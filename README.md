@@ -1,17 +1,37 @@
 # 3D Ramen Shop: setup and how the code works
 
-Everything is in one file, `main.cpp`. It uses classic OpenGL plus **freeglut** (which also gives you GLU for cylinders, disks and spheres). No textures, shaders, lighting, animation or GUI.
+This 3D project uses classic OpenGL plus **freeglut** (which also gives you GLU for cylinders, disks and spheres) structured in a clean, modular C++ architecture. Features atmospheric evening lighting, fog, animated steam, specular highlights, dynamic swaying lanterns, and dual-mode Orbit/Walkthrough camera with mouse controls.
 
-The only extras are a few camera keys so you can look around, and thin dark edge outlines so shapes are readable without lighting:
+Controls:
 
-| Key | Action |
+| Control | Action |
 |---|---|
-| ← / → | orbit around the shop |
-| ↑ / ↓ | zoom in / out |
-| Page Up / Page Down | camera higher / lower |
-| H | hide / show the roof (look inside) |
-| O | outlines on / off |
-| Esc | quit |
+| **C** | Toggle Camera Mode (**Orbit** ⟷ **Walkthrough** ⟷ **Counter View**) |
+| **W / A / S / D** | Walk forward / strafe left / backward / strafe right (Walkthrough mode) |
+| **Q / E** | Fly down / up (Walkthrough mode) |
+| **Left Mouse Drag** | Freely look around (Walkthrough) or orbit / tilt (Orbit mode) |
+| **Scroll Wheel** | Smooth zoom in / out (Orbit) or vertical height adjust (Walkthrough) |
+| **← / →** | Orbit around the shop (Orbit mode) |
+| **↑ / ↓** | Zoom in / out (Orbit mode) |
+| **Page Up / Page Down** | Camera higher / lower |
+| **H** | Hide / show the roof (look inside) |
+| **O** | Outlines on / off |
+| **F** | Atmospheric night fog on / off |
+| **X** | Animated steam rising on / off |
+| **Space** | Pause / resume animation |
+| **1** | Toggle **Ambient Light** (global + per-light ambient) |
+| **2** | Toggle **Diffuse Reflection** (Lambertian cosine shading) |
+| **3** | Toggle **Specular Highlights** (Blinn-Phong gloss on glass, metals, ceramics) |
+| **4** | Toggle **Directional Light** (Moonlight + cool fill) |
+| **5** | Toggle **Point Lights** (Central warm pendant bulb + exterior paper lanterns) |
+| **6** | Toggle **Spot Light** (Focused chef counter downlight + volumetric beam) |
+| **7** | Toggle **Area Light** (Overhead ceiling rectangular softbox luminaire) |
+| **P** | Cycle **Lighting Presets** (Full Realism, Spotlight Focus, Area Softbox, Cozy Night, Specular Only, Diffuse Only, Ambient Only) |
+| **Tab** | Cycle selected scene object |
+| **I / K / J / L / U / N** | Translate selected object (Z / X / Y) |
+| **[ / ] / ; / '** | Rotate selected object (Yaw / Pitch) |
+| **, / .** | Scale selected object down / up |
+| **Esc** | Quit |
 
 ---
 
@@ -150,13 +170,17 @@ Tip: build a new object around `(0,0,0)` with its bottom at `y = 0`. Then a sing
 
 ---
 
-## Splitting into files later (optional)
+## Modular File Architecture
 
-When you are comfortable, cut the sections into files:
+The codebase is organized into clean, focused modules:
 
-- `shapes.h/.cpp`: section 1–3 (Vec3, Color, colours, applyTransform, basic shapes)
-- `shop.h/.cpp`: sections 4–6 and 8
-- `food.h/.cpp`: section 7
-- `main.cpp`: sections 9–10
-
-In each `.h`, put the function declarations **with** their default arguments, for example `void drawTable(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);`. In the `.cpp`, write the definitions **without** the `= ...` defaults. Colour constants and `quad`/`showOutlines` need `extern` in the header, with the single definition in `shapes.cpp`.
+| Header / Source | Purpose |
+|---|---|
+| `shapes.h` / `shapes.cpp` | `Vec3`, `Color`, color constants, transforms, quadric, basic shapes, rising steam |
+| `food.h` / `food.cpp` | Ramen noodles, chashu meat, eggs, nori, ramen bowl, chopsticks, spoon |
+| `furniture.h` / `furniture.cpp` | Tables, chairs, stools, bench, counter, kitchen cabinets, stove, sink, cooking pots |
+| `decorations.h` / `decorations.cpp` | Paper lanterns, cylindrical orange lanterns, noren curtains, menu boards, wall art |
+| `exterior.h` / `exterior.cpp` | Shop building, roof, windows, street, sidewalk, trees, streetlamps, fence |
+| `scene.h` / `scene.cpp` | High-level `drawGround()`, `drawExterior()`, and `drawInterior()` composition |
+| `camera.h` / `camera.cpp` | Dual-mode camera (Orbit & Walkthrough), WASD movement, mouse freelook |
+| `main.cpp` | Entry point, FreeGLUT initialization, lighting/fog setup, and render loop |

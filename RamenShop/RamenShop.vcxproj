@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -22,7 +22,6 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
-    
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -73,7 +72,8 @@ exit /b 0</Command>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <FunctionLevelLinking>true</FunctionLevelLinking><IntrinsicFunctions>true</IntrinsicFunctions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
       <AdditionalIncludeDirectories>..\packages\nupengl.core.0.1.0.1\build\native\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -89,10 +89,39 @@ exit /b 0</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="texture.cpp" />
+    <ClCompile Include="objects.cpp" />
+    <ClCompile Include="shapes.cpp" />
+    <ClCompile Include="furniture.cpp" />
+    <ClCompile Include="food.cpp" />
+    <ClCompile Include="decorations.cpp" />
+    <ClCompile Include="exterior.cpp" />
+    <ClCompile Include="camera.cpp" />
+    <ClCompile Include="scene.cpp" />
+    <ClCompile Include="shader.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="shapes.h" />
+    <ClInclude Include="texture.h" />
+    <ClInclude Include="objects.h" />
+    <ClInclude Include="furniture.h" />
+    <ClInclude Include="food.h" />
+    <ClInclude Include="decorations.h" />
+    <ClInclude Include="exterior.h" />
+    <ClInclude Include="camera.h" />
+    <ClInclude Include="scene.h" />
+    <ClInclude Include="shader.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="CODE_CHANGES_DETAIL.md" />
+    <None Include="COMPLETION_CHECKLIST.md" />
+    <None Include="IMPLEMENTATION_COMPLETE.md" />
+    <None Include="LIGHTING_IMPROVEMENTS.md" />
+    <None Include="MATERIAL_QUICK_REFERENCE.md" />
     <None Include="packages.config" />
     <None Include="..\README.md" />
+    <None Include="START_HERE.md" />
+    <None Include="VISUAL_CHANGES_GUIDE.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
