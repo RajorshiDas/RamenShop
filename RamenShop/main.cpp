@@ -25,6 +25,9 @@
  *      Q / E               : fly down / up (Walkthrough)
  *
  *  Scene Controls:
+ *      R                   : toggle Real-Time Ray Tracing ON / OFF
+ *      B                   : cycle Ray Tracing bounce depth (1 to 5 bounces)
+ *      Y                   : toggle Ray Traced soft shadows on / off
  *      G                   : toggle Phong / Gouraud shading
  *      T                   : toggle Day / Night (sun ↔ moon)
  *      H                   : hide / show the roof
@@ -56,6 +59,7 @@
 #include "camera.h"
 #include "texture.h"
 #include "shader.h"
+#include "raytracer.h"
 #include <cstdio>
 
 void display()
@@ -69,6 +73,15 @@ void display()
 
     // Dynamically apply all light components & flicker parameters
     applyLightingParameters();
+
+    // If Ray Tracing mode is active, render via real-time Ray Tracing engine
+    if (useRayTracing) {
+        int w = glutGet(GLUT_WINDOW_WIDTH);
+        int h = glutGet(GLUT_WINDOW_HEIGHT);
+        renderRayTracedFrame(w, h);
+        glutSwapBuffers();
+        return;
+    }
 
     // Place lights in world space (after camera transform)
     // 1. Directional lights (w = 0.0f)
@@ -133,6 +146,26 @@ void updateTimer(int value)
 {
     if (!animPaused) {
         animTime += 0.016f;
+    }
+
+    // Smoothly animate entrance door open/close
+    float targetAngle = doorOpen ? 90.0f : 0.0f;
+    if (doorAngle < targetAngle) {
+        doorAngle += 2.5f;
+        if (doorAngle > targetAngle) doorAngle = targetAngle;
+    } else if (doorAngle > targetAngle) {
+        doorAngle -= 2.5f;
+        if (doorAngle < targetAngle) doorAngle = targetAngle;
+    }
+
+    // Smoothly animate sliding shoji door open/close
+    float targetSlide = slideDoorOpen ? 1.0f : 0.0f;
+    if (slideDoorOffset < targetSlide) {
+        slideDoorOffset += 0.025f;
+        if (slideDoorOffset > targetSlide) slideDoorOffset = targetSlide;
+    } else if (slideDoorOffset > targetSlide) {
+        slideDoorOffset -= 0.025f;
+        if (slideDoorOffset < targetSlide) slideDoorOffset = targetSlide;
     }
 
     // Process continuous WASD movement when in FPS mode
@@ -222,6 +255,9 @@ void init()
 
     // Compile Phong GLSL shader (press G to toggle)
     initPhongShader();
+
+    // Initialise Real-Time GPU Ray Tracer (press R to toggle)
+    initRayTracer();
 }
 
 int main(int argc, char** argv)

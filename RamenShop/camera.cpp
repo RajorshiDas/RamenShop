@@ -2,6 +2,7 @@
 #include "scene.h"
 #include "objects.h"
 #include "shader.h"
+#include "raytracer.h"
 #include <cstdio>
 
 CameraMode currentCamMode = CAM_ORBIT;
@@ -35,7 +36,8 @@ void updateWindowTitle()
         (selectedObj == OBJ_NONE) ? "none" : sceneObjects[selectedObj].name;
 
     sprintf_s(buf, sizeof(buf),
-        "3D Ramen Shop | %s[T] | %s[G] | Cam:%s[C] | Amb:%s[1] Dif:%s[2] Spec:%s[3] | Dir:%s[4] Pt:%s[5] Spot:%s[6] Area:%s[7] | Preset:%s[P]",
+        "3D Ramen Shop | %s | %s[T] | %s[G] | Cam:%s[C] | Amb:%s[1] Dif:%s[2] Spec:%s[3] | Dir:%s[4] Pt:%s[5] Spot:%s[6] Area:%s[7] | Preset:%s[P]",
+        getRayTracingStatusString(),
         getDayNightModeName(),
         usePhongShading ? "Phong" : "Gouraud",
         camName,
@@ -148,6 +150,11 @@ void handleKeyboardDown(unsigned char key, int, int)
         if (key == '.')  objScaleMul(ds);           // grow
     }
 
+    // ── Ray Tracing Toggles ──
+    if (key == 'r' || key == 'R') { toggleRayTracing(); updateWindowTitle(); }
+    if (key == 'b' || key == 'B') { cycleRayBounces();  updateWindowTitle(); }
+    if (key == 'y' || key == 'Y') { toggleRayShadows(); updateWindowTitle(); }
+
     // ── Light component & source toggles ──
     if (key == '1') { toggleAmbient();     updateWindowTitle(); }
     if (key == '2') { toggleDiffuse();     updateWindowTitle(); }
@@ -192,6 +199,49 @@ void handleSpecialUp(int key, int, int)
 
 void handleMouseClick(int button, int state, int x, int y)
 {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        // Ray-cast to detect click on entrance door
+        GLdouble mv[16], proj[16];
+        GLint vp[4];
+        glGetDoublev(GL_MODELVIEW_MATRIX, mv);
+        glGetDoublev(GL_PROJECTION_MATRIX, proj);
+        glGetIntegerv(GL_VIEWPORT, vp);
+
+        GLdouble nx, ny, nz, fx, fy, fz;
+        double wy = (double)(vp[3] - y);
+        gluUnProject(x, wy, 0.0, mv, proj, vp, &nx, &ny, &nz);
+        gluUnProject(x, wy, 1.0, mv, proj, vp, &fx, &fy, &fz);
+
+        double rdx = fx - nx, rdy = fy - ny, rdz = fz - nz;
+
+        // Intersect ray with entrance door plane z = 3.92
+        if (fabs(rdz) > 0.0001) {
+            double t = (3.92 - nz) / rdz;
+            if (t > 0) {
+                double hitX = nx + t * rdx;
+                double hitY = ny + t * rdy;
+                // Door bounds: x in [-1.75, 1.75], y in [0.10, 3.15]
+                if (hitX > -1.75 && hitX < 1.75 && hitY > 0.10 && hitY < 3.15) {
+                    doorOpen = !doorOpen;
+                }
+            }
+        }
+
+        // Intersect ray with left wall plane x = -4.9 (sliding shoji door)
+        if (fabs(rdx) > 0.0001) {
+            double t = (-4.9 - nx) / rdx;
+            if (t > 0) {
+                double hitY = ny + t * rdy;
+                double hitZ = nz + t * rdz;
+                // Sliding door centered at z=2.8, y=1.5, size 2.4×2.8
+                // Z bounds: 2.8 ± 1.2 = [1.6, 4.0]
+                // Y bounds: 1.5 ± 1.4 = [0.1, 2.9]
+                if (hitZ > 1.6 && hitZ < 4.0 && hitY > 0.1 && hitY < 2.9) {
+                    slideDoorOpen = !slideDoorOpen;
+                }
+            }
+        }
+    }
     if (button == GLUT_LEFT_BUTTON) {
         isMouseDragging = (state == GLUT_DOWN);
         lastMouseX = x; lastMouseY = y;

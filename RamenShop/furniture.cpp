@@ -252,3 +252,78 @@ void drawLadle(Vec3 pos, Vec3 rot, Vec3 scale)
 
     glPopMatrix();
 }
+
+void drawSpatula(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+    setMaterialConductive(STEEL, 75.0f);
+    beginSphereReflect();
+    drawCylinderCustom({ 0, 0, 0 }, NO_ROT, ONE, STEEL, 0.014f, 0.010f, 0.50f);
+    drawTorus({ 0, 0.50f, 0 }, { 90, 0, 0 }, ONE, STEEL, 0.008f, 0.022f);
+    drawCube({ 0, -0.06f, 0 }, NO_ROT, { 0.08f, 0.12f, 0.012f }, STEEL);
+    endSphereReflect();
+    resetMaterialGloss();
+    glPopMatrix();
+}
+
+void drawStrainer(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+    setMaterialConductive(STEEL, 75.0f);
+    beginSphereReflect();
+    drawCylinderCustom({ 0, 0.12f, 0 }, NO_ROT, ONE, STEEL, 0.014f, 0.010f, 0.45f);
+    drawTorus({ 0, 0.57f, 0 }, { 90, 0, 0 }, ONE, STEEL, 0.008f, 0.022f);
+    drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.20f, 0.02f, 0.20f }, STEEL);
+    drawTorus({ 0, 0.02f, 0 }, NO_ROT, ONE, STEEL, 0.008f, 0.10f);
+    endSphereReflect();
+    resetMaterialGloss();
+    glPopMatrix();
+}
+
+void drawTongs(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+    setMaterialConductive(STEEL, 75.0f);
+    beginSphereReflect();
+    drawCylinderCustom({ -0.02f, 0, 0 }, { 0, 0, -3 }, ONE, STEEL, 0.010f, 0.008f, 0.50f);
+    drawCylinderCustom({  0.02f, 0, 0 }, { 0, 0,  3 }, ONE, STEEL, 0.010f, 0.008f, 0.50f);
+    drawTorus({ 0, 0.48f, 0 }, { 90, 0, 0 }, ONE, STEEL, 0.006f, 0.018f);
+    drawCube({ -0.035f, -0.02f, 0 }, NO_ROT, { 0.02f, 0.05f, 0.025f }, STEEL);
+    drawCube({  0.035f, -0.02f, 0 }, NO_ROT, { 0.02f, 0.05f, 0.025f }, STEEL);
+    endSphereReflect();
+    resetMaterialGloss();
+    glPopMatrix();
+}
+
+void drawWok(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+    setMaterialConductive(DARK_GRAY, 60.0f);
+    beginSphereReflect();
+    drawBowl({ 0, 0, 0 }, NO_ROT, { 0.50f, 0.22f, 0.50f }, DARK_GRAY);
+    drawCube({ -0.26f, 0.12f, 0 }, { 0, 0, -15 }, { 0.08f, 0.03f, 0.03f }, DARK_WOOD);
+    drawCube({  0.26f, 0.12f, 0 }, { 0, 0,  15 }, { 0.08f, 0.03f, 0.03f }, DARK_WOOD);
+    endSphereReflect();
+    resetMaterialGloss();
+    glPopMatrix();
+}
+
+void drawKitchenHood(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+    setMaterialConductive(STEEL, 50.0f);
+    beginSphereReflect();
+    drawCuboid({ 0, 0, 0 }, NO_ROT, { 2.0f, 0.12f, 0.65f }, STEEL);
+    drawCuboid({ 0, -0.12f, 0 }, NO_ROT, { 2.2f, 0.06f, 0.75f }, STEEL);
+    drawCube({ -1.0f, -0.06f, 0 }, { 0, 0,  8 }, { 0.04f, 0.20f, 0.70f }, STEEL);
+    drawCube({  1.0f, -0.06f, 0 }, { 0, 0, -8 }, { 0.04f, 0.20f, 0.70f }, STEEL);
+    drawCuboid({ 0, 0.12f, 0 }, NO_ROT, { 0.50f, 0.60f, 0.40f }, DARK_GRAY);
+    endSphereReflect();
+    resetMaterialGloss();
+    glPopMatrix();
+}

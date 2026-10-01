@@ -99,6 +99,7 @@ exit /b 0</Command>
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="scene.cpp" />
     <ClCompile Include="shader.cpp" />
+    <ClCompile Include="raytracer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="shapes.h" />
@@ -111,16 +112,20 @@ exit /b 0</Command>
     <ClInclude Include="camera.h" />
     <ClInclude Include="scene.h" />
     <ClInclude Include="shader.h" />
+    <ClInclude Include="raytracer.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="CODE_CHANGES_DETAIL.md" />
     <None Include="COMPLETION_CHECKLIST.md" />
     <None Include="IMPLEMENTATION_COMPLETE.md" />
+    <None Include="LANTERN_UPGRADE.md" />
     <None Include="LIGHTING_IMPROVEMENTS.md" />
     <None Include="MATERIAL_QUICK_REFERENCE.md" />
     <None Include="packages.config" />
     <None Include="..\README.md" />
+    <None Include="RAY_TRACING_GUIDE.md" />
     <None Include="START_HERE.md" />
+    <None Include="UI_CONTROLS_GUIDE.md" />
     <None Include="VISUAL_CHANGES_GUIDE.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

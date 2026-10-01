@@ -52,47 +52,122 @@ void drawCylinderLantern(Vec3 pos, Vec3 rot, Vec3 scale)
     glRotatef(sway, 0, 0, 1);
 
     float flick = 1.0f + 0.06f * sin(animTime * 4.6f + pos.x);
-    setEmission(0.90f * flick, 0.50f * flick, 0.10f * flick);
 
-    // Orange paper lantern: semi-translucent with warm glow
+    // ── Chochin body: elongated oval (egg shape, wider in the middle) ─────
+    setEmission(0.92f * flick, 0.45f * flick, 0.08f * flick);
     setMaterialPBR(Materials::GlazedMatte, LANTERN_ORANGE);
-    drawCylinderCustom({ 0, -0.4f, 0 }, NO_ROT, ONE, LANTERN_ORANGE, 0.22f, 0.22f, 0.8f);
+    drawSphere({ 0, -0.05f, 0 }, NO_ROT, { 0.32f, 0.50f, 0.32f }, LANTERN_ORANGE);
     clearEmission();
 
-    // Wooden bands and hardware: natural grain
-    setMaterialPBR(Materials::WoodMatte, DARK_WOOD);
-    drawTorus({ 0, -0.40f, 0 }, NO_ROT, ONE, DARK_WOOD, 0.02f, 0.23f);
-    drawTorus({ 0, -0.13f, 0 }, NO_ROT, ONE, DARK_WOOD, 0.015f, 0.23f);
-    drawTorus({ 0,  0.13f, 0 }, NO_ROT, ONE, DARK_WOOD, 0.015f, 0.23f);
-    drawTorus({ 0,  0.40f, 0 }, NO_ROT, ONE, DARK_WOOD, 0.02f, 0.23f);
+    // ── Horizontal ribs (bamboo framework visible through paper) ──────────
+    setMaterialPBR(Materials::WoodMatte, DARK_RED);
+    float ribR[] = { 0.20f, 0.28f, 0.32f, 0.32f, 0.28f, 0.20f };
+    for (int i = 0; i < 6; i++) {
+        float ry = -0.38f + i * 0.13f;
+        drawTorus({ 0, ry, 0 }, NO_ROT, ONE, DARK_RED, 0.008f, ribR[i]);
+    }
 
-    // String support: dark material
+    // ── Top and bottom caps (dark metal/wood rings) ───────────────────────
+    setMaterialPBRMetallic(Materials::BrushedMetal, BLACK);
+    drawCylinder({ 0,  0.30f, 0 }, NO_ROT, { 0.18f, 0.05f, 0.18f }, BLACK);
+    drawCylinder({ 0, -0.46f, 0 }, NO_ROT, { 0.16f, 0.04f, 0.16f }, BLACK);
+
+    // ── Hanging string ────────────────────────────────────────────────────
     setMaterialPBR(Materials::SeaweedNori, BLACK);
-    drawCylinder({ 0, 0.40f, 0 }, NO_ROT, { 0.02f, 0.7f, 0.02f }, BLACK);
+    drawCylinder({ 0, 0.35f, 0 }, NO_ROT, { 0.015f, 0.75f, 0.015f }, BLACK);
 
-    resetMaterialGloss();
-    glPopMatrix();
-}
+    // ── Bottom tassel / weight ────────────────────────────────────────────
+         setMaterialPBRMetallic(Materials::Gold, GOLD);
+        drawCone({ 0, -0.60f, 0 }, NO_ROT, { 0.06f, 0.14f, 0.06f }, GOLD);
 
-void drawNoren(Vec3 pos, Vec3 rot, Vec3 scale)
-{
-    glPushMatrix();
-    applyTransform(pos, rot, scale);
+        resetMaterialGloss();
+        glPopMatrix();
+    }
 
-    // Rod: natural wood with matte finish
+    // ────── Premium Hanging Lantern (Chochin) ──────
+    // Elegant egg-shaped paper lantern with bright interior glow, visible horizontal
+    // paper ribs, dark metal caps, and warm glowing interior. Perfect for ambient dining.
+    void drawHangingLantern(Vec3 pos, Vec3 rot, Vec3 scale)
+    {
+        glPushMatrix();
+        applyTransform(pos, rot, scale);
+
+        // Gentle sway from ceiling air currents
+        float sway = sin(animTime * 1.5f + pos.x * 0.5f) * 3.5f;
+        glRotatef(sway, 0, 0, 1);
+
+        float flicker = 1.0f + 0.08f * sin(animTime * 4.2f + pos.x);
+
+        // ────── Main lantern paper body (egg-shaped with MUCH BRIGHTER glow) ──────
+        // Very bright interior illumination - like looking inside a lit bulb
+        setEmission(1.0f * flicker, 0.65f * flicker, 0.15f * flicker);
+        setMaterialPBR(Materials::GlazedMatte, LANTERN_ORANGE);
+
+        // Egg-shaped body: scales create tapered top and bottom
+        drawSphere({ 0, -0.08f, 0 }, NO_ROT, { 0.36f, 0.54f, 0.36f }, LANTERN_ORANGE);
+
+        clearEmission();
+
+        // ────── Horizontal paper ribs (visible texture lines on lantern surface) ──────
+        // These are rendered directly on the paper surface to show paper pleats
+        setMaterialPBR(Materials::GlazedMatte, {0.9f, 0.65f, 0.35f});  // warm tan/orange
+
+        // Draw horizontal lines across the entire lantern body
+        int numRibs = 14;  // Many ribs for detailed paper texture
+        for (int i = 0; i < numRibs; i++) {
+            float ry = -0.38f + (float)i * (0.76f / (numRibs - 1));
+
+            // Calculate radius based on egg-shape equation
+            float t = (ry + 0.08f) / 0.54f;  // normalize to 0-1
+            float rbody = 0.36f * sqrt(1.0f - t * t);  // ellipse equation
+
+            // Thin horizontal band/rib
+            drawTorus({ 0, ry, 0 }, NO_ROT, ONE, {0.9f, 0.65f, 0.35f}, 0.006f, rbody + 0.01f);
+        }
+
+        // ────── Top metal cap with hanging loop ──────
+        setMaterialPBRMetallic(Materials::BrushedMetal, DARK_GRAY);
+        drawCylinder({ 0, 0.32f, 0 }, NO_ROT, { 0.20f, 0.06f, 0.20f }, DARK_GRAY);  // top ring
+
+        // Hanging loop (thick wire)
+        setMaterialPBRMetallic(Materials::Polished, GRAY);
+        drawTorus({ 0, 0.38f, 0 }, NO_ROT, ONE, GRAY, 0.012f, 0.08f);
+
+        // ────── Hanging string/chain ──────
+        setMaterialPBR(Materials::SeaweedNori, {0.1f, 0.1f, 0.1f});
+        drawCylinder({ 0, 0.45f, 0 }, NO_ROT, { 0.008f, 0.85f, 0.008f }, {0.1f, 0.1f, 0.1f});
+
+        // ────── Bottom metal ring ──────
+        setMaterialPBRMetallic(Materials::BrushedMetal, DARK_GRAY);
+        drawCylinder({ 0, -0.48f, 0 }, NO_ROT, { 0.18f, 0.04f, 0.18f }, DARK_GRAY);
+
+        // ────── Bottom hanging tassel (weight/ornament) ──────
+        setMaterialPBRMetallic(Materials::Gold, GOLD);
+        drawCone({ 0, -0.65f, 0 }, NO_ROT, { 0.07f, 0.16f, 0.07f }, GOLD);
+
+            resetMaterialGloss();
+            glPopMatrix();
+        }
+
+        void drawNoren(Vec3 pos, Vec3 rot, Vec3 scale)
+        {
+            glPushMatrix();
+            applyTransform(pos, rot, scale);
+
+            // Rod: natural wood with matte finish
     setMaterialPBR(Materials::WoodMatte, DARK_WOOD);
     drawCylinder({ -3.5f, 0, 0 }, { 0, 0, -90 }, { 0.04f, 7.0f, 0.04f }, DARK_WOOD);
 
-    // Hanging cloth panels with gentle breeze ripple
+    // Hanging cloth panels with gentle breeze ripple (shortened to reveal kitchen)
     for (int i = -4; i <= 4; i++) {
         float sway = sin(animTime * 2.2f + (float)i * 0.5f) * 3.5f;
         glPushMatrix();
         glTranslatef(i * 0.72f, 0, 0.02f);
         glRotatef(sway, 1, 0, 0);
 
-        // Traditional navy cotton fabric: very matte, diffuse
-        setMaterialPBR(Materials::Fabric, NAVY);
-        drawBoard({ 0, -0.65f, 0 }, { 90, 0, 0 }, { 0.68f, 0.6f, 1.3f }, NAVY);
+        // Traditional red cotton fabric: very matte, diffuse
+        setMaterialPBR(Materials::Fabric, RED);
+        drawBoard({ 0, -0.35f, 0 }, { 90, 0, 0 }, { 0.68f, 0.6f, 0.65f }, RED);
 
         glPopMatrix();
     }

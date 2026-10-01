@@ -41,6 +41,14 @@ const char* getCurrentPresetName();
 const char* getDayNightModeName();  // Returns "DAY" or "NIGHT"
 void applyLightingParameters();
 
+// Entrance door state (click to open/close)
+extern bool doorOpen;
+extern float doorAngle;
+
+// Sliding shoji door state (click to open/close)
+extern bool slideDoorOpen;
+extern float slideDoorOffset;
+
 // High-level scene functions
 void drawSky();       // Sky dome with sun (day) or moon (night)
 void drawGround();

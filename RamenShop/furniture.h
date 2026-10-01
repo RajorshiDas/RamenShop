@@ -14,3 +14,8 @@ void drawCookingPot(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawKitchen(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawCashRegister(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawLadle(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawSpatula(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawStrainer(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawTongs(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawWok(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawKitchenHood(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);

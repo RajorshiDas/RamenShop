@@ -250,6 +250,310 @@ void drawTree(Vec3 pos, Vec3 rot, Vec3 scale)
     glPopMatrix();
 }
 
+// ────── Cherry Blossom Tree ──────
+// Elegant cherry blossom tree with pink flowering blossoms and graceful branches
+void drawCherryBlossomTree(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    // Brown trunk with slight taper
+    setMaterialPBR(Materials::WoodMatte, TRUNK);
+    drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.2f, 2.1f, 0.2f }, TRUNK);
+
+    // Cherry blossom pink colors - soft and graceful
+    Color cherryPink = { 0.95f, 0.70f, 0.75f };  // Soft pink for blossoms
+    Color cherryPinkLight = { 1.0f, 0.85f, 0.90f };  // Lighter pink highlights
+
+    // Set emissive glow for cherry blossoms - they catch light beautifully
+    setEmission(0.15f, 0.08f, 0.10f);  // Subtle pink glow
+    setMaterialPBR(Materials::GlazedMatte, cherryPink);
+
+    // Central large canopy sphere
+    drawSphere({ 0.0f, 2.4f, 0.0f }, NO_ROT, { 1.8f, 1.6f, 1.8f }, cherryPink);
+
+    // Left side flowering cluster
+    drawSphere({ -0.8f, 2.6f, -0.3f }, NO_ROT, { 1.2f, 1.4f, 1.2f }, cherryPinkLight);
+
+    // Right side flowering cluster  
+    drawSphere({ 0.7f, 2.7f, 0.4f }, NO_ROT, { 1.3f, 1.5f, 1.3f }, cherryPinkLight);
+
+    // Top crown bloom
+    drawSphere({ 0.0f, 3.5f, 0.0f }, NO_ROT, { 1.0f, 0.9f, 1.0f }, cherryPink);
+
+    // Lower blooms
+    drawSphere({ -0.5f, 1.8f, 0.3f }, NO_ROT, { 0.9f, 0.8f, 0.9f }, cherryPinkLight);
+    drawSphere({ 0.6f, 1.9f, -0.2f }, NO_ROT, { 0.85f, 0.75f, 0.85f }, cherryPink);
+
+    clearEmission();
+    resetMaterialGloss();
+    glPopMatrix();
+}
+
+// ─── Interactive Entrance Door (Sliding Shoji-style, click to open/close) ──
+// Two Japanese shoji door panels that slide apart horizontally on tracks.
+// Left panel slides further left, right panel slides further right.
+// Translucent washi paper with kumiko lattice, warm interior glow, solid
+// wood kick panel (koshi-ita), and recessed hikite finger pulls.
+void drawEntranceDoor(float angle)
+{
+    float pw = 1.75f;        // panel width (each half)
+    float ph = 3.05f;        // panel height (floor to header beam)
+    float by = FLOOR_Y;      // base Y
+    float hz = 3.92f;        // door Z (front wall plane)
+    float fw = 0.08f;        // frame stile/rail width
+    float kickH = ph * 0.18f; // solid wood kick panel height (koshi-ita)
+
+    // Map angle (0-90) to normalized slide offset (0.0-1.0)
+    float slideNorm = angle / 90.0f;
+    float slideX = slideNorm * pw;  // how far each panel slides outward
+
+    // Lattice dimensions (paper area above kick panel)
+    float latticeBot = kickH;
+    float latticeTop = ph - fw;
+    float latticeH   = latticeTop - latticeBot;
+    float latticeW   = pw - fw * 2;
+    int hBars = (int)(latticeH / 0.45f);
+    int vBars = (int)(latticeW / 0.40f);
+    float hStep = latticeH / (hBars + 1);
+    float vStep = latticeW / (vBars + 1);
+
+    // Fixed door frame: top and bottom sliding tracks + side posts
+    drawCube({ 0, by + ph + 0.02f, hz }, NO_ROT,
+             { pw * 2 + 0.50f, 0.04f, 0.14f }, DARK_WOOD);          // top track
+    drawCube({ 0, by - 0.015f, hz }, NO_ROT,
+             { pw * 2 + 0.50f, 0.03f, 0.14f }, DARK_WOOD);          // bottom track
+    drawCube({ -(pw + 0.08f), by + ph * 0.5f, hz }, NO_ROT,
+             { 0.08f, ph + 0.10f, 0.14f }, DARK_WOOD);              // left post
+    drawCube({  (pw + 0.08f), by + ph * 0.5f, hz }, NO_ROT,
+             { 0.08f, ph + 0.10f, 0.14f }, DARK_WOOD);              // right post
+
+    // Removed black aperture - interior is now visible when door opens
+    if (false) {  // disabled aperture drawing
+
+        float openW = slideX * 2.0f;
+        glBegin(GL_QUADS);
+        glNormal3f(0, 0, 1);
+        setColor(BLACK);
+        glVertex3f(-openW * 0.5f, by + 0.02f, hz - 0.03f);
+        glVertex3f( openW * 0.5f, by + 0.02f, hz - 0.03f);
+        glVertex3f( openW * 0.5f, by + ph - 0.02f, hz - 0.03f);
+        glVertex3f(-openW * 0.5f, by + ph - 0.02f, hz - 0.03f);
+        glEnd();
+    }
+
+    // ── Left door panel ── slides left when opening (front track)
+    glPushMatrix();
+    glTranslatef(-pw * 0.5f - slideX, by, hz + 0.01f);
+
+    // Washi paper panel (warm emissive glow from interior light)
+    setEmission(0.35f, 0.25f, 0.10f);
+    glBegin(GL_QUADS);
+    glNormal3f(0, 0, 1);
+    setColor(PAPER);
+    glVertex3f(fw - pw * 0.5f,      kickH,    -0.02f);
+    glVertex3f(pw * 0.5f - fw,      kickH,    -0.02f);
+    glVertex3f(pw * 0.5f - fw,      ph - fw,  -0.02f);
+    glVertex3f(fw - pw * 0.5f,      ph - fw,  -0.02f);
+    glEnd();
+    clearEmission();
+
+    // Outer dark-wood frame
+    drawCube({ 0, ph - fw * 0.5f, 0 }, NO_ROT,
+             { pw + 0.08f, fw, 0.10f }, DARK_WOOD);               // top rail
+    drawCube({ 0, fw * 0.5f, 0 }, NO_ROT,
+             { pw + 0.08f, fw, 0.10f }, DARK_WOOD);               // bottom rail
+    drawCube({ -(pw * 0.5f - fw * 0.5f), ph * 0.5f, 0 }, NO_ROT,
+             { fw, ph, 0.10f }, DARK_WOOD);                        // left stile
+    drawCube({ (pw * 0.5f - fw * 0.5f), ph * 0.5f, 0 }, NO_ROT,
+             { fw, ph, 0.10f }, DARK_WOOD);                        // right stile
+
+    // Horizontal kumiko lattice bars
+    for (int i = 1; i <= hBars; i++) {
+        float y = latticeBot + i * hStep;
+        drawCube({ 0, y, 0.01f }, NO_ROT,
+                 { latticeW - 0.04f, 0.03f, 0.03f }, DARK_WOOD);
+    }
+
+    // Vertical kumiko lattice bars
+    for (int i = 1; i <= vBars; i++) {
+        float x = -(pw * 0.5f - fw) + i * vStep;
+        float barY = (latticeBot + latticeTop) * 0.5f;
+        drawCube({ x, barY, 0.01f }, NO_ROT,
+                 { 0.03f, latticeH, 0.03f }, DARK_WOOD);
+    }
+
+    // Bottom kick panel — koshi-ita (solid wood)
+    float koshiCY = (fw + kickH) * 0.5f;
+    float koshiH  = kickH - fw + 0.02f;
+    drawCube({ 0, koshiCY, 0 }, NO_ROT,
+             { pw - fw * 2 + 0.02f, koshiH, 0.06f }, WOOD);
+
+    // Hikite — recessed finger pull (on right stile side)
+    drawCube({ pw * 0.5f - 0.20f, ph * 0.43f, 0.05f }, NO_ROT,
+             { 0.07f, 0.14f, 0.02f }, DARK_WOOD);
+
+    glPopMatrix();
+
+    // ── Right door panel ── slides right when opening (rear track)
+    glPushMatrix();
+    glTranslatef(pw * 0.5f + slideX, by, hz - 0.01f);
+
+    // Washi paper panel
+    setEmission(0.35f, 0.25f, 0.10f);
+    glBegin(GL_QUADS);
+    glNormal3f(0, 0, 1);
+    setColor(PAPER);
+    glVertex3f(-(pw * 0.5f - fw), kickH,    -0.02f);
+    glVertex3f( (pw * 0.5f - fw), kickH,    -0.02f);
+    glVertex3f( (pw * 0.5f - fw), ph - fw,  -0.02f);
+    glVertex3f(-(pw * 0.5f - fw), ph - fw,  -0.02f);
+    glEnd();
+    clearEmission();
+
+    // Outer dark-wood frame
+    drawCube({ 0, ph - fw * 0.5f, 0 }, NO_ROT,
+             { pw + 0.08f, fw, 0.10f }, DARK_WOOD);
+    drawCube({ 0, fw * 0.5f, 0 }, NO_ROT,
+             { pw + 0.08f, fw, 0.10f }, DARK_WOOD);
+    drawCube({ -(pw * 0.5f - fw * 0.5f), ph * 0.5f, 0 }, NO_ROT,
+             { fw, ph, 0.10f }, DARK_WOOD);
+    drawCube({ (pw * 0.5f - fw * 0.5f), ph * 0.5f, 0 }, NO_ROT,
+             { fw, ph, 0.10f }, DARK_WOOD);
+
+    // Horizontal kumiko lattice bars
+    for (int i = 1; i <= hBars; i++) {
+        float y = latticeBot + i * hStep;
+        drawCube({ 0, y, 0.01f }, NO_ROT,
+                 { latticeW - 0.04f, 0.03f, 0.03f }, DARK_WOOD);
+    }
+
+    // Vertical kumiko lattice bars
+    for (int i = 1; i <= vBars; i++) {
+        float x = -(pw * 0.5f - fw) + i * vStep;
+        float barY = (latticeBot + latticeTop) * 0.5f;
+        drawCube({ x, barY, 0.01f }, NO_ROT,
+                 { 0.03f, latticeH, 0.03f }, DARK_WOOD);
+    }
+
+    // Bottom kick panel — koshi-ita
+    drawCube({ 0, koshiCY, 0 }, NO_ROT,
+             { pw - fw * 2 + 0.02f, koshiH, 0.06f }, WOOD);
+
+    // Hikite — recessed finger pull (on left stile side, mirrored)
+    drawCube({ -(pw * 0.5f - 0.20f), ph * 0.43f, 0.05f }, NO_ROT,
+             { 0.07f, 0.14f, 0.02f }, DARK_WOOD);
+
+    glPopMatrix();
+}
+
+// ─── Helper: single centered shoji panel (used by sliding door) ───────────
+static void drawShojiPanelCentered(float width, float height)
+{
+    float hw = width * 0.5f;
+    float hh = height * 0.5f;
+    float fw = 0.06f;
+    float kickH = height * 0.15f;
+
+    // Washi paper (above kick panel)
+    setEmission(0.35f, 0.25f, 0.10f);
+    glBegin(GL_QUADS);
+    glNormal3f(0, 0, 1);
+    setColor(PAPER);
+    glVertex3f(-hw + fw, -hh + kickH, -0.015f);
+    glVertex3f( hw - fw, -hh + kickH, -0.015f);
+    glVertex3f( hw - fw,  hh - fw,    -0.015f);
+    glVertex3f(-hw + fw,  hh - fw,    -0.015f);
+    glEnd();
+    clearEmission();
+
+    // Panel frame
+    drawCube({ 0,  hh - fw * 0.5f, 0 }, NO_ROT, { width, fw, 0.08f }, DARK_WOOD);  // top
+    drawCube({ 0, -hh + fw * 0.5f, 0 }, NO_ROT, { width, fw, 0.08f }, DARK_WOOD);  // bottom
+    drawCube({ -hw + fw * 0.5f, 0, 0 }, NO_ROT, { fw, height, 0.08f }, DARK_WOOD); // left
+    drawCube({  hw - fw * 0.5f, 0, 0 }, NO_ROT, { fw, height, 0.08f }, DARK_WOOD); // right
+
+    // Kumiko lattice (horizontal bars in paper area)
+    float latticeBot = -hh + kickH;
+    float latticeTop = hh - fw;
+    float latticeH   = latticeTop - latticeBot;
+    float latticeW   = width - fw * 2;
+    int hBars = (int)(latticeH / 0.40f);
+    float hStep = latticeH / (hBars + 1);
+    for (int i = 1; i <= hBars; i++) {
+        float y = latticeBot + i * hStep;
+        drawCube({ 0, y, 0.008f }, NO_ROT, { latticeW - 0.02f, 0.025f, 0.025f }, DARK_WOOD);
+    }
+
+    // Kumiko lattice (vertical bars)
+    int vBars = (int)(latticeW / 0.35f);
+    float vStep = latticeW / (vBars + 1);
+    for (int i = 1; i <= vBars; i++) {
+        float x = -hw + fw + i * vStep;
+        float barCY = (latticeBot + latticeTop) * 0.5f;
+        drawCube({ x, barCY, 0.008f }, NO_ROT, { 0.025f, latticeH, 0.025f }, DARK_WOOD);
+    }
+
+    // Kick panel (solid wood — koshi-ita)
+    float kickCY = -hh + (fw + kickH) * 0.5f;
+    drawCube({ 0, kickCY, 0 }, NO_ROT,
+             { width - fw * 2, kickH - fw, 0.05f }, WOOD);
+
+    // Hikite (recessed finger pull)
+    drawCube({ hw - 0.14f, 0, 0.04f }, NO_ROT, { 0.06f, 0.10f, 0.015f }, DARK_WOOD);
+}
+
+// ─── Interactive Sliding Shoji Door (click to open/close) ─────────────────
+// Two shoji panels that slide apart horizontally on tracks.
+// offset: 0 = closed, 1 = fully open.
+void drawSlidingShoji(Vec3 pos, Vec3 rot, float offset, float totalW, float height)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, ONE);
+
+    float panelW = totalW * 0.5f;
+    float halfH  = height * 0.5f;
+    float halfW  = totalW * 0.5f;
+    float slide  = offset * panelW;
+
+    // Removed black aperture - interior is now visible when shoji opens
+    if (false) {  // disabled aperture drawing
+        float openHW = halfW * offset;
+        glBegin(GL_QUADS);
+        glNormal3f(0, 0, 1);
+        setColor(BLACK);
+        glVertex3f(-openHW, -halfH + 0.02f, -0.04f);
+        glVertex3f( openHW, -halfH + 0.02f, -0.04f);
+        glVertex3f( openHW,  halfH - 0.02f, -0.04f);
+        glVertex3f(-openHW,  halfH - 0.02f, -0.04f);
+        glEnd();
+    }
+
+    // Fixed door frame: top/bottom tracks and side posts
+    drawCube({ 0, halfH + 0.03f, 0 }, NO_ROT,
+             { totalW + 0.16f, 0.04f, 0.14f }, DARK_WOOD);          // top track
+    drawCube({ 0, -halfH - 0.02f, 0 }, NO_ROT,
+             { totalW + 0.16f, 0.03f, 0.14f }, DARK_WOOD);          // bottom track
+    drawCube({ -(halfW + 0.04f), 0, 0 }, NO_ROT,
+             { 0.06f, height + 0.04f, 0.12f }, DARK_WOOD);          // left post
+    drawCube({  (halfW + 0.04f), 0, 0 }, NO_ROT,
+             { 0.06f, height + 0.04f, 0.12f }, DARK_WOOD);          // right post
+
+    // Left panel (slides left when opening, front track)
+    glPushMatrix();
+    glTranslatef(-panelW * 0.5f - slide, 0, 0.012f);
+    drawShojiPanelCentered(panelW, height);
+    glPopMatrix();
+
+    // Right panel (slides right when opening, rear track)
+    glPushMatrix();
+    glTranslatef(panelW * 0.5f + slide, 0, -0.012f);
+    drawShojiPanelCentered(panelW, height);
+    glPopMatrix();
+
+    glPopMatrix();
+}
+
 // ─── Shoji Sliding Door (Japanese paper door) ─────────────────────────────
 // Translucent washi paper panel in a dark-wood lattice frame.
 // Warm interior light glows through the paper.

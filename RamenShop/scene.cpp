@@ -8,6 +8,14 @@ bool showFog    = true;
 bool showSteam  = true;
 bool animPaused = false;
 
+// Entrance door state
+bool doorOpen   = false;
+float doorAngle = 0.0f;
+
+// Sliding shoji door state
+bool slideDoorOpen   = false;
+float slideDoorOffset = 0.0f;
+
 // ─── Day/Night cycle ────────────────────────────────────────────────────────
 DayNightMode dayNightMode = NIGHT;
 bool isDayTime = false;
@@ -570,11 +578,23 @@ void drawExterior()
     drawShopBuilding({ 0, 0, 0 });
     if (showRoof) drawRoof({ 0, 0, 0 });
 
-    // Clear glass shopfront facade panels and sliding entrance doors
-    drawClearGlassWindow({ -3.35f, 1.65f, 3.90f }, NO_ROT, ONE, 2.90f, 2.70f);
-    drawClearGlassWindow({  3.35f, 1.65f, 3.90f }, NO_ROT, ONE, 2.90f, 2.70f);
-    drawClearGlassWindow({ -0.90f, 1.60f, 3.92f }, NO_ROT, ONE, 1.60f, 2.60f);
-    drawClearGlassWindow({  0.90f, 1.60f, 3.92f }, NO_ROT, ONE, 1.60f, 2.60f);
+    // Japanese paper (shoji) shopfront facade panels (replaces glass)
+    drawShojiWindow({ -3.35f, 1.65f, 3.90f }, NO_ROT, ONE, 2.90f, 2.70f);
+    drawShojiWindow({  3.35f, 1.65f, 3.90f }, NO_ROT, ONE, 2.90f, 2.70f);
+
+    // Wooden entrance doors — sliding shoji (click to open/close)
+    drawEntranceDoor(doorAngle);
+
+    // Clear glass windows on side walls (left and right)
+    drawClearGlassWindow({ -4.90f, 2.2f, 0.5f }, { 0, -90, 0 }, ONE, 2.40f, 2.00f);   // left wall center
+    drawClearGlassWindow({  4.90f, 2.2f, 0.5f }, { 0,  90, 0 }, ONE, 2.40f, 2.00f);   // right wall center
+
+    // Shoji windows on the side walls (rear sections)
+    drawShojiWindow({ -4.90f, 2.2f, -2.0f }, { 0, -90, 0 }, ONE, 1.6f, 1.2f);   // left wall, rear
+    drawShojiWindow({  4.90f, 2.2f, -2.0f }, { 0,  90, 0 }, ONE, 1.6f, 1.2f);   // right wall, rear
+
+    // Sliding shoji door on the left side wall (click to open/close)
+    drawSlidingShoji({ -4.90f, 1.5f, 2.8f }, { 0, -90, 0 }, slideDoorOffset, 2.4f, 2.8f);
 
     drawGridWindow({ 0, 4.3f, 4.05f }, NO_ROT, ONE, 8.5f, 1.5f, 12, 3);
     drawSignBoard({ 0, 5.65f, 4.12f });
@@ -584,25 +604,25 @@ void drawExterior()
     float swayL  = sin(animTime * 2.0f) * 2.5f;
     float swayR  = sin(animTime * 1.9f + 0.8f) * 2.5f;
 
-    // Left lantern — selectable as OBJ_LANTERN_L
+    // Left lantern — selectable as OBJ_LANTERN_L (bright yellow chochin)
     glPushMatrix();
     glTranslatef(-3.8f, 2.95f, 4.5f);
-    applyObjDelta(OBJ_LANTERN_L);          // user transform applied at pivot
-    glRotatef(swayL, 0, 0, 1);            // breeze sway on top
+    applyObjDelta(OBJ_LANTERN_L);
+    glRotatef(swayL, 0, 0, 1);
     drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.02f, 0.4f, 0.02f }, BLACK);
-    setEmission(0.75f * flickL, 0.60f * flickL, 0.35f * flickL);
-    drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, LANTERN_CREAM);
+    setEmission(0.95f * flickL, 0.85f * flickL, 0.15f * flickL);
+    drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, GOLD);
     clearEmission();
     glPopMatrix();
 
-    // Right lantern — selectable as OBJ_LANTERN_R
+    // Right lantern — selectable as OBJ_LANTERN_R (bright yellow chochin)
     glPushMatrix();
     glTranslatef(3.8f, 2.95f, 4.5f);
     applyObjDelta(OBJ_LANTERN_R);
     glRotatef(swayR, 0, 0, 1);
     drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.02f, 0.4f, 0.02f }, BLACK);
-    setEmission(0.75f * flickR, 0.60f * flickR, 0.35f * flickR);
-    drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, LANTERN_CREAM);
+    setEmission(0.95f * flickR, 0.85f * flickR, 0.15f * flickR);
+    drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, GOLD);
     clearEmission();
     glPopMatrix();
 
@@ -618,6 +638,9 @@ void drawExterior()
     drawTree({  7.0f, 0,  3.0f }, NO_ROT, { 1.2f, 1.5f, 1.2f });
     drawTree({ -6.5f, 0, -2.0f }, NO_ROT, { 0.8f, 1.1f, 0.8f });
     drawTree({  7.5f, 0, -1.5f });
+
+    // Cherry blossom tree prominently displayed to the left of the shop entrance
+    drawCherryBlossomTree({ -5.5f, 0, 6.2f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
 
     drawLamp({ -7.0f, 0, 7.0f }, { 0, -90, 0 });
     drawLamp({  7.0f, 0, 7.0f }, { 0, -90, 0 });
@@ -656,7 +679,7 @@ void drawInterior()
             glTranslatef(x, counterTop, -0.3f);
             applyObjDelta(OBJ_BOWL);
             drawRamenBowl({ 0, 0, 0 }, NO_ROT, { 0.24f, 0.24f, 0.24f });
-            drawChopsticks({ 0.18f, 0.005f, 0.12f }, { 0, 25, 0 }, { 0.24f, 0.24f, 0.24f });
+            drawChopsticks({ 0.18f, 0.005f, -0.12f }, { 0, 25, 0 }, { 0.24f, 0.24f, 0.24f });
             if (showSteam) drawSteam({ 0, 0.09f, 0 }, 0.22f, 0.0f);
             glPopMatrix();
         } else {
@@ -731,11 +754,31 @@ void drawInterior()
     drawClearGlassJar({ -0.85f, shelfY + 0.04f, -3.63f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.85f, 0.25f, 0.10f });
     drawClearGlassJar({ -0.55f, shelfY + 0.04f, -3.63f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.15f, 0.45f, 0.15f });
 
-    // Ladle hanging on a hook between the two wall shelves
-    drawLadle({ 0.0f, shelfY + 0.56f, -3.60f }, { 0, 0, 90 });
+    // ── Utensil hanging rail on the back wall ────────────────────────────────
+    float railY = shelfY + 0.60f;  // just above shelves
+    drawCylinder({ 0, railY, -3.72f }, { 0, 0, -90 }, { 0.02f, 3.2f, 0.02f }, STEEL);
 
-    drawCylinderLantern({ -1.8f, 2.9f, 0.0f }, NO_ROT, { 0.9f, 0.9f, 0.9f });
-    drawCylinderLantern({  1.8f, 2.9f, 0.0f }, NO_ROT, { 0.9f, 0.9f, 0.9f });
+    // Hanging utensils along the rail
+    drawLadle({    -1.2f, railY - 0.04f, -3.68f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
+    drawSpatula({  -0.6f, railY - 0.04f, -3.68f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
+    drawTongs({     0.0f, railY - 0.04f, -3.68f }, { 0, 15, 0 }, { 0.8f, 0.8f, 0.8f });
+    drawStrainer({  0.6f, railY - 0.04f, -3.68f }, NO_ROT, { 0.7f, 0.7f, 0.7f });
+    drawLadle({     1.2f, railY - 0.04f, -3.68f }, { 0, -10, 0 }, { 0.7f, 0.7f, 0.7f });
+    drawSpatula({   1.8f, railY - 0.04f, -3.68f }, { 0, 25, 0 }, { 0.6f, 0.6f, 0.6f });
+
+    // ── Kitchen hood (range hood) above the stove ─────────────────────────
+    drawKitchenHood({ -1.5f, FY + 2.4f, -3.2f });
+
+    // ── Wok on the kitchen counter ────────────────────────────────────────
+    drawWok({ 0.8f, kitchenTop + 0.02f, -3.2f }, NO_ROT, { 0.7f, 0.7f, 0.7f });
+
+    // Extra stacked bowls near the prep area
+    for (int i = 0; i < 3; i++)
+        drawBowl({ -0.3f, kitchenTop + i * 0.05f, -3.15f },
+                 NO_ROT, { 0.20f, 0.20f, 0.20f }, PLATE_WHITE);
+
+    drawHangingLantern({ -1.8f, 3.1f, 0.0f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
+    drawHangingLantern({  1.8f, 3.1f, 0.0f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
 
     // Noren curtain — selectable as OBJ_NOREN
     glPushMatrix();
@@ -751,7 +794,7 @@ void drawInterior()
     drawWallClock({ 0.0f, 3.3f, -3.78f });
 
     drawWallDecoration({ -4.77f, 2.0f, 0.5f }, { 0,  90, 0 });
-    drawWallDecoration({  4.77f, 2.0f, 1.0f }, { 0, -90, 0 });
+    drawWallDecoration({  4.77f, 2.0f, 0.5f }, { 0, -90, 0 });
 
     drawCuboid({ -3.8f, FY, 0.5f },        NO_ROT, { 0.4f,  0.35f, 0.3f  }, WOOD);
     drawCuboid({ -3.8f, FY + 0.35f, 0.5f }, NO_ROT, { 0.45f, 0.04f, 0.35f }, LIGHT_WOOD);

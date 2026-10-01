@@ -44,6 +44,9 @@
     <ClCompile Include="shader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="raytracer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="shapes.h">
@@ -76,6 +79,9 @@
     <ClInclude Include="shader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="raytracer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -85,7 +91,10 @@
     <None Include="VISUAL_CHANGES_GUIDE.md" />
     <None Include="IMPLEMENTATION_COMPLETE.md" />
     <None Include="CODE_CHANGES_DETAIL.md" />
+    <None Include="RAY_TRACING_GUIDE.md" />
     <None Include="START_HERE.md" />
     <None Include="COMPLETION_CHECKLIST.md" />
+    <None Include="LANTERN_UPGRADE.md" />
+    <None Include="UI_CONTROLS_GUIDE.md" />
   </ItemGroup>
 </Project>
