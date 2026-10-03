@@ -2,18 +2,31 @@
 
 #include "shapes.h"
 
-enum CameraMode { CAM_ORBIT, CAM_FPS, CAM_FOCUSED };
+enum CameraMode { CAM_ORBIT, CAM_FPS, CAM_FOCUSED, CAM_UPPER };
 extern CameraMode currentCamMode;
 
-// Orbit Camera parameters
+// Orbit Camera parameters (exterior overview)
 extern float camAngle;
 extern float camDistance;
 extern float camHeight;
+extern float camLookAtY;
 
 // FPS Walkthrough Camera parameters
 extern Vec3  fpsPos;
 extern float fpsYaw;
 extern float fpsPitch;
+
+// Upper Room orbit parameters
+extern float upperAngle;
+extern float upperDistance;
+extern float upperHeight;
+extern float upperLookAtY;
+
+// Counter View orbit parameters
+extern float counterAngle;
+extern float counterDistance;
+extern float counterHeight;
+extern float counterLookAtY;
 
 // Key state arrays for smooth continuous motion
 extern bool keyStates[256];

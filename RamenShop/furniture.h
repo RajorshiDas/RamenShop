@@ -19,3 +19,16 @@ void drawStrainer(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawTongs(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawWok(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawKitchenHood(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+
+// ── Modular kitchen equipment (each independently repositionable) ───────────
+void drawStoveTop(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawLargeRamenPot(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawIngredientContainer(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, Color fill = { 0.40f, 0.80f, 0.30f });
+void drawStackedBowls(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, int count = 5);
+void drawRefrigerator(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawDishRack(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawKitchenKnife(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawTicketRail(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawGasBurner(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawNoodleStation(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawServingCounter(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);

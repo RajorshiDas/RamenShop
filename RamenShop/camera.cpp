@@ -7,15 +7,28 @@
 
 CameraMode currentCamMode = CAM_ORBIT;
 
-// Orbit Camera
+// Orbit Camera (exterior overview)
 float camAngle    = 30.0f;
-float camDistance = 20.0f;
+float camDistance  = 20.0f;
 float camHeight   = 8.0f;
+float camLookAtY  = 1.5f;
 
 // FPS Walkthrough Camera
 Vec3  fpsPos   = { 0.0f, 1.65f, 9.0f };
 float fpsYaw   = 180.0f;
 float fpsPitch = 0.0f;
+
+// Upper Room orbit
+float upperAngle    = 45.0f;
+float upperDistance  = 5.5f;
+float upperHeight   = 5.5f;
+float upperLookAtY  = 3.8f;
+
+// Counter View orbit
+float counterAngle    = 0.0f;
+float counterDistance  = 3.5f;
+float counterHeight   = 2.0f;
+float counterLookAtY  = 1.2f;
 
 // Key states
 bool keyStates[256]        = { false };
@@ -30,13 +43,14 @@ void updateWindowTitle()
     char buf[512];
     const char* camName =
         (currentCamMode == CAM_ORBIT)   ? "Orbit" :
-        (currentCamMode == CAM_FPS)     ? "Walkthrough" : "Counter View";
+        (currentCamMode == CAM_FPS)     ? "Walkthrough" :
+        (currentCamMode == CAM_UPPER)   ? "Upper Room" : "Counter View";
 
     const char* objName =
         (selectedObj == OBJ_NONE) ? "none" : sceneObjects[selectedObj].name;
 
     sprintf_s(buf, sizeof(buf),
-        "3D Ramen Shop | %s | %s[T] | %s[G] | Cam:%s[C] | Amb:%s[1] Dif:%s[2] Spec:%s[3] | Dir:%s[4] Pt:%s[5] Spot:%s[6] Area:%s[7] | Preset:%s[P]",
+        "3D Ramen Shop | %s | %s[T] | %s[G] | Cam:%s[C] | Amb:%s[1] Dif:%s[2] Spec:%s[3] | Sky:%s[4] Lamps:%s[5] Kitchen:%s[6] Decor:%s[7] | Preset:%s[P]",
         getRayTracingStatusString(),
         getDayNightModeName(),
         usePhongShading ? "Phong" : "Gouraud",
@@ -58,7 +72,7 @@ void applyCameraView()
     if (currentCamMode == CAM_ORBIT) {
         float a = camAngle * PI / 180.0f;
         gluLookAt(camDistance * sin(a), camHeight, camDistance * cos(a),
-                  0, 1.5f, 1,
+                  0, camLookAtY, 0,
                   0, 1, 0);
     }
     else if (currentCamMode == CAM_FPS) {
@@ -71,11 +85,62 @@ void applyCameraView()
                   fpsPos.x + fx, fpsPos.y + fy, fpsPos.z + fz,
                   0, 1, 0);
     }
-    else {   // CAM_FOCUSED — close-up of the counter / first bowl
-        gluLookAt(-2.2f, 2.2f, 2.5f,   // eye: above and in front of first bowl
-                  -2.2f, 1.2f, -0.3f,  // look-at: first bowl position
+    else if (currentCamMode == CAM_UPPER) {
+        // Orbit inside the second-floor tatami room
+        float a = upperAngle * PI / 180.0f;
+        gluLookAt(upperDistance * sin(a), upperHeight, upperDistance * cos(a),
+                  0, upperLookAtY, 0,
                   0, 1, 0);
     }
+    else {   // CAM_FOCUSED — orbit around the counter area
+        float a = counterAngle * PI / 180.0f;
+        float lookX = 0.0f, lookZ = -0.3f;
+        gluLookAt(lookX + counterDistance * sin(a), counterHeight, lookZ + counterDistance * cos(a),
+                  lookX, counterLookAtY, lookZ,
+                  0, 1, 0);
+    }
+}
+
+// ─── Floor height under the camera (handles stairs + second floor) ──────────
+// Returns the surface Y the camera should stand on at world (x, z).
+// currentY lets us know whether we are already on the second floor.
+static float getFloorY(float x, float z, float currentY)
+{
+    const float GRND   = FLOOR_Y;   // 0.10  ground floor surface
+    const float FLOOR2 = 3.42f;     // GH(3.3) + slab(0.12) — second-floor surface
+    const float EYE    = 1.65f;     // eye height above floor
+
+    // ── Staircase parameters (must match scene.cpp drawInterior) ──
+    const float SX  = 4.0f;   // centre X
+    const float SW  = 1.0f;   // width
+    const float SZ0 = 2.5f;   // Z of front face of step 0
+    const float SH  = 0.332f; // riser height
+    const float SD  = 0.30f;  // tread depth
+    const int   NS  = 10;     // step count
+
+    // Inside staircase x-column?
+    if (x >= SX - SW * 0.5f - 0.2f && x <= SX + SW * 0.5f + 0.2f) {
+        float dist = SZ0 - z;   // how far along the run (0 = front, NS*SD = back)
+
+        // On a step tread
+        if (dist >= 0.0f && dist < NS * SD) {
+            int step = (int)(dist / SD);
+            if (step >= NS) step = NS - 1;
+            return GRND + (step + 1) * SH;   // tread top of step i
+        }
+        // Past the last step — already on the second-floor landing
+        if (dist >= NS * SD && dist < NS * SD + 1.5f) {
+            return FLOOR2;
+        }
+    }
+
+    // Already walking on the second floor (anywhere inside the building)
+    if (currentY >= FLOOR2 + EYE * 0.5f) {
+        if (x >= -4.8f && x <= 4.8f && z >= -3.8f && z <= 3.8f)
+            return FLOOR2;
+    }
+
+    return GRND;
 }
 
 // ─── Continuous FPS movement ───────────────────────────────────────────────
@@ -95,7 +160,17 @@ void updateCameraMovement()
     if (keyStates['a'] || keyStates['A']) { fpsPos.x -= right.x*spd; fpsPos.z -= right.z*spd; }
     if (keyStates['e'] || keyStates['E']) fpsPos.y += spd * 0.8f;
     if (keyStates['q'] || keyStates['Q']) fpsPos.y -= spd * 0.8f;
-    if (fpsPos.y < 0.6f) fpsPos.y = 0.6f;
+
+    // Ground/stair following: keep camera eye above the surface beneath it
+    const float eyeH  = 1.65f;
+    float groundY     = getFloorY(fpsPos.x, fpsPos.z, fpsPos.y);
+    float minY        = groundY + eyeH;
+    if (fpsPos.y < minY) {
+        fpsPos.y = minY;          // step up instantly (stair rise)
+    } else if (fpsPos.y > minY + 0.05f) {
+        fpsPos.y -= 0.07f;        // gentle fall back to surface
+        if (fpsPos.y < minY) fpsPos.y = minY;
+    }
 }
 
 // ─── Keyboard handlers ─────────────────────────────────────────────────────
@@ -103,10 +178,11 @@ void handleKeyboardDown(unsigned char key, int, int)
 {
     keyStates[key] = true;
 
-    // ── Camera mode cycle (Orbit → FPS → Focused → Orbit) ──
+    // ── Camera mode cycle (Orbit → FPS → Focused → Upper → Orbit) ──
     if (key == 'c' || key == 'C') {
         if      (currentCamMode == CAM_ORBIT)   currentCamMode = CAM_FPS;
         else if (currentCamMode == CAM_FPS)     currentCamMode = CAM_FOCUSED;
+        else if (currentCamMode == CAM_FOCUSED) currentCamMode = CAM_UPPER;
         else                                    currentCamMode = CAM_ORBIT;
         updateWindowTitle();
     }
@@ -179,12 +255,26 @@ void handleSpecialDown(int key, int, int)
 {
     specialKeyStates[key] = true;
     if (currentCamMode == CAM_ORBIT) {
-        if (key == GLUT_KEY_LEFT)                 camAngle   -= 5;
-        if (key == GLUT_KEY_RIGHT)                camAngle   += 5;
-        if (key == GLUT_KEY_UP && camDistance > 3) camDistance -= 1;
-        if (key == GLUT_KEY_DOWN)                 camDistance += 1;
-        if (key == GLUT_KEY_PAGE_UP)              camHeight  += 0.5f;
-        if (key == GLUT_KEY_PAGE_DOWN)            camHeight  -= 0.5f;
+        if (key == GLUT_KEY_LEFT)                  camAngle   -= 5;
+        if (key == GLUT_KEY_RIGHT)                 camAngle   += 5;
+        if (key == GLUT_KEY_UP && camDistance > 3)  camDistance -= 1;
+        if (key == GLUT_KEY_DOWN)                  camDistance += 1;
+        if (key == GLUT_KEY_PAGE_UP)   { camHeight += 0.5f; camLookAtY += 0.4f; }
+        if (key == GLUT_KEY_PAGE_DOWN) { camHeight -= 0.5f; camLookAtY -= 0.4f; }
+    } else if (currentCamMode == CAM_UPPER) {
+        if (key == GLUT_KEY_LEFT)                       upperAngle    -= 5;
+        if (key == GLUT_KEY_RIGHT)                      upperAngle    += 5;
+        if (key == GLUT_KEY_UP && upperDistance > 2)     upperDistance  -= 0.5f;
+        if (key == GLUT_KEY_DOWN)                       upperDistance  += 0.5f;
+        if (key == GLUT_KEY_PAGE_UP)   { upperHeight += 0.3f; upperLookAtY += 0.2f; }
+        if (key == GLUT_KEY_PAGE_DOWN) { upperHeight -= 0.3f; upperLookAtY -= 0.2f; }
+    } else if (currentCamMode == CAM_FOCUSED) {
+        if (key == GLUT_KEY_LEFT)                           counterAngle    -= 5;
+        if (key == GLUT_KEY_RIGHT)                          counterAngle    += 5;
+        if (key == GLUT_KEY_UP && counterDistance > 1.5f)    counterDistance -= 0.5f;
+        if (key == GLUT_KEY_DOWN)                           counterDistance += 0.5f;
+        if (key == GLUT_KEY_PAGE_UP)   { counterHeight += 0.3f; counterLookAtY += 0.2f; }
+        if (key == GLUT_KEY_PAGE_DOWN) { counterHeight -= 0.3f; counterLookAtY -= 0.2f; }
     } else if (currentCamMode == CAM_FPS) {
         if (key == GLUT_KEY_PAGE_UP)              fpsPos.y += 0.3f;
         if (key == GLUT_KEY_PAGE_DOWN && fpsPos.y > 0.8f) fpsPos.y -= 0.3f;
@@ -241,19 +331,52 @@ void handleMouseClick(int button, int state, int x, int y)
                 }
             }
         }
+
+        // Intersect ray with upper-room door plane x = 3.50
+        if (fabs(rdx) > 0.0001) {
+            double t = (3.50 - nx) / rdx;
+            if (t > 0) {
+                double hitY = ny + t * rdy;
+                double hitZ = nz + t * rdz;
+                // Door centre z=-0.1, half-w=0.6 → z [-0.7, 0.5]
+                // Door y: 3.42 to 5.32
+                if (hitZ > -0.7 && hitZ < 0.5 && hitY > 3.42 && hitY < 5.32) {
+                    upperDoorOpen = !upperDoorOpen;
+                    // Enter / exit the upper room view
+                    if (upperDoorOpen) {
+                        currentCamMode = CAM_UPPER;
+                    } else {
+                        currentCamMode = CAM_ORBIT;
+                    }
+                    updateWindowTitle();
+                }
+            }
+        }
     }
     if (button == GLUT_LEFT_BUTTON) {
         isMouseDragging = (state == GLUT_DOWN);
         lastMouseX = x; lastMouseY = y;
     }
-    if (button == 3 && state == GLUT_DOWN) {   // wheel up
-        if (currentCamMode == CAM_ORBIT && camDistance > 3) camDistance -= 0.8f;
-        else if (currentCamMode == CAM_FPS)  fpsPos.y += 0.2f;
+    if (button == 3 && state == GLUT_DOWN) {   // wheel up — zoom in
+        if (currentCamMode == CAM_ORBIT && camDistance > 3)
+            camDistance -= 0.8f;
+        else if (currentCamMode == CAM_UPPER && upperDistance > 2)
+            upperDistance -= 0.5f;
+        else if (currentCamMode == CAM_FOCUSED && counterDistance > 1.5f)
+            counterDistance -= 0.5f;
+        else if (currentCamMode == CAM_FPS)
+            fpsPos.y += 0.2f;
         glutPostRedisplay();
     }
-    if (button == 4 && state == GLUT_DOWN) {   // wheel down
-        if (currentCamMode == CAM_ORBIT)        camDistance += 0.8f;
-        else if (currentCamMode == CAM_FPS && fpsPos.y > 0.8f) fpsPos.y -= 0.2f;
+    if (button == 4 && state == GLUT_DOWN) {   // wheel down — zoom out
+        if (currentCamMode == CAM_ORBIT)
+            camDistance += 0.8f;
+        else if (currentCamMode == CAM_UPPER)
+            upperDistance += 0.5f;
+        else if (currentCamMode == CAM_FOCUSED)
+            counterDistance += 0.5f;
+        else if (currentCamMode == CAM_FPS && fpsPos.y > 0.8f)
+            fpsPos.y -= 0.2f;
         glutPostRedisplay();
     }
 }
@@ -272,6 +395,14 @@ void handleMouseMotion(int x, int y)
         camAngle  += dx * 0.35f;
         camHeight += dy * 0.04f;
         if (camHeight < 0.5f) camHeight = 0.5f;
+    } else if (currentCamMode == CAM_UPPER) {
+        upperAngle  += dx * 0.35f;
+        upperHeight += dy * 0.04f;
+        if (upperHeight < 3.8f) upperHeight = 3.8f;
+    } else if (currentCamMode == CAM_FOCUSED) {
+        counterAngle  += dx * 0.35f;
+        counterHeight += dy * 0.04f;
+        if (counterHeight < 0.5f) counterHeight = 0.5f;
     }
     lastMouseX = x; lastMouseY = y;
     glutPostRedisplay();

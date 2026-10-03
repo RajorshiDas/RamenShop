@@ -1,5 +1,6 @@
 #include "decorations.h"
 #include "shader.h"
+#include "scene.h"    // isDayTime for day/night conditional emission
 
 void drawLantern(Vec3 pos, Vec3 rot, Vec3 scale)
 {
@@ -98,32 +99,12 @@ void drawCylinderLantern(Vec3 pos, Vec3 rot, Vec3 scale)
 
         float flicker = 1.0f + 0.08f * sin(animTime * 4.2f + pos.x);
 
-        // ────── Main lantern paper body (egg-shaped with MUCH BRIGHTER glow) ──────
-        // Very bright interior illumination - like looking inside a lit bulb
-        setEmission(1.0f * flicker, 0.65f * flicker, 0.15f * flicker);
-        setMaterialPBR(Materials::GlazedMatte, LANTERN_ORANGE);
-
-        // Egg-shaped body: scales create tapered top and bottom
-        drawSphere({ 0, -0.08f, 0 }, NO_ROT, { 0.36f, 0.54f, 0.36f }, LANTERN_ORANGE);
-
+        // ────── Solid glowing red lantern body ──────
+        const Color LANTERN_RED = { 0.90f, 0.10f, 0.08f };
+        setEmission(0.85f * flicker, 0.12f * flicker, 0.08f * flicker);
+        setMaterialPBR(Materials::GlazedMatte, LANTERN_RED);
+        drawSphere({ 0, -0.08f, 0 }, NO_ROT, { 0.36f, 0.54f, 0.36f }, LANTERN_RED);
         clearEmission();
-
-        // ────── Horizontal paper ribs (visible texture lines on lantern surface) ──────
-        // These are rendered directly on the paper surface to show paper pleats
-        setMaterialPBR(Materials::GlazedMatte, {0.9f, 0.65f, 0.35f});  // warm tan/orange
-
-        // Draw horizontal lines across the entire lantern body
-        int numRibs = 14;  // Many ribs for detailed paper texture
-        for (int i = 0; i < numRibs; i++) {
-            float ry = -0.38f + (float)i * (0.76f / (numRibs - 1));
-
-            // Calculate radius based on egg-shape equation
-            float t = (ry + 0.08f) / 0.54f;  // normalize to 0-1
-            float rbody = 0.36f * sqrt(1.0f - t * t);  // ellipse equation
-
-            // Thin horizontal band/rib
-            drawTorus({ 0, ry, 0 }, NO_ROT, ONE, {0.9f, 0.65f, 0.35f}, 0.006f, rbody + 0.01f);
-        }
 
         // ────── Top metal cap with hanging loop ──────
         setMaterialPBRMetallic(Materials::BrushedMetal, DARK_GRAY);
@@ -255,7 +236,10 @@ void drawSignBoard(Vec3 pos, Vec3 rot, Vec3 scale)
     applyTransform(pos, rot, scale);
 
     drawCube({ 0, 0, -0.02f }, NO_ROT, { 2.8f, 0.85f, 0.10f }, DARK_WOOD);   // frame
-    setEmission(0.15f, 0.14f, 0.12f);   // slight self-illumination
+    if (!isDayTime)
+        setEmission(0.35f, 0.30f, 0.18f);   // illuminated sign at night
+    else
+        setEmission(0.06f, 0.05f, 0.04f);   // subtle during day
     drawCube({ 0, 0,  0.03f }, NO_ROT, { 2.6f, 0.70f, 0.06f }, WHITE);       // white board
     clearEmission();
 

@@ -228,13 +228,21 @@ void updatePhongUniforms()
     if (!shaderActive) return;
 
     // Light enable mask — matches the glEnable/glDisable state in scene.cpp
+    //   LIGHT0 = Moon/Sun (directional)
+    //   LIGHT1 = Interior dining pendant (point)
+    //   LIGHT2 = Left exterior chochin   (point)
+    //   LIGHT3 = Right exterior chochin  (point)
+    //   LIGHT4 = Kitchen spotlight       (spot)
+    //   LIGHT5 = Street lamps            (area toggle)
+    //   LIGHT6 = Hanging lanterns         (area toggle)
+    //   LIGHT7 = Second floor ceiling     (area toggle)
     float mask[8];
     mask[0] = lightDirectional ? 1.0f : 0.0f;
-    mask[1] = lightDirectional ? 1.0f : 0.0f;
+    mask[1] = lightPoint       ? 1.0f : 0.0f;
     mask[2] = lightPoint       ? 1.0f : 0.0f;
     mask[3] = lightPoint       ? 1.0f : 0.0f;
-    mask[4] = lightPoint       ? 1.0f : 0.0f;
-    mask[5] = lightSpot        ? 1.0f : 0.0f;
+    mask[4] = lightSpot        ? 1.0f : 0.0f;
+    mask[5] = (lightArea && !isDayTime) ? 1.0f : 0.0f;
     mask[6] = lightArea        ? 1.0f : 0.0f;
     mask[7] = lightArea        ? 1.0f : 0.0f;
     glUniform1fv(uLightOn, 8, mask);

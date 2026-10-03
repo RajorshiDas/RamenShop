@@ -16,6 +16,10 @@ float doorAngle = 0.0f;
 bool slideDoorOpen   = false;
 float slideDoorOffset = 0.0f;
 
+// Upper room door state
+bool upperDoorOpen   = false;
+float upperDoorOffset = 0.0f;
+
 // ─── Day/Night cycle ────────────────────────────────────────────────────────
 DayNightMode dayNightMode = NIGHT;
 bool isDayTime = false;
@@ -289,33 +293,35 @@ void applyLightingParameters() {
     // Zero vector for disabled light components
     static const GLfloat ZERO4[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
-    // 1. Global Ambient Illumination
+    // ════════════════════════════════════════════════════════════════════════
+    //  GLOBAL AMBIENT — very low; pools of light come from placed fixtures
+    // ════════════════════════════════════════════════════════════════════════
     if (isDayTime) {
-        // Daytime: bright warm ambient
-        GLfloat DAY_AMB[] = { 0.30f, 0.30f, 0.28f, 1.0f };
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lightAmbient ? DAY_AMB : ZERO4);
+        GLfloat dayAmb[] = { 0.25f, 0.25f, 0.24f, 1.0f };
+        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lightAmbient ? dayAmb : ZERO4);
     } else {
-        // Nighttime: low-energy fill light (original)
-        static const GLfloat NIGHT_AMB[] = { 0.06f, 0.06f, 0.08f, 1.0f };
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lightAmbient ? NIGHT_AMB : ZERO4);
+        GLfloat nightAmb[] = { 0.04f, 0.04f, 0.06f, 1.0f };
+        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lightAmbient ? nightAmb : ZERO4);
     }
 
-    // 2. Directional Light (GL_LIGHT0) - Sunlight (day) or Moonlight (night)
+    // ════════════════════════════════════════════════════════════════════════
+    //  OUTDOOR LIGHTING
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── LIGHT0: Moon / Sun (Directional) ──────────────────────────────────
     if (lightDirectional) {
         glEnable(GL_LIGHT0);
         if (isDayTime) {
-            // Warm sunlight
-            GLfloat a0[] = { 0.15f, 0.14f, 0.10f, 1.0f };
-            GLfloat d0[] = { 0.85f, 0.80f, 0.65f, 1.0f };
-            GLfloat s0[] = { 1.00f, 0.95f, 0.80f, 1.0f };
+            GLfloat a0[] = { 0.12f, 0.12f, 0.10f, 1.0f };
+            GLfloat d0[] = { 0.80f, 0.75f, 0.60f, 1.0f };    // warm gold sunlight
+            GLfloat s0[] = { 0.95f, 0.90f, 0.75f, 1.0f };
             glLightfv(GL_LIGHT0, GL_AMBIENT,  lightAmbient  ? a0 : ZERO4);
             glLightfv(GL_LIGHT0, GL_DIFFUSE,  lightDiffuse  ? d0 : ZERO4);
             glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular ? s0 : ZERO4);
         } else {
-            // Cool blue moonlight (original)
             GLfloat a0[] = { 0.02f, 0.02f, 0.04f, 1.0f };
-            GLfloat d0[] = { 0.18f, 0.18f, 0.28f, 1.0f };
-            GLfloat s0[] = { 0.40f, 0.40f, 0.50f, 1.0f };
+            GLfloat d0[] = { 0.12f, 0.13f, 0.22f, 1.0f };    // cool blue moonlight
+            GLfloat s0[] = { 0.30f, 0.32f, 0.45f, 1.0f };
             glLightfv(GL_LIGHT0, GL_AMBIENT,  lightAmbient  ? a0 : ZERO4);
             glLightfv(GL_LIGHT0, GL_DIFFUSE,  lightDiffuse  ? d0 : ZERO4);
             glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular ? s0 : ZERO4);
@@ -324,95 +330,122 @@ void applyLightingParameters() {
         glDisable(GL_LIGHT0);
     }
 
-    // 3. Directional Back Fill (GL_LIGHT1) - Separation light
-    if (lightDirectional) {
+    // ════════════════════════════════════════════════════════════════════════
+    //  INTERIOR LIGHTING
+    // ════════════════════════════════════════════════════════════════════════
+
+    // Organic flicker — subtle incandescent bulb variation
+    float flickPendant = 1.0f + 0.04f * sinf(animTime * 4.2f) + 0.03f * sinf(animTime * 11.7f);
+    float flickLanL    = 1.0f + 0.07f * sinf(animTime * 4.3f) + 0.04f * cosf(animTime * 12.4f);
+    float flickLanR    = 1.0f + 0.07f * sinf(animTime * 4.1f + 1.2f) + 0.04f * sinf(animTime * 13.1f);
+    float flickHang    = 1.0f + 0.06f * sinf(animTime * 3.8f) + 0.03f * cosf(animTime * 10.5f);
+
+    // ── LIGHT1: Dining pendant lamps + box lantern cluster ────────────────
+    //    Primary warm interior light. Warm amber (~2700K incandescent).
+    if (lightPoint) {
         glEnable(GL_LIGHT1);
-        if (isDayTime) {
-            // Warm sky bounce fill
-            GLfloat a1[] = { 0.08f, 0.08f, 0.06f, 1.0f };
-            GLfloat d1[] = { 0.35f, 0.38f, 0.45f, 1.0f };  // sky-blue bounce
-            glLightfv(GL_LIGHT1, GL_AMBIENT,  lightAmbient ? a1 : ZERO4);
-            glLightfv(GL_LIGHT1, GL_DIFFUSE,  lightDiffuse ? d1 : ZERO4);
-        } else {
-            // Cool back fill (original)
-            GLfloat a1[] = { 0.01f, 0.01f, 0.02f, 1.0f };
-            GLfloat d1[] = { 0.08f, 0.08f, 0.12f, 1.0f };
-            glLightfv(GL_LIGHT1, GL_AMBIENT,  lightAmbient ? a1 : ZERO4);
-            glLightfv(GL_LIGHT1, GL_DIFFUSE,  lightDiffuse ? d1 : ZERO4);
-        }
-        glLightfv(GL_LIGHT1, GL_SPECULAR, ZERO4);
+        float dayScale = isDayTime ? 0.4f : 1.0f;
+        GLfloat a1[] = { 0.05f * dayScale, 0.04f * dayScale, 0.02f * dayScale, 1.0f };
+        GLfloat d1[] = { 0.80f * flickPendant * dayScale, 0.55f * flickPendant * dayScale, 0.22f * flickPendant * dayScale, 1.0f };
+        GLfloat s1[] = { 0.90f * dayScale, 0.80f * dayScale, 0.60f * dayScale, 1.0f };
+        glLightfv(GL_LIGHT1, GL_AMBIENT,  lightAmbient  ? a1 : ZERO4);
+        glLightfv(GL_LIGHT1, GL_DIFFUSE,  lightDiffuse  ? d1 : ZERO4);
+        glLightfv(GL_LIGHT1, GL_SPECULAR, lightSpecular ? s1 : ZERO4);
     } else {
         glDisable(GL_LIGHT1);
     }
 
-    // Organic flickers for point lights (simulate incandescent bulb flicker)
-    float flickInt  = 1.0f + 0.06f * sinf(animTime * 4.2f) + 0.04f * sinf(animTime * 11.7f);
-    float flickLanL = 1.0f + 0.08f * sinf(animTime * 4.3f) + 0.04f * cosf(animTime * 12.4f);
-    float flickLanR = 1.0f + 0.08f * sinf(animTime * 4.1f + 1.2f) + 0.04f * sinf(animTime * 13.1f);
-
-    // 4. Point Light: Warm Interior Central Pendant (GL_LIGHT2) - Tungsten warm
+    // ── LIGHT2 & LIGHT3: Exterior chochin lanterns ────────────────────────
+    //    Warm orange paper lanterns at the shop entrance (~2200K candle-warm).
     if (lightPoint) {
         glEnable(GL_LIGHT2);
-        GLfloat a2[] = { 0.06f, 0.04f, 0.02f, 1.0f };   // warm, dim ambient
-        GLfloat d2[] = { 0.85f * flickInt, 0.60f * flickInt, 0.25f * flickInt, 1.0f };  // warm diffuse
-        GLfloat s2[] = { 0.95f, 0.85f, 0.65f, 1.0f };   // warm specular
-        glLightfv(GL_LIGHT2, GL_AMBIENT,  lightAmbient  ? a2 : ZERO4);
-        glLightfv(GL_LIGHT2, GL_DIFFUSE,  lightDiffuse  ? d2 : ZERO4);
-        glLightfv(GL_LIGHT2, GL_SPECULAR, lightSpecular ? s2 : ZERO4);
-    } else {
-        glDisable(GL_LIGHT2);
-    }
-
-    // 5. Point Lights: Left & Right Exterior Lanterns (GL_LIGHT3, GL_LIGHT4)
-    if (lightPoint) {
         glEnable(GL_LIGHT3);
-        glEnable(GL_LIGHT4);
-        GLfloat aLan[]  = { 0.02f, 0.01f, 0.00f, 1.0f };  // warm amber ambient
-        GLfloat dLanL[] = { 0.88f * flickLanL, 0.40f * flickLanL, 0.08f * flickLanL, 1.0f };
-        GLfloat dLanR[] = { 0.88f * flickLanR, 0.40f * flickLanR, 0.08f * flickLanR, 1.0f };
-        GLfloat sLan[]  = { 0.65f, 0.30f, 0.08f, 1.0f };  // warm glossy highlights
+        float dayLan = isDayTime ? 0.25f : 1.0f;
+        GLfloat aLan[]  = { 0.02f * dayLan, 0.01f * dayLan, 0.00f, 1.0f };
+        GLfloat dLanL[] = { 0.85f * flickLanL * dayLan, 0.38f * flickLanL * dayLan, 0.07f * flickLanL * dayLan, 1.0f };
+        GLfloat dLanR[] = { 0.85f * flickLanR * dayLan, 0.38f * flickLanR * dayLan, 0.07f * flickLanR * dayLan, 1.0f };
+        GLfloat sLan[]  = { 0.60f * dayLan, 0.28f * dayLan, 0.06f * dayLan, 1.0f };
+
+        glLightfv(GL_LIGHT2, GL_AMBIENT,  lightAmbient  ? aLan  : ZERO4);
+        glLightfv(GL_LIGHT2, GL_DIFFUSE,  lightDiffuse  ? dLanL : ZERO4);
+        glLightfv(GL_LIGHT2, GL_SPECULAR, lightSpecular ? sLan  : ZERO4);
 
         glLightfv(GL_LIGHT3, GL_AMBIENT,  lightAmbient  ? aLan  : ZERO4);
-        glLightfv(GL_LIGHT3, GL_DIFFUSE,  lightDiffuse  ? dLanL : ZERO4);
+        glLightfv(GL_LIGHT3, GL_DIFFUSE,  lightDiffuse  ? dLanR : ZERO4);
         glLightfv(GL_LIGHT3, GL_SPECULAR, lightSpecular ? sLan  : ZERO4);
-
-        glLightfv(GL_LIGHT4, GL_AMBIENT,  lightAmbient  ? aLan  : ZERO4);
-        glLightfv(GL_LIGHT4, GL_DIFFUSE,  lightDiffuse  ? dLanR : ZERO4);
-        glLightfv(GL_LIGHT4, GL_SPECULAR, lightSpecular ? sLan  : ZERO4);
     } else {
+        glDisable(GL_LIGHT2);
         glDisable(GL_LIGHT3);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  KITCHEN LIGHTING
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── LIGHT4: Kitchen spotlight — functional task lighting ──────────────
+    //    Neutral white, slightly warm (~4000K fluorescent).
+    if (lightSpot) {
+        glEnable(GL_LIGHT4);
+        float daySpot = isDayTime ? 0.6f : 1.0f;
+        GLfloat a4[] = { 0.02f * daySpot, 0.02f * daySpot, 0.02f * daySpot, 1.0f };
+        GLfloat d4[] = { 0.95f * daySpot, 0.92f * daySpot, 0.82f * daySpot, 1.0f };
+        GLfloat s4[] = { 1.00f * daySpot, 0.98f * daySpot, 0.92f * daySpot, 1.0f };
+        glLightfv(GL_LIGHT4, GL_AMBIENT,  lightAmbient  ? a4 : ZERO4);
+        glLightfv(GL_LIGHT4, GL_DIFFUSE,  lightDiffuse  ? d4 : ZERO4);
+        glLightfv(GL_LIGHT4, GL_SPECULAR, lightSpecular ? s4 : ZERO4);
+    } else {
         glDisable(GL_LIGHT4);
     }
 
-    // 6. Focused Spot Light: Counter Station Downlight (GL_LIGHT5) - Task lighting
-    if (lightSpot) {
-        glEnable(GL_LIGHT5);
-        GLfloat a5[] = { 0.02f, 0.02f, 0.01f, 1.0f };
-        GLfloat d5[] = { 1.00f, 0.96f, 0.85f, 1.0f };    // neutral white, slightly warm
-        GLfloat s5[] = { 1.00f, 0.98f, 0.95f, 1.0f };    // almost pure white specular
-        glLightfv(GL_LIGHT5, GL_AMBIENT,  lightAmbient  ? a5 : ZERO4);
-        glLightfv(GL_LIGHT5, GL_DIFFUSE,  lightDiffuse  ? d5 : ZERO4);
-        glLightfv(GL_LIGHT5, GL_SPECULAR, lightSpecular ? s5 : ZERO4);
+    // ════════════════════════════════════════════════════════════════════════
+    //  STREET / ATMOSPHERE / SECOND FLOOR
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── LIGHT5: Street lamps (outdoor pavement illumination) ─────────────
+    //    Warm sodium-yellow (~2500K). Only meaningful at night.
+    if (lightArea) {
+        if (!isDayTime) {
+            glEnable(GL_LIGHT5);
+            GLfloat a5[] = { 0.03f, 0.02f, 0.01f, 1.0f };
+            GLfloat d5[] = { 0.70f, 0.55f, 0.20f, 1.0f };    // warm sodium yellow
+            GLfloat s5[] = { 0.50f, 0.40f, 0.15f, 1.0f };
+            glLightfv(GL_LIGHT5, GL_AMBIENT,  lightAmbient  ? a5 : ZERO4);
+            glLightfv(GL_LIGHT5, GL_DIFFUSE,  lightDiffuse  ? d5 : ZERO4);
+            glLightfv(GL_LIGHT5, GL_SPECULAR, lightSpecular ? s5 : ZERO4);
+        } else {
+            glDisable(GL_LIGHT5);   // street lamps off during day
+        }
     } else {
         glDisable(GL_LIGHT5);
     }
 
-    // 7. Area Light: Ceiling Rectangular Luminaire Softbox (GL_LIGHT6, GL_LIGHT7)
+    // ── LIGHT6: Hanging red lanterns (warm dining atmosphere) ─────────────
+    //    Warm red-amber glow from decorative chochin lanterns inside.
     if (lightArea) {
         glEnable(GL_LIGHT6);
-        glEnable(GL_LIGHT7);
-        GLfloat aArea[] = { 0.03f, 0.04f, 0.05f, 1.0f };  // neutral-cool ambient
-        GLfloat dArea[] = { 0.62f, 0.66f, 0.75f, 1.0f };  // neutral-cool diffuse
-        GLfloat sArea[] = { 0.50f, 0.52f, 0.58f, 1.0f };  // soft specular (diffuse source)
-        glLightfv(GL_LIGHT6, GL_AMBIENT,  lightAmbient  ? aArea : ZERO4);
-        glLightfv(GL_LIGHT6, GL_DIFFUSE,  lightDiffuse  ? dArea : ZERO4);
-        glLightfv(GL_LIGHT6, GL_SPECULAR, lightSpecular ? sArea : ZERO4);
-
-        glLightfv(GL_LIGHT7, GL_AMBIENT,  lightAmbient  ? aArea : ZERO4);
-        glLightfv(GL_LIGHT7, GL_DIFFUSE,  lightDiffuse  ? dArea : ZERO4);
-        glLightfv(GL_LIGHT7, GL_SPECULAR, lightSpecular ? sArea : ZERO4);
+        float dayHang = isDayTime ? 0.2f : 1.0f;
+        GLfloat a6[] = { 0.03f * dayHang, 0.01f * dayHang, 0.00f, 1.0f };
+        GLfloat d6[] = { 0.55f * flickHang * dayHang, 0.20f * flickHang * dayHang, 0.06f * flickHang * dayHang, 1.0f };
+        GLfloat s6[] = { 0.40f * dayHang, 0.15f * dayHang, 0.05f * dayHang, 1.0f };
+        glLightfv(GL_LIGHT6, GL_AMBIENT,  lightAmbient  ? a6 : ZERO4);
+        glLightfv(GL_LIGHT6, GL_DIFFUSE,  lightDiffuse  ? d6 : ZERO4);
+        glLightfv(GL_LIGHT6, GL_SPECULAR, lightSpecular ? s6 : ZERO4);
     } else {
         glDisable(GL_LIGHT6);
+    }
+
+    // ── LIGHT7: Second-floor ceiling dome (soft upstairs illumination) ────
+    //    Soft warm white through paper shade (~3000K).
+    if (lightArea) {
+        glEnable(GL_LIGHT7);
+        float dayUp = isDayTime ? 0.3f : 1.0f;
+        GLfloat a7[] = { 0.03f * dayUp, 0.02f * dayUp, 0.01f * dayUp, 1.0f };
+        GLfloat d7[] = { 0.45f * dayUp, 0.35f * dayUp, 0.18f * dayUp, 1.0f };
+        GLfloat s7[] = { 0.30f * dayUp, 0.25f * dayUp, 0.15f * dayUp, 1.0f };
+        glLightfv(GL_LIGHT7, GL_AMBIENT,  lightAmbient  ? a7 : ZERO4);
+        glLightfv(GL_LIGHT7, GL_DIFFUSE,  lightDiffuse  ? d7 : ZERO4);
+        glLightfv(GL_LIGHT7, GL_SPECULAR, lightSpecular ? s7 : ZERO4);
+    } else {
         glDisable(GL_LIGHT7);
     }
 }
@@ -481,8 +514,8 @@ static void drawShadows()
     float FY         = FLOOR_Y;
     float counterTop = FY + 1.06f;
 
-    // Interior warm point-light position (same as GL_LIGHT2 in display())
-    const float lx = 0.0f, ly = 2.8f, lz = -0.2f;
+    // Interior warm point-light position (matches GL_LIGHT1 dining pendant)
+    const float lx = 0.3f, ly = 2.8f, lz = 0.0f;
 
     // Shadow projection matrix: project onto plane y = 0 (column-major)
     // Derived from M[i][j] = dot*δ[i][j] − L[i]*n_ext[j]
@@ -585,9 +618,48 @@ void drawExterior()
     // Wooden entrance doors — sliding shoji (click to open/close)
     drawEntranceDoor(doorAngle);
 
-    // Clear glass windows on side walls (left and right)
+    // Clear glass windows on side walls (left and right) — walls have matching openings
     drawClearGlassWindow({ -4.90f, 2.2f, 0.5f }, { 0, -90, 0 }, ONE, 2.40f, 2.00f);   // left wall center
     drawClearGlassWindow({  4.90f, 2.2f, 0.5f }, { 0,  90, 0 }, ONE, 2.40f, 2.00f);   // right wall center
+
+    // Side wall window frames (wooden mullions around clear glass)
+    for (int sx = -1; sx <= 1; sx += 2) {
+        float fx = sx * 4.88f;
+        drawCube({ fx, 3.22f, 0.5f }, NO_ROT, { 0.10f, 0.08f, 2.56f }, DARK_WOOD);   // top rail
+        drawCube({ fx, 2.2f, -0.74f }, NO_ROT, { 0.10f, 2.08f, 0.08f }, DARK_WOOD);  // back post
+        drawCube({ fx, 2.2f,  1.74f }, NO_ROT, { 0.10f, 2.08f, 0.08f }, DARK_WOOD);  // front post
+        drawCube({ fx, 2.2f, 0.5f }, NO_ROT, { 0.06f, 2.0f, 0.04f }, DARK_WOOD);     // vertical mullion
+        drawCube({ fx, 2.2f, 0.5f }, NO_ROT, { 0.06f, 0.04f, 2.4f }, DARK_WOOD);     // horizontal mullion
+    }
+
+    // Back wall clear glass windows with wooden frames (two windows at x=±3.5)
+    for (int sx = -1; sx <= 1; sx += 2) {
+        float wx = sx * 3.5f;
+        float wy = 1.8f;
+        float wz = -3.85f;
+        float wW = 1.2f, wH = 1.0f;
+        float hW = wW * 0.5f, hH = wH * 0.5f;
+        float ft = 0.08f;
+
+        // Glass pane
+        drawClearGlassWindow({ wx, wy, wz }, NO_ROT, ONE, wW, wH);
+
+        // Frame: top/bottom rails and left/right stiles
+        drawCube({ wx, wy + hH + ft * 0.5f, wz }, NO_ROT,
+                 { wW + ft * 2, ft, 0.12f }, DARK_WOOD);
+        drawCube({ wx, wy - hH - ft * 0.5f, wz }, NO_ROT,
+                 { wW + ft * 2, ft, 0.12f }, DARK_WOOD);
+        drawCube({ wx - hW - ft * 0.5f, wy, wz }, NO_ROT,
+                 { ft, wH, 0.12f }, DARK_WOOD);
+        drawCube({ wx + hW + ft * 0.5f, wy, wz }, NO_ROT,
+                 { ft, wH, 0.12f }, DARK_WOOD);
+        // Cross mullions
+        drawCube({ wx, wy, wz }, NO_ROT, { 0.04f, wH, 0.06f }, DARK_WOOD);
+        drawCube({ wx, wy, wz }, NO_ROT, { wW, 0.04f, 0.06f }, DARK_WOOD);
+        // Window sill
+        drawCube({ wx, wy - hH - ft - 0.03f, wz + 0.06f }, NO_ROT,
+                 { wW + 0.20f, 0.05f, 0.20f }, WOOD);
+    }
 
     // Shoji windows on the side walls (rear sections)
     drawShojiWindow({ -4.90f, 2.2f, -2.0f }, { 0, -90, 0 }, ONE, 1.6f, 1.2f);   // left wall, rear
@@ -596,8 +668,11 @@ void drawExterior()
     // Sliding shoji door on the left side wall (click to open/close)
     drawSlidingShoji({ -4.90f, 1.5f, 2.8f }, { 0, -90, 0 }, slideDoorOffset, 2.4f, 2.8f);
 
-    drawGridWindow({ 0, 4.3f, 4.05f }, NO_ROT, ONE, 8.5f, 1.5f, 12, 3);
-    drawSignBoard({ 0, 5.65f, 4.12f });
+    // Second floor front facade: two shoji windows flush with the outer wall face
+    drawShojiWindow({ -3.2f, 4.3f, 4.02f }, NO_ROT, ONE, 2.0f, 1.3f);
+    drawShojiWindow({  3.2f, 4.3f, 4.02f }, NO_ROT, ONE, 2.0f, 1.3f);
+    // Ramen sign mounted above the roofline (above the gable peak)
+    drawSignBoard({ 0, 7.6f, 4.05f });
 
     float flickL = 1.0f + 0.08f * sin(animTime * 4.9f);
     float flickR = 1.0f + 0.08f * sin(animTime * 4.6f + 1.5f);
@@ -605,12 +680,13 @@ void drawExterior()
     float swayR  = sin(animTime * 1.9f + 0.8f) * 2.5f;
 
     // Left lantern — selectable as OBJ_LANTERN_L (bright yellow chochin)
+    float dayLanScale = isDayTime ? 0.25f : 1.0f;   // dim during day
     glPushMatrix();
     glTranslatef(-3.8f, 2.95f, 4.5f);
     applyObjDelta(OBJ_LANTERN_L);
     glRotatef(swayL, 0, 0, 1);
     drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.02f, 0.4f, 0.02f }, BLACK);
-    setEmission(0.95f * flickL, 0.85f * flickL, 0.15f * flickL);
+    setEmission(0.95f * flickL * dayLanScale, 0.85f * flickL * dayLanScale, 0.15f * flickL * dayLanScale);
     drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, GOLD);
     clearEmission();
     glPopMatrix();
@@ -621,7 +697,7 @@ void drawExterior()
     applyObjDelta(OBJ_LANTERN_R);
     glRotatef(swayR, 0, 0, 1);
     drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.02f, 0.4f, 0.02f }, BLACK);
-    setEmission(0.95f * flickR, 0.85f * flickR, 0.15f * flickR);
+    setEmission(0.95f * flickR * dayLanScale, 0.85f * flickR * dayLanScale, 0.15f * flickR * dayLanScale);
     drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, GOLD);
     clearEmission();
     glPopMatrix();
@@ -647,6 +723,170 @@ void drawExterior()
 
     // Vending machine to the right of the shop entrance, facing the sidewalk
     drawVendingMachine({ 8.5f, 0, 3.5f }, { 0, -90, 0 });
+}
+
+// ─── Second Floor ────────────────────────────────────────────────────────────
+static void drawSecondFloor()
+{
+    const float GH = 3.3f;   // base y of second floor (top of ground floor)
+    const float UH = 2.0f;   // upper floor wall height
+    const float floorY2 = GH + 0.12f;  // 3.42 — walking surface
+
+    // Floor/ceiling slab — split into 4 pieces, leaving a staircase opening
+    //   Opening: x [3.5, 4.5], z [-0.5, 2.5]
+    const Color SLAB_TINT = { 0.62f, 0.48f, 0.30f };
+    GLuint slabTex = getTexID(TEX_DARK_WOOD);
+    drawTexturedBox({ -0.7f, GH,  0.0f }, NO_ROT, { 8.4f, 0.12f, 7.8f }, slabTex, SLAB_TINT, 1.5f);
+    drawTexturedBox({  4.7f, GH,  0.0f }, NO_ROT, { 0.4f, 0.12f, 7.8f }, slabTex, SLAB_TINT, 1.5f);
+    drawTexturedBox({  4.0f, GH, -2.2f }, NO_ROT, { 1.0f, 0.12f, 3.4f }, slabTex, SLAB_TINT, 1.5f);
+    drawTexturedBox({  4.0f, GH,  3.2f }, NO_ROT, { 1.0f, 0.12f, 1.4f }, slabTex, SLAB_TINT, 1.5f);
+
+    // ── Clean polished light wood bedroom floor (single surface, no grid lines) ──
+    const Color BEDROOM_FLOOR = { 0.90f, 0.82f, 0.65f };
+    drawTexturedBox({ 0, floorY2, 0 }, NO_ROT, { 8.0f, 0.06f, 7.0f },
+                    getTexID(TEX_DARK_WOOD), BEDROOM_FLOOR, 2.0f);
+
+    // ══════════════════════════════════════════════════════════════════════
+    //   BEDROOM  — Japanese futon bed, nightstand, wardrobe, folding screen
+    // ══════════════════════════════════════════════════════════════════════
+    const float TY = floorY2 + 0.06f;
+
+    // ── Futon Bed (shikibuton + kakebuton + makura) ──
+    // Shikibuton — thick cotton mattress pad
+    const Color FUTON_WHITE = { 0.95f, 0.93f, 0.88f };
+    setMaterialPBR(Materials::Fabric, FUTON_WHITE);
+    drawCuboid({ 0.8f, TY, 0.0f }, NO_ROT, { 1.1f, 0.10f, 2.1f }, FUTON_WHITE);
+    resetMaterialGloss();
+
+    // Kakebuton — duvet / blanket (deep indigo blue)
+    const Color FUTON_INDIGO = { 0.12f, 0.14f, 0.28f };
+    setMaterialPBR(Materials::Fabric, FUTON_INDIGO);
+    drawCuboid({ 0.8f, TY + 0.10f, -0.25f }, NO_ROT, { 1.05f, 0.06f, 1.5f }, FUTON_INDIGO);
+    // Folded-back edge near pillow
+    drawCuboid({ 0.8f, TY + 0.14f, 0.55f }, NO_ROT, { 1.0f, 0.04f, 0.20f }, FUTON_INDIGO);
+    resetMaterialGloss();
+
+    // Makura — buckwheat pillow
+    const Color PILLOW_CREAM = { 0.94f, 0.91f, 0.84f };
+    setMaterialPBR(Materials::Fabric, PILLOW_CREAM);
+    drawCuboid({ 0.8f, TY + 0.08f, 0.85f }, NO_ROT, { 0.50f, 0.12f, 0.25f }, PILLOW_CREAM);
+    resetMaterialGloss();
+
+    // ── Bedside Tansu (nightstand) ──
+    setMaterialPBR(Materials::WoodPolished, DARK_WOOD);
+    drawCuboid({ 2.0f, TY, 0.9f }, NO_ROT, { 0.55f, 0.40f, 0.45f }, DARK_WOOD);
+    drawCuboid({ 2.0f, TY + 0.40f, 0.9f }, NO_ROT, { 0.60f, 0.03f, 0.50f }, WOOD);
+    resetMaterialGloss();
+    // Drawer divider
+    drawCuboid({ 2.0f, TY + 0.19f, 1.125f }, NO_ROT, { 0.48f, 0.006f, 0.006f }, LIGHT_WOOD);
+    // Drawer knobs
+    setMaterialPBR(Materials::Gold, GOLD);
+    drawSphere({ 2.0f, TY + 0.30f, 1.13f }, NO_ROT, { 0.025f, 0.025f, 0.025f }, GOLD);
+    drawSphere({ 2.0f, TY + 0.10f, 1.13f }, NO_ROT, { 0.025f, 0.025f, 0.025f }, GOLD);
+    resetMaterialGloss();
+    // Book on nightstand
+    drawCuboid({ 1.95f, TY + 0.43f, 0.85f }, { 0, 15, 0 }, { 0.18f, 0.025f, 0.13f }, DARK_RED);
+
+    // ── Low Wardrobe Tansu (against back wall) ──
+    setMaterialPBR(Materials::WoodPolished, DARK_WOOD);
+    drawCuboid({ 2.0f, TY, -3.35f }, NO_ROT, { 1.6f, 0.75f, 0.55f }, DARK_WOOD);
+    drawCuboid({ 2.0f, TY + 0.75f, -3.35f }, NO_ROT, { 1.68f, 0.04f, 0.60f }, WOOD);
+    resetMaterialGloss();
+    // Metal corner brackets
+    for (int sx = -1; sx <= 1; sx += 2)
+        drawCuboid({ 2.0f + sx * 0.72f, TY + 0.74f, -3.07f }, NO_ROT,
+                   { 0.08f, 0.06f, 0.02f }, METAL);
+    // Drawer handles
+    setMaterialPBR(Materials::Gold, GOLD);
+    for (int r = 0; r < 2; r++)
+        for (int sx = -1; sx <= 1; sx += 2)
+            drawSphere({ 2.0f + sx * 0.40f, TY + 0.22f + r * 0.30f, -3.07f }, NO_ROT,
+                       { 0.025f, 0.025f, 0.025f }, GOLD);
+    resetMaterialGloss();
+
+    // ── Zabuton cushion (beside tokonoma alcove) ──
+    const Color ZABUTON = { 0.55f, 0.12f, 0.12f };
+    setMaterialPBR(Materials::Fabric, ZABUTON);
+    drawCuboid({ -3.0f, TY, -2.5f }, { 0, 15, 0 }, { 0.50f, 0.05f, 0.45f }, ZABUTON);
+    resetMaterialGloss();
+    // Tea cup near cushion
+    drawCup({ -2.6f, TY, -2.2f }, NO_ROT, { 0.09f, 0.09f, 0.09f }, CUP_GREEN);
+
+    // ── Folding Screen (byobu) — 3-panel room divider ──
+    {
+        const Color SCREEN_GOLD = { 0.88f, 0.82f, 0.62f };
+        float scY = TY + 0.62f;
+        float scH = 1.20f, scW = 0.65f;
+        float px[] = { -2.6f, -1.95f, -1.3f };
+        float pz[] = {  1.7f,  1.6f,   1.7f };
+        float pa[] = {  12.0f, 0.0f, -12.0f };
+        for (int i = 0; i < 3; i++) {
+            if (!isDayTime)
+                setEmission(0.05f, 0.04f, 0.02f);
+            else
+                setEmission(0.02f, 0.02f, 0.01f);
+            drawCube({ px[i], scY, pz[i] }, { 0, pa[i], 0 },
+                     { scW, scH, 0.03f }, SCREEN_GOLD);
+            clearEmission();
+            drawCube({ px[i], scY + scH * 0.5f + 0.02f, pz[i] }, { 0, pa[i], 0 },
+                     { scW + 0.04f, 0.04f, 0.05f }, DARK_WOOD);
+            drawCube({ px[i], scY - scH * 0.5f - 0.02f, pz[i] }, { 0, pa[i], 0 },
+                     { scW + 0.04f, 0.04f, 0.05f }, DARK_WOOD);
+        }
+    }
+
+    // ── Simple flush ceiling light (paper dome — no hanging cords) ──
+    if (lightArea) {
+        float dayDome = isDayTime ? 0.25f : 1.0f;
+        setEmission(0.60f * dayDome, 0.45f * dayDome, 0.15f * dayDome);
+    }
+    drawSphere({ 0.0f, GH + UH - 0.05f, 0.0f }, NO_ROT, { 0.30f, 0.10f, 0.30f }, PAPER);
+    if (lightArea) clearEmission();
+
+    // ── Tokonoma alcove shelf on the back wall ──
+    drawCuboid({ -3.5f, floorY2 + 0.50f, -3.55f }, NO_ROT, { 1.8f, 0.06f, 0.5f }, DARK_WOOD);
+
+    // Scroll painting above the tokonoma shelf (kakejiku)
+    if (!isDayTime)
+        setEmission(0.06f, 0.04f, 0.02f);
+    else
+        setEmission(0.02f, 0.02f, 0.01f);
+    drawCuboid({ -3.5f, floorY2 + 1.20f, -3.72f }, NO_ROT, { 0.9f, 1.0f, 0.04f }, PAPER);
+    clearEmission();
+    drawCuboid({ -3.5f, floorY2 + 1.74f, -3.71f }, NO_ROT, { 1.0f, 0.06f, 0.06f }, DARK_WOOD);  // top rod
+    drawCuboid({ -3.5f, floorY2 + 0.66f, -3.71f }, NO_ROT, { 1.0f, 0.06f, 0.06f }, DARK_WOOD);  // bottom rod
+
+    // Small ikebana vase on the tokonoma shelf
+    const Color VASE_BLUE = { 0.20f, 0.25f, 0.55f };
+    setMaterialPBR(Materials::Ceramic, VASE_BLUE);
+    drawCylinder({ -3.5f, floorY2 + 0.56f, -3.45f }, NO_ROT, { 0.06f, 0.18f, 0.06f }, VASE_BLUE);
+    drawSphere({   -3.5f, floorY2 + 0.82f, -3.45f }, NO_ROT, { 0.04f, 0.06f, 0.04f }, LEAF);  // leaf
+    resetMaterialGloss();
+
+    // ── Wall decoration on the right-side inner wall ──
+    drawWallDecoration({ 2.5f, floorY2 + 1.0f, -3.72f }, NO_ROT);
+
+    // ── Floor lamp in the far corner ──
+    drawJapaneseFloorLanternTower({ -4.1f, floorY2, -3.0f }, NO_ROT, { 0.7f, 0.7f, 0.7f }, lightPoint);
+
+    // ── Clickable sliding shoji door at the staircase entrance ──
+    {
+        const float doorW = 1.2f, doorH = 1.9f;
+        const float doorX = 3.50f;
+        const float doorZ = -0.1f;
+
+        // Frame posts
+        drawCuboid({ doorX, floorY2, doorZ - doorW * 0.5f - 0.06f },
+                   NO_ROT, { 0.10f, doorH + 0.10f, 0.10f }, DARK_WOOD);
+        drawCuboid({ doorX, floorY2, doorZ + doorW * 0.5f + 0.06f },
+                   NO_ROT, { 0.10f, doorH + 0.10f, 0.10f }, DARK_WOOD);
+        // Lintel
+        drawCuboid({ doorX, floorY2 + doorH, doorZ },
+                   NO_ROT, { 0.10f, 0.15f, doorW + 0.24f }, DARK_WOOD);
+        // Sliding shoji panels (click to open/close)
+        drawSlidingShoji({ doorX, floorY2 + doorH * 0.5f, doorZ },
+                         { 0, 90, 0 }, upperDoorOffset, doorW, doorH);
+    }
 }
 
 // ─── Interior ───────────────────────────────────────────────────────────────
@@ -704,6 +944,9 @@ void drawInterior()
     drawPendantGlassLamp({ -1.2f, 2.85f, -0.2f }, NO_ROT, ONE, lightPoint);
     drawPendantGlassLamp({  1.2f, 2.85f, -0.2f }, NO_ROT, ONE, lightPoint);
 
+    // Japanese Box Lantern Cluster — andon-style washi-paper lanterns above dining area
+    drawJapaneseBoxLanternCluster({ 0.5f, 3.30f, 0.55f }, NO_ROT, ONE, lightPoint);
+
     // ── Clear Glass Drinking Tumblers at each dining seat (with water & ice) ──
     drawClearGlassTumbler({ -1.85f, counterTop + 0.06f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
     drawClearGlassTumbler({ -0.35f, counterTop + 0.06f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
@@ -727,55 +970,14 @@ void drawInterior()
 
     drawKitchen({ 0, FY, -3.2f });
 
+    // Steam above cooking pots (world coordinates matching centered pot positions)
     float kitchenTop = FY + 0.94f;
     if (showSteam) {
-        drawSteam({ -1.95f, kitchenTop + 0.46f, -3.2f }, 0.36f, 0.4f);
-        drawSteam({ -1.05f, kitchenTop + 0.38f, -3.2f }, 0.28f, 1.8f);
+        drawSteam({ -0.85f, kitchenTop + 0.65f, -3.2f }, 0.40f, 0.4f);   // large pot left burner
+        drawSteam({  0.0f,  kitchenTop + 0.65f, -3.2f }, 0.38f, 1.8f);   // large pot center burner
+        drawSteam({  0.85f, kitchenTop + 0.42f, -3.2f }, 0.25f, 3.2f);   // small pot right burner
+        drawSteam({  1.6f,  kitchenTop + 0.38f, -3.2f }, 0.30f, 5.0f);   // noodle station
     }
-
-    float shelfY = FY + 1.7f;
-    drawShelf({ -1.8f, shelfY, -3.63f });
-    drawShelf({  1.8f, shelfY, -3.63f });
-    for (int i = 0; i < 4; i++) {
-        drawBowl({ -2.5f + i * 0.50f, shelfY + 0.04f, -3.63f },
-                 NO_ROT, { 0.3f, 0.3f, 0.3f }, DARK_GRAY);
-        drawPlate({ -2.5f + i * 0.50f, shelfY + 0.64f, -3.63f },
-                  NO_ROT, { 0.35f, 0.35f, 0.35f }, PLATE_WHITE);
-        drawCup({ 1.1f + i * 0.50f, shelfY + 0.04f, -3.63f },
-                NO_ROT, { 0.12f, 0.12f, 0.12f }, STEEL);
-        drawBottle({ 1.1f + i * 0.50f, shelfY + 0.64f, -3.63f },
-                   NO_ROT, { 0.35f, 0.35f, 0.35f },
-                   (i % 2 == 0) ? SOY : CUP_GREEN);
-    }
-    drawCookingPot({ 3.5f, shelfY + 0.04f, -3.63f }, NO_ROT, { 1.2f, 1.2f, 1.2f });
-    if (showSteam) drawSteam({ 3.5f, shelfY + 0.04f + 0.54f, -3.63f }, 0.44f, 3.1f);
-
-    // Clear glass spice jars on the wall shelf
-    drawClearGlassJar({ -0.85f, shelfY + 0.04f, -3.63f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.85f, 0.25f, 0.10f });
-    drawClearGlassJar({ -0.55f, shelfY + 0.04f, -3.63f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.15f, 0.45f, 0.15f });
-
-    // ── Utensil hanging rail on the back wall ────────────────────────────────
-    float railY = shelfY + 0.60f;  // just above shelves
-    drawCylinder({ 0, railY, -3.72f }, { 0, 0, -90 }, { 0.02f, 3.2f, 0.02f }, STEEL);
-
-    // Hanging utensils along the rail
-    drawLadle({    -1.2f, railY - 0.04f, -3.68f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
-    drawSpatula({  -0.6f, railY - 0.04f, -3.68f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
-    drawTongs({     0.0f, railY - 0.04f, -3.68f }, { 0, 15, 0 }, { 0.8f, 0.8f, 0.8f });
-    drawStrainer({  0.6f, railY - 0.04f, -3.68f }, NO_ROT, { 0.7f, 0.7f, 0.7f });
-    drawLadle({     1.2f, railY - 0.04f, -3.68f }, { 0, -10, 0 }, { 0.7f, 0.7f, 0.7f });
-    drawSpatula({   1.8f, railY - 0.04f, -3.68f }, { 0, 25, 0 }, { 0.6f, 0.6f, 0.6f });
-
-    // ── Kitchen hood (range hood) above the stove ─────────────────────────
-    drawKitchenHood({ -1.5f, FY + 2.4f, -3.2f });
-
-    // ── Wok on the kitchen counter ────────────────────────────────────────
-    drawWok({ 0.8f, kitchenTop + 0.02f, -3.2f }, NO_ROT, { 0.7f, 0.7f, 0.7f });
-
-    // Extra stacked bowls near the prep area
-    for (int i = 0; i < 3; i++)
-        drawBowl({ -0.3f, kitchenTop + i * 0.05f, -3.15f },
-                 NO_ROT, { 0.20f, 0.20f, 0.20f }, PLATE_WHITE);
 
     drawHangingLantern({ -1.8f, 3.1f, 0.0f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
     drawHangingLantern({  1.8f, 3.1f, 0.0f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
@@ -787,17 +989,38 @@ void drawInterior()
     drawNoren({ 0, 0, 0 });
     glPopMatrix();
 
-    drawMenuBoard({ -3.2f, 2.8f, -3.77f });
-    drawMenuBoard({  3.2f, 2.8f, -3.77f });
+    // Wall clock centered on the back wall (below second floor boundary)
+    drawWallClock({ 0.0f, 2.7f, -3.78f }, NO_ROT, { 0.55f, 0.55f, 0.55f });
 
-    // Wall clock centered on the back wall between the two menu boards
-    drawWallClock({ 0.0f, 3.3f, -3.78f });
-
-    drawWallDecoration({ -4.77f, 2.0f, 0.5f }, { 0,  90, 0 });
-    drawWallDecoration({  4.77f, 2.0f, 0.5f }, { 0, -90, 0 });
+    drawWallDecoration({ -4.77f, 2.0f, 2.8f }, { 0,  90, 0 });
+    drawWallDecoration({  4.77f, 2.0f, 2.8f }, { 0, -90, 0 });
 
     drawCuboid({ -3.8f, FY, 0.5f },        NO_ROT, { 0.4f,  0.35f, 0.3f  }, WOOD);
     drawCuboid({ -3.8f, FY + 0.35f, 0.5f }, NO_ROT, { 0.45f, 0.04f, 0.35f }, LIGHT_WOOD);
 
     drawPlant({ 4.3f, FY, 2.0f });
+
+    // Japanese floor lantern tower — left-front corner of the dining area
+    drawJapaneseFloorLanternTower({ -4.1f, FY, 3.2f }, NO_ROT, ONE, lightPoint);
+
+    // Staircase — right side of dining area, 10 solid-block steps rising to second floor
+    {
+        const float SW  = 1.0f;    // stair width  (x)
+        const float SH  = 0.332f;  // riser height per step
+        const float SD  = 0.30f;   // tread depth  (z)
+        const float SX  = 4.0f;    // center X (near right wall)
+        const float SZ0 = 2.5f;    // Z of front face of first step
+        const int   NS  = 10;      // number of steps
+
+        setMaterialPBR(Materials::WoodPolished, DARK_WOOD);
+        for (int i = 0; i < NS; i++) {
+            // Each block fills from FY up to this step's tread level
+            drawCuboid({ SX, FY, SZ0 - i * SD - SD * 0.5f }, NO_ROT,
+                       { SW, (i + 1) * SH, SD }, DARK_WOOD);
+        }
+        resetMaterialGloss();
+    }
+
+    // Second floor: tatami room with low table and tea
+    drawSecondFloor();
 }

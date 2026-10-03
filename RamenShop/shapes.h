@@ -176,6 +176,10 @@ void drawSpotlightFixture(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, bool is
 void drawSpotlightBeam(Vec3 pos, float height = 2.2f, float topRadius = 0.08f, float bottomRadius = 0.75f);
 void drawAreaLightFixture(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, bool isOn = true);
 void drawPendantGlassLamp(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, bool isOn = true);
+// Five andon-style box lanterns hung at staggered heights from a single ceiling mount
+void drawJapaneseBoxLanternCluster(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, bool isOn = true);
+// Tall stacked andon floor lamp tower for a room corner
+void drawJapaneseFloorLanternTower(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, bool isOn = true);
 
 // Textured geometry (falls back to solid color when texID == 0)
 void drawTexturedBox  (Vec3 pos, Vec3 rot, Vec3 size, GLuint texID, Color tint = WHITE, float uvScale = 1.0f);

@@ -54,7 +54,7 @@ const Color GLASS_WATER  = { 0.65f, 0.84f, 0.96f };   // drinking water
 
 // Global variables definition
 GLUquadric* quad = nullptr;
-bool showOutlines = true;
+bool showOutlines = false;
 float animTime = 0.0f;
 bool drawingShadow = false;
 
@@ -988,6 +988,204 @@ void drawPendantGlassLamp(Vec3 pos, Vec3 rot, Vec3 scale, bool isOn)
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     resetMaterialGloss();
+
+    glPopMatrix();
+}
+
+// ─── Japanese Floor Lantern Tower ─────────────────────────────────────────────
+
+// Tall stacked andon-style floor lamp: natural bamboo/wood lattice frame with
+// glowing washi-paper panels in each section, placed in a room corner.
+void drawJapaneseFloorLanternTower(Vec3 pos, Vec3 rot, Vec3 scale, bool isOn)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    const float hw  = 0.155f;  // half-width of each section
+    const float sh  = 0.40f;   // height of each section
+    const int   NS  = 4;       // number of stacked sections
+    const Color BAMBOO = { 0.72f, 0.56f, 0.30f };  // natural bamboo
+
+    float flick = 1.0f + 0.05f * sinf(animTime * 3.2f)
+                       + 0.03f * cosf(animTime * 8.9f);
+
+    // ── Base disc ────────────────────────────────────────────────────────
+    setMaterialPBR(Materials::WoodPolished, DARK_WOOD);
+    drawCylinder({ 0, 0.015f, 0 }, NO_ROT, { hw + 0.06f, 0.03f, hw + 0.06f }, DARK_WOOD);
+    resetMaterialGloss();
+
+    float baseY = 0.045f;   // top of the base disc
+
+    for (int s = 0; s < NS; s++) {
+        float y0 = baseY + s * sh;      // bottom of this section
+        float y1 = y0 + sh;             // top of this section
+        float yc = (y0 + y1) * 0.5f;
+
+        // 4 corner posts
+        setMaterialPBR(Materials::WoodMatte, BAMBOO);
+        for (int sx = -1; sx <= 1; sx += 2)
+            for (int sz = -1; sz <= 1; sz += 2)
+                drawCylinder({ sx * hw, yc, sz * hw }, NO_ROT,
+                             { 0.016f, sh, 0.016f }, BAMBOO);
+
+        // Bottom rail (shared with previous section's top rail except for s==0)
+        drawCuboid({ 0, y0 + 0.009f, 0 }, NO_ROT,
+                   { hw*2 + 0.01f, 0.018f, hw*2 + 0.01f }, BAMBOO);
+        // Top rail
+        drawCuboid({ 0, y1 - 0.009f, 0 }, NO_ROT,
+                   { hw*2 + 0.01f, 0.018f, hw*2 + 0.01f }, BAMBOO);
+        resetMaterialGloss();
+
+        // ── Washi-paper panels on all 4 faces ────────────────────────────
+        float pp0 = y0 + 0.020f;   // paper starts just above bottom rail
+        float pp1 = y1 - 0.018f;   // paper ends just below top rail
+
+        if (isOn) {
+            setEmission(1.0f * flick, 0.68f * flick, 0.18f * flick);
+            glColor3f(1.0f, 0.85f, 0.56f);
+        } else {
+            clearEmission();
+            glColor3f(0.87f, 0.82f, 0.68f);
+        }
+
+        // +Z front
+        glBegin(GL_QUADS); glNormal3f(0, 0, 1);
+        glVertex3f(-hw, pp1, hw); glVertex3f( hw, pp1, hw);
+        glVertex3f( hw, pp0, hw); glVertex3f(-hw, pp0, hw);
+        glEnd();
+        // -Z back
+        glBegin(GL_QUADS); glNormal3f(0, 0, -1);
+        glVertex3f( hw, pp1, -hw); glVertex3f(-hw, pp1, -hw);
+        glVertex3f(-hw, pp0, -hw); glVertex3f( hw, pp0, -hw);
+        glEnd();
+        // -X left
+        glBegin(GL_QUADS); glNormal3f(-1, 0, 0);
+        glVertex3f(-hw, pp1, -hw); glVertex3f(-hw, pp1,  hw);
+        glVertex3f(-hw, pp0,  hw); glVertex3f(-hw, pp0, -hw);
+        glEnd();
+        // +X right
+        glBegin(GL_QUADS); glNormal3f(1, 0, 0);
+        glVertex3f( hw, pp1,  hw); glVertex3f( hw, pp1, -hw);
+        glVertex3f( hw, pp0, -hw); glVertex3f( hw, pp0,  hw);
+        glEnd();
+
+        clearEmission();
+    }
+
+    // ── Top finial ───────────────────────────────────────────────────────
+    float topY = baseY + NS * sh;
+    setMaterialPBR(Materials::WoodPolished, DARK_WOOD);
+    drawCuboid({ 0, topY + 0.015f, 0 }, NO_ROT,
+               { hw*2 + 0.04f, 0.030f, hw*2 + 0.04f }, DARK_WOOD);
+    drawCylinder({ 0, topY + 0.045f, 0 }, NO_ROT, { 0.032f, 0.08f, 0.032f }, DARK_WOOD);
+    drawSphere  ({ 0, topY + 0.125f, 0 }, NO_ROT, { 0.038f, 0.038f, 0.038f }, DARK_WOOD);
+    resetMaterialGloss();
+
+    glPopMatrix();
+}
+
+// ─── Japanese Box Lantern Cluster ─────────────────────────────────────────────
+
+// Internal helper: draws one andon-style box lantern.
+// Called inside drawJapaneseBoxLanternCluster with the cluster centre already
+// translated to the origin.  rx/rz are horizontal offsets from that origin;
+// cordLen is how far the lantern hangs below the ceiling mount; phase gives
+// each lantern an independent sway / flicker offset.
+static void drawOneBoxLantern(float rx, float rz, float cordLen, bool isOn, float phase)
+{
+    glPushMatrix();
+    glTranslatef(rx, 0.0f, rz);
+
+    // Subtle independent sway
+    float sway = sinf(animTime * 1.4f + phase) * 1.6f;
+    glRotatef(sway, 0, 0, 1);
+
+    // Thin dark hanging cord
+    drawCylinder({ 0, -cordLen * 0.5f, 0 }, NO_ROT,
+                 { 0.007f, cordLen, 0.007f }, DARK_WOOD);
+
+    glTranslatef(0, -cordLen, 0);   // move to top-centre of the lantern box
+
+    const float hw = 0.115f;  // half-width  (X)
+    const float hh = 0.148f;  // half-height (Y)
+    const float hd = 0.115f;  // half-depth  (Z)
+
+    // Per-lantern flicker  (incandescent character)
+    float flick = 1.0f + 0.07f * sinf(animTime * 4.8f + phase * 2.1f)
+                       + 0.03f * cosf(animTime * 11.3f + phase);
+
+    // ── Dark-wood frame ──────────────────────────────────────────────────
+    setMaterialPBR(Materials::WoodMatte, DARK_WOOD);
+
+    drawCuboid({ 0,  hh + 0.014f, 0 }, NO_ROT,
+               { hw*2+0.022f, 0.020f, hd*2+0.022f }, DARK_WOOD);   // top cap
+    drawCuboid({ 0, -hh - 0.014f, 0 }, NO_ROT,
+               { hw*2+0.022f, 0.020f, hd*2+0.022f }, DARK_WOOD);   // bottom cap
+
+    for (int sx = -1; sx <= 1; sx += 2)
+        for (int sz = -1; sz <= 1; sz += 2)
+            drawCylinder({ sx*hw*0.92f, 0, sz*hd*0.92f }, NO_ROT,
+                         { 0.011f, hh*2+0.02f, 0.011f }, DARK_WOOD);  // corner posts
+
+    resetMaterialGloss();
+
+    // ── Emissive washi-paper panels ──────────────────────────────────────
+    if (isOn) {
+        setEmission(1.0f * flick, 0.70f * flick, 0.20f * flick);
+        glColor3f(1.0f, 0.87f, 0.60f);
+    } else {
+        clearEmission();
+        glColor3f(0.86f, 0.80f, 0.65f);
+    }
+
+    // +Z front
+    glBegin(GL_QUADS); glNormal3f(0, 0, 1);
+    glVertex3f(-hw,  hh, hd); glVertex3f( hw,  hh, hd);
+    glVertex3f( hw, -hh, hd); glVertex3f(-hw, -hh, hd);
+    glEnd();
+    // -Z back
+    glBegin(GL_QUADS); glNormal3f(0, 0, -1);
+    glVertex3f( hw,  hh, -hd); glVertex3f(-hw,  hh, -hd);
+    glVertex3f(-hw, -hh, -hd); glVertex3f( hw, -hh, -hd);
+    glEnd();
+    // -X left
+    glBegin(GL_QUADS); glNormal3f(-1, 0, 0);
+    glVertex3f(-hw,  hh, -hd); glVertex3f(-hw,  hh,  hd);
+    glVertex3f(-hw, -hh,  hd); glVertex3f(-hw, -hh, -hd);
+    glEnd();
+    // +X right
+    glBegin(GL_QUADS); glNormal3f(1, 0, 0);
+    glVertex3f( hw,  hh,  hd); glVertex3f( hw,  hh, -hd);
+    glVertex3f( hw, -hh, -hd); glVertex3f( hw, -hh,  hd);
+    glEnd();
+
+    clearEmission();
+    glPopMatrix();
+}
+
+// Japanese Box Lantern Cluster:
+// Five rectangular washi-paper andon lanterns suspended at staggered heights
+// from a single ceiling mount — warm amber glow, dark-wood frame, gentle sway.
+void drawJapaneseBoxLanternCluster(Vec3 pos, Vec3 rot, Vec3 scale, bool isOn)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    // Ceiling mount canopy disc
+    setMaterialPBRMetallic(Materials::BrushedMetal, DARK_GRAY);
+    drawCylinder({ 0, -0.01f, 0 }, NO_ROT, { 0.055f, 0.028f, 0.055f }, DARK_GRAY);
+    resetMaterialGloss();
+
+    // (xOff, zOff, cordLen, animPhase)  — 5 lanterns at varying heights
+    const float L[5][4] = {
+        {  0.00f,  0.00f, 0.50f, 0.0f },   // centre — highest
+        { -0.23f, -0.12f, 0.78f, 1.3f },   // left-back — lower
+        {  0.21f,  0.08f, 0.65f, 2.5f },   // right-front
+        { -0.07f,  0.24f, 0.93f, 0.8f },   // front-centre — lowest
+        {  0.16f, -0.22f, 0.60f, 3.1f },   // right-back
+    };
+    for (int i = 0; i < 5; i++)
+        drawOneBoxLantern(L[i][0], L[i][1], L[i][2], isOn, L[i][3]);
 
     glPopMatrix();
 }

@@ -1,4 +1,5 @@
 #include "exterior.h"
+#include "scene.h"    // isDayTime for day/night conditional emission
 
 void drawShopBuilding(Vec3 pos, Vec3 rot, Vec3 scale)
 {
@@ -13,14 +14,44 @@ void drawShopBuilding(Vec3 pos, Vec3 rot, Vec3 scale)
     drawTexturedBox({ 0, 0, 0 }, NO_ROT, { 10, 0.1f, 8 },
                     getTexID(TEX_TILE_FLOOR), WHITE, 2.0f);
 
-    // Ground floor walls (open front)
-    drawTexturedBox({ 0, 0, -3.9f }, NO_ROT, { 10, GH, 0.2f },
-                    getTexID(TEX_WALL), WHITE, 2.0f);   // back wall
+    // Ground floor walls (open front) — with window openings
+
+    // ── Back wall: two window openings at x=±3.5, y=[1.3,2.3], size 1.2×1.0 ──
+    {
+        GLuint wallTex = getTexID(TEX_WALL);
+        const float wBot = 1.3f, wTop = 2.3f;  // window vertical range
+        const float wInner = 2.9f, wOuter = 4.1f;  // window x edges (symmetric ±)
+
+        // Bottom strip (full width, below windows)
+        drawTexturedBox({ 0, 0, -3.9f }, NO_ROT, { 10, wBot, 0.2f }, wallTex, WHITE, 2.0f);
+        // Top strip (full width, above windows)
+        drawTexturedBox({ 0, wTop, -3.9f }, NO_ROT, { 10, GH - wTop, 0.2f }, wallTex, WHITE, 2.0f);
+        // Center section (between the two windows)
+        drawTexturedBox({ 0, wBot, -3.9f }, NO_ROT, { wInner * 2.0f, wTop - wBot, 0.2f }, wallTex, WHITE, 2.0f);
+        // Far left (left of left window)
+        drawTexturedBox({ -4.55f, wBot, -3.9f }, NO_ROT, { 0.9f, wTop - wBot, 0.2f }, wallTex, WHITE, 2.0f);
+        // Far right (right of right window)
+        drawTexturedBox({ 4.55f, wBot, -3.9f }, NO_ROT, { 0.9f, wTop - wBot, 0.2f }, wallTex, WHITE, 2.0f);
+    }
+
+    // ── Side walls: window openings for clear glass windows at z=0.5, 2.4×2.0 ──
     for (int sx = -1; sx <= 1; sx += 2) {
-        drawTexturedBox({ sx * 4.9f, 0, 0 },    NO_ROT, { 0.2f, 1.2f, 8 },
+        // Lower dark wood wainscot (unchanged)
+        drawTexturedBox({ sx * 4.9f, 0, 0 }, NO_ROT, { 0.2f, 1.2f, 8 },
                         getTexID(TEX_DARK_WOOD), WHITE, 1.0f);
-        drawTexturedBox({ sx * 4.9f, 1.2f, 0 }, NO_ROT, { 0.2f, GH - 1.2f, 8 },
-                        getTexID(TEX_WALL), WHITE, 2.0f);
+
+        // Upper wall split around window opening: z=[-0.7,1.7], y=[1.2,3.2]
+        GLuint wallTex = getTexID(TEX_WALL);
+        float wallH = GH - 1.2f;  // 2.1
+        // Section behind window (z < -0.7)
+        drawTexturedBox({ sx * 4.9f, 1.2f, -2.35f }, NO_ROT, { 0.2f, wallH, 3.3f },
+                        wallTex, WHITE, 2.0f);
+        // Section in front of window (z > 1.7)
+        drawTexturedBox({ sx * 4.9f, 1.2f, 2.85f }, NO_ROT, { 0.2f, wallH, 2.3f },
+                        wallTex, WHITE, 2.0f);
+        // Strip above window (y=[3.2,3.3] over window area)
+        drawTexturedBox({ sx * 4.9f, 3.2f, 0.5f }, NO_ROT, { 0.2f, GH - 3.2f, 2.4f },
+                        wallTex, WHITE, 2.0f);
     }
 
     // Front: structural wood posts
@@ -30,11 +61,18 @@ void drawShopBuilding(Vec3 pos, Vec3 rot, Vec3 scale)
     drawCuboid({  1.8f, 0, 3.9f }, NO_ROT, { 0.15f, GH, 0.15f }, DARK_WOOD);
     drawCuboid({ 0, GH - 0.15f, 3.95f }, NO_ROT, { 10.2f, 0.18f, 0.14f }, DARK_WOOD);
 
-    // Upper facade: dark navy
-    drawCuboid({  0,    GH, 3.9f },  NO_ROT, { 10, UH, 0.2f }, UPPER_WALL);
-    drawCuboid({  0,    GH, -3.9f }, NO_ROT, { 10, UH, 0.2f }, UPPER_WALL);
-    drawCuboid({ -4.9f, GH, 0 },    NO_ROT, { 0.2f, UH, 8 },  UPPER_WALL);
-    drawCuboid({  4.9f, GH, 0 },    NO_ROT, { 0.2f, UH, 8 },  UPPER_WALL);
+    // Second floor walls — light cream plaster with dark wood frame
+    drawTexturedBox({  0,    GH,  3.9f }, NO_ROT, { 10,   UH, 0.2f }, getTexID(TEX_WALL), WHITE, 2.0f);
+    drawTexturedBox({  0,    GH, -3.9f }, NO_ROT, { 10,   UH, 0.2f }, getTexID(TEX_WALL), WHITE, 2.0f);
+    drawTexturedBox({ -4.9f, GH,  0    }, NO_ROT, { 0.2f, UH, 8    }, getTexID(TEX_WALL), WHITE, 2.0f);
+    drawTexturedBox({  4.9f, GH,  0    }, NO_ROT, { 0.2f, UH, 8    }, getTexID(TEX_WALL), WHITE, 2.0f);
+
+    // Floor-separator beam between ground floor and second floor
+    drawCuboid({ 0, GH, 3.95f }, NO_ROT, { 10.2f, 0.15f, 0.14f }, DARK_WOOD);
+
+    // Vertical mid-posts on second floor front facade
+    drawCuboid({ -1.8f, GH, 3.95f }, NO_ROT, { 0.12f, UH, 0.12f }, DARK_WOOD);
+    drawCuboid({  1.8f, GH, 3.95f }, NO_ROT, { 0.12f, UH, 0.12f }, DARK_WOOD);
 
     // Corner posts
     for (int sx = -1; sx <= 1; sx += 2)
@@ -55,10 +93,20 @@ void drawRoof(Vec3 pos, Vec3 rot, Vec3 scale)
 
     float TH = 5.3f;
 
-    // Main flat roof slab
-    drawCuboid({ 0, TH, 0 }, NO_ROT, { 11.2f, 0.18f, 9.2f }, DARK_GRAY);
-    drawCuboid({ 0, TH + 0.18f,  4.6f }, NO_ROT, { 11.2f, 0.06f, 0.15f }, DARK_GRAY);
-    drawCuboid({ 0, TH + 0.18f, -4.6f }, NO_ROT, { 11.2f, 0.06f, 0.15f }, DARK_GRAY);
+    // Eave overhang slab (underside of roof eave)
+    drawCuboid({ 0, TH, 0 }, NO_ROT, { 11.4f, 0.12f, 9.4f }, DARK_GRAY);
+
+    // Traditional Japanese gable roof (ridge runs E–W, slopes N and S)
+    drawWedge({ 0, TH + 0.12f, 0 }, NO_ROT, { 11.4f, 2.2f, 9.4f }, ROOF_TILE);
+
+    // Ridge cap beam along the peak
+    drawCuboid({ 0, TH + 2.24f, 0 }, NO_ROT, { 11.6f, 0.16f, 0.24f }, DARK_WOOD);
+
+    // Eave fascia boards on all four sides
+    drawCuboid({ 0,     TH + 0.02f,  4.7f }, NO_ROT, { 11.6f, 0.22f, 0.14f }, DARK_WOOD);
+    drawCuboid({ 0,     TH + 0.02f, -4.7f }, NO_ROT, { 11.6f, 0.22f, 0.14f }, DARK_WOOD);
+    drawCuboid({ -5.7f, TH + 0.02f,  0    }, NO_ROT, { 0.14f, 0.22f, 9.6f  }, DARK_WOOD);
+    drawCuboid({  5.7f, TH + 0.02f,  0    }, NO_ROT, { 0.14f, 0.22f, 9.6f  }, DARK_WOOD);
 
     // Zigzag blue awning over open front
     drawBoard({ 0, 3.22f, 4.7f }, { 12, 0, 0 }, { 10.6f, 1.2f, 1.4f }, AWNING_BLUE);
@@ -67,9 +115,7 @@ void drawRoof(Vec3 pos, Vec3 rot, Vec3 scale)
         drawCone({ x, 2.95f, 5.15f }, { 15, 0, 0 }, { 0.28f, 0.25f, 0.18f }, AWNING_BLUE);
     }
 
-    // Fascia trim
-    drawCuboid({ 0, TH - 0.02f,  4.55f }, NO_ROT, { 11.2f, 0.10f, 0.4f }, DARK_WOOD);
-    drawCuboid({ 0, TH - 0.02f, -4.55f }, NO_ROT, { 11.2f, 0.10f, 0.4f }, DARK_WOOD);
+    // (fascia trim superseded by eave fascia boards in gable roof above)
 
     glPopMatrix();
 }
@@ -79,7 +125,10 @@ void drawWindow(Vec3 pos, Vec3 rot, Vec3 scale)
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
-    setEmission(0.45f, 0.30f, 0.12f);
+    if (!isDayTime)
+        setEmission(0.40f, 0.28f, 0.10f);
+    else
+        setEmission(0.05f, 0.04f, 0.02f);
     drawCube({ 0, 0, -0.06f }, NO_ROT, { 1.9f, 1.5f, 0.02f }, PAPER);
     clearEmission();
 
@@ -153,7 +202,10 @@ void drawLamp(Vec3 pos, Vec3 rot, Vec3 scale)
     drawCylinder({ 0, 0.2f, 0 },    NO_ROT, { 0.12f, 3.3f, 0.12f }, DARK_GRAY);
     drawCube({ 0.35f, 3.45f, 0 },   NO_ROT, { 0.8f, 0.08f, 0.08f }, DARK_GRAY);
     drawCone({ 0.7f, 3.15f, 0 },    NO_ROT, { 0.5f, 0.3f, 0.5f },   DARK_GRAY);
-    setEmission(0.9f, 0.7f, 0.3f);
+    if (!isDayTime)
+        setEmission(0.95f, 0.75f, 0.30f);   // bright warm glow at night
+    else
+        setEmission(0.15f, 0.12f, 0.05f);   // barely visible during day
     drawSphere({ 0.7f, 3.12f, 0 },  NO_ROT, { 0.2f, 0.2f, 0.2f },   GOLD);
     clearEmission();
     glPopMatrix();
@@ -195,8 +247,11 @@ void drawVendingMachine(Vec3 pos, Vec3 rot, Vec3 scale)
     // ── Company stripe (red band near top) ────────────────────────────────
     drawCuboid({ 0, 1.72f, 0.282f }, NO_ROT, { 0.86f, 0.09f, 0.012f }, RED);
 
-    // ── Illuminated product window ─────────────────────────────────────────
-    setEmission(0.28f, 0.20f, 0.10f);
+    // ── Illuminated product window — brighter at night ──────────────────────
+    if (!isDayTime)
+        setEmission(0.40f, 0.30f, 0.15f);
+    else
+        setEmission(0.10f, 0.08f, 0.04f);
     drawCuboid({ 0, 1.18f, 0.282f }, NO_ROT, { 0.72f, 0.62f, 0.010f },
                { 0.95f, 0.85f, 0.65f });
     clearEmission();
@@ -346,8 +401,11 @@ void drawEntranceDoor(float angle)
     glPushMatrix();
     glTranslatef(-pw * 0.5f - slideX, by, hz + 0.01f);
 
-    // Washi paper panel (warm emissive glow from interior light)
-    setEmission(0.35f, 0.25f, 0.10f);
+    // Washi paper panel — warm glow from interior light at night
+    if (!isDayTime)
+        setEmission(0.30f, 0.22f, 0.08f);
+    else
+        setEmission(0.04f, 0.03f, 0.01f);
     glBegin(GL_QUADS);
     glNormal3f(0, 0, 1);
     setColor(PAPER);
@@ -399,8 +457,11 @@ void drawEntranceDoor(float angle)
     glPushMatrix();
     glTranslatef(pw * 0.5f + slideX, by, hz - 0.01f);
 
-    // Washi paper panel
-    setEmission(0.35f, 0.25f, 0.10f);
+    // Washi paper panel — warm glow at night
+    if (!isDayTime)
+        setEmission(0.30f, 0.22f, 0.08f);
+    else
+        setEmission(0.04f, 0.03f, 0.01f);
     glBegin(GL_QUADS);
     glNormal3f(0, 0, 1);
     setColor(PAPER);
@@ -455,8 +516,11 @@ static void drawShojiPanelCentered(float width, float height)
     float fw = 0.06f;
     float kickH = height * 0.15f;
 
-    // Washi paper (above kick panel)
-    setEmission(0.35f, 0.25f, 0.10f);
+    // Washi paper (above kick panel) — warm glow at night
+    if (!isDayTime)
+        setEmission(0.30f, 0.22f, 0.08f);
+    else
+        setEmission(0.04f, 0.03f, 0.01f);
     glBegin(GL_QUADS);
     glNormal3f(0, 0, 1);
     setColor(PAPER);
@@ -565,8 +629,11 @@ void drawShojiDoor(Vec3 pos, Vec3 rot, Vec3 scale, float width, float height)
     float hw = width * 0.5f;
     float hh = height * 0.5f;
 
-    // Washi paper panel (warm emissive glow from interior light)
-    setEmission(0.35f, 0.25f, 0.10f);
+    // Washi paper panel — warm glow from interior light at night
+    if (!isDayTime)
+        setEmission(0.30f, 0.22f, 0.08f);
+    else
+        setEmission(0.04f, 0.03f, 0.01f);
     glBegin(GL_QUADS);
     glNormal3f(0, 0, 1);
     setColor(PAPER);
@@ -624,8 +691,11 @@ void drawShojiWindow(Vec3 pos, Vec3 rot, Vec3 scale, float width, float height)
     float hw = width * 0.5f;
     float hh = height * 0.5f;
 
-    // Washi paper panel (warm glow)
-    setEmission(0.40f, 0.28f, 0.10f);
+    // Washi paper panel — warm glow at night (interior light through paper)
+    if (!isDayTime)
+        setEmission(0.35f, 0.24f, 0.08f);
+    else
+        setEmission(0.05f, 0.04f, 0.02f);   // subtle during day
     glBegin(GL_QUADS);
     glNormal3f(0, 0, 1);
     setColor(PAPER);
