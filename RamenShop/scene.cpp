@@ -327,7 +327,26 @@ static void drawShadows()
 // ─── Ground ─────────────────────────────────────────────────────────────────
 void drawGround()
 {
-    drawSubdividedPlane({ 0, 0, 0 }, NO_ROT, { 80, 1, 80 }, { 0.12f, 0.14f, 0.10f }, 32, 32);
+    // ── Large unlit base ground so the world never shows black void ────
+    setLighting(false);
+    {
+        Color dayGrass   = { 0.32f, 0.52f, 0.22f };
+        Color nightGrass = { 0.06f, 0.10f, 0.05f };
+        Color baseCol = isDayTime ? dayGrass : nightGrass;
+        setColor(baseCol);
+        glBegin(GL_QUADS);
+        glNormal3f(0, 1, 0);
+        float ext = 120.0f;
+        glVertex3f(-ext, -0.02f, -ext);
+        glVertex3f( ext, -0.02f, -ext);
+        glVertex3f( ext, -0.02f,  ext);
+        glVertex3f(-ext, -0.02f,  ext);
+        glEnd();
+    }
+    setLighting(true);
+
+    // Lit grass layer on top (benefits from nearby lights)
+    drawSubdividedPlane({ 0, 0, 0 }, NO_ROT, { 80, 1, 80 }, GRASS, 32, 32);
 
     // Draw floor platform and write stencil = 1 for every floor pixel
     // (used by drawFloorReflection to mask the reflection to the floor area)
@@ -342,6 +361,7 @@ void drawGround()
     drawCuboid({ 0, -0.10f, 5.5f }, NO_ROT, { 13.0f, 0.10f, 1.2f }, WOOD);
     drawSidewalk({ 0, 0, 7.0f });
     drawStreet({ 0, 0, 12.0f });
+    drawSidewalk({ 0, 0, 17.0f });   // far-side sidewalk across the street
 
     // Polished-floor reflection overlay (stencil-masked to the floor platform)
     drawFloorReflection();
@@ -349,9 +369,199 @@ void drawGround()
     drawShadows();
 }
 
+// ─── Exterior Shadows (planar shadow-matrix projection) ────────────────────
+// Projects simplified silhouettes of major exterior objects onto the ground
+// plane from the directional sun/moon and point-light lamps/lanterns.
+//
+// Pass 1 — directional (sun or moon): stencil-masked to exterior ground
+//          (stencil == 0; the interior floor platform is ≥ 1 from drawGround)
+// Pass 2 — point lights (night only): lamps & lanterns near the shop entrance
+static void drawExteriorShadows()
+{
+    disablePhongShader();
+    drawingShadow = true;
+
+    // ── Common shadow render state ─────────────────────────────────────
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+
+    glDisable(GL_COLOR_MATERIAL);
+    GLfloat sSpec[] = { 0, 0, 0, 0 };
+    GLfloat sEmis[] = { 0, 0, 0, 1 };
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, sSpec);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, sEmis);
+
+    // ════════════════════════════════════════════════════════════════════
+    //  PASS 1 — Directional shadow (Sun / Moon)
+    // ════════════════════════════════════════════════════════════════════
+    {
+        // Shadow direction — roughly matches LIGHT0
+        // Day: higher sun angle → shorter, natural shadows
+        // Night: lower moon angle → longer, atmospheric shadows
+        float lx, ly, lz;
+        if (isDayTime) { lx = 0.4f;  ly = 0.65f; lz = -0.5f; }
+        else           { lx = 0.5f;  ly = 0.35f; lz = -0.7f; }
+
+        // Directional shadow matrix onto y = 0 (w = 0 → parallel rays)
+        GLfloat mat[16] = {
+             ly,    0.0f,  0.0f,  0.0f,     // col 0
+            -lx,    0.0f, -lz,   0.0f,     // col 1
+             0.0f,  0.0f,  ly,   0.0f,     // col 2
+             0.0f,  0.0f,  0.0f,  ly       // col 3
+        };
+
+        float alpha = isDayTime ? 0.25f : 0.10f;
+        GLfloat sAmb[] = { 0, 0, 0, alpha };
+        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, sAmb);
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, sAmb);
+
+        // Stencil: exterior ground == 0; interior floor ≥ 1
+        glEnable(GL_STENCIL_TEST);
+        glStencilFunc(GL_EQUAL, 0, 0xFF);
+        glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
+        glDisable(GL_DEPTH_TEST);
+
+        glPushMatrix();
+        glTranslatef(0.0f, 0.005f, 0.0f);   // nudge above ground to avoid z-fight
+        glMultMatrixf(mat);
+
+        // ── Shadow-casting geometry (simplified shapes) ─────────────
+
+        // Shop building body + roof
+        drawCuboid({ 0, 0, 0 }, NO_ROT, { 10, 5.3f, 8 }, BLACK);
+        drawCuboid({ 0, 5.3f, 0.5f }, NO_ROT, { 12, 1.5f, 10 }, BLACK);
+
+        // Near-side houses (same side as shop)
+        float nearHX[] = { -15.0f, -23.0f, 15.0f, 23.0f };
+        for (int i = 0; i < 4; i++)
+            drawCuboid({ nearHX[i], 0, 2.15f }, NO_ROT, { 4, 3.5f, 3.5f }, BLACK);
+
+        // Far-side houses (across the street)
+        float farHX[] = { -8.0f, -16.0f, -24.0f, 8.0f, 16.0f, 24.0f };
+        for (int i = 0; i < 6; i++)
+            drawCuboid({ farHX[i], 0, 20.75f }, NO_ROT, { 4, 3.5f, 3.5f }, BLACK);
+
+        // Trees near the shop (simplified: trunk cylinder + canopy sphere)
+        float treePosX[] = { -7.0f, 7.0f, -6.5f, 7.5f };
+        float treePosZ[] = { 2.0f, 3.0f, -2.0f, -1.5f };
+        float treeH[]    = { 3.0f, 3.5f, 2.5f, 2.8f };
+        float treeCR[]   = { 1.5f, 1.8f, 1.3f, 1.4f };
+        for (int i = 0; i < 4; i++) {
+            drawCylinder({ treePosX[i], 0, treePosZ[i] }, NO_ROT,
+                         { 0.15f, treeH[i], 0.15f }, BLACK);
+            drawSphere({ treePosX[i], treeH[i] * 0.7f, treePosZ[i] }, NO_ROT,
+                       { treeCR[i], treeCR[i] * 0.8f, treeCR[i] }, BLACK);
+        }
+
+        // Cherry blossom tree (prominent, near entrance)
+        drawCylinder({ -5.5f, 0, 6.2f }, NO_ROT, { 0.12f, 2.5f, 0.12f }, BLACK);
+        drawSphere({ -5.5f, 3.0f, 6.2f }, NO_ROT, { 2.2f, 1.8f, 2.2f }, BLACK);
+
+        // Accent maple trees flanking the shop
+        drawCylinder({ -10.5f, 0, 4.5f }, NO_ROT, { 0.10f, 2.5f, 0.10f }, BLACK);
+        drawSphere({ -10.5f, 2.8f, 4.5f }, NO_ROT, { 1.8f, 1.5f, 1.8f }, BLACK);
+        drawCylinder({ 10.5f, 0, 4.5f }, NO_ROT, { 0.10f, 2.8f, 0.10f }, BLACK);
+        drawSphere({ 10.5f, 3.0f, 4.5f }, NO_ROT, { 2.0f, 1.6f, 2.0f }, BLACK);
+
+        // Lamp post poles — near-side sidewalk (z ≈ 7)
+        float nearLampX[] = { -7.0f, 7.0f, -15.0f, 15.0f, -23.0f, 23.0f };
+        for (int i = 0; i < 6; i++)
+            drawCylinder({ nearLampX[i], 0, 7.0f }, NO_ROT,
+                         { 0.12f, 3.5f, 0.12f }, BLACK);
+        // Lamp post poles — far-side sidewalk (z ≈ 17)
+        float farLampX[] = { -8.0f, 8.0f, -16.0f, 16.0f, -24.0f, 24.0f };
+        for (int i = 0; i < 6; i++)
+            drawCylinder({ farLampX[i], 0, 17.0f }, NO_ROT,
+                         { 0.12f, 3.5f, 0.12f }, BLACK);
+
+        // Fences in front of shop
+        drawCuboid({ 0, 0.3f, 5.8f }, NO_ROT, { 5.5f, 0.7f, 0.08f }, BLACK);
+
+        // Vending machine
+        drawCuboid({ 8.5f, 0, 3.5f }, NO_ROT, { 0.9f, 1.85f, 0.56f }, BLACK);
+
+        // Plants near entrance
+        drawSphere({ -4.5f, 0.6f, 4.8f }, NO_ROT, { 0.55f, 0.50f, 0.55f }, BLACK);
+        drawSphere({ 4.5f, 0.6f, 4.8f }, NO_ROT, { 0.55f, 0.50f, 0.55f }, BLACK);
+
+        glPopMatrix();
+        glDisable(GL_STENCIL_TEST);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  PASS 2 (night only) — Point-light shadows from lamps & lanterns
+    //  Depth test keeps shadows on the ground surface.
+    //  Low alpha (8%) so overlap darkening is barely noticeable.
+    // ════════════════════════════════════════════════════════════════════
+    if (!isDayTime) {
+        GLfloat lampAmb[] = { 0, 0, 0, 0.08f };
+        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, lampAmb);
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, lampAmb);
+        glEnable(GL_DEPTH_TEST);
+
+        // Light source positions:
+        //   Left / right entrance lanterns (-3.8, 2.5, 4.5) and (3.8, 2.5, 4.5)
+        //   Left / right nearest lamp bulbs (-7, 3.12, 6.3) and (7, 3.12, 6.3)
+        //     (bulb offset (0.7, 3.12, 0) rotated −90° around Y → (0, 3.12, −0.7))
+        struct PtLight { float x, y, z; };
+        PtLight lights[] = {
+            { -3.8f, 2.50f, 4.5f },   // left lantern
+            {  3.8f, 2.50f, 4.5f },   // right lantern
+            { -7.0f, 3.12f, 6.3f },   // left lamp post bulb
+            {  7.0f, 3.12f, 6.3f },   // right lamp post bulb
+        };
+
+        for (int li = 0; li < 4; li++) {
+            float px = lights[li].x, py = lights[li].y, pz = lights[li].z;
+
+            // Point-light shadow matrix onto y = 0 (w = 1)
+            GLfloat pmat[16] = {
+                 py,    0.0f,  0.0f,  0.0f,     // col 0
+                -px,    0.0f, -pz,  -1.0f,     // col 1
+                 0.0f,  0.0f,  py,   0.0f,     // col 2
+                 0.0f,  0.0f,  0.0f,  py       // col 3
+            };
+
+            glPushMatrix();
+            glTranslatef(0.0f, 0.006f + li * 0.001f, 0.0f);
+            glMultMatrixf(pmat);
+
+            // Shadow-cast objects near entrance
+            drawCuboid({ 0, 0.3f, 5.8f }, NO_ROT, { 5.5f, 0.7f, 0.08f }, BLACK);
+            drawSphere({ -4.5f, 0.6f, 4.8f }, NO_ROT, { 0.55f, 0.50f, 0.55f }, BLACK);
+            drawSphere({ 4.5f, 0.6f, 4.8f }, NO_ROT, { 0.55f, 0.50f, 0.55f }, BLACK);
+            drawSphere({ -2.5f, 0.5f, 5.4f }, NO_ROT, { 0.30f, 0.30f, 0.30f }, BLACK);
+            drawSphere({ 2.5f, 0.5f, 5.4f }, NO_ROT, { 0.30f, 0.30f, 0.30f }, BLACK);
+            // Other lamp post poles cast shadows from neighboring lamps
+            drawCylinder({ -7.0f, 0, 7.0f }, NO_ROT, { 0.12f, 3.5f, 0.12f }, BLACK);
+            drawCylinder({ 7.0f, 0, 7.0f }, NO_ROT, { 0.12f, 3.5f, 0.12f }, BLACK);
+
+            glPopMatrix();
+        }
+    }
+
+    drawingShadow = false;
+
+    // ── Restore render state ───────────────────────────────────────────
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    GLfloat noSpec[] = { 0, 0, 0, 1 };
+    GLfloat noEm[]   = { 0, 0, 0, 1 };
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, noSpec);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, noEm);
+    glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+    enablePhongShader();
+}
+
 // ─── Exterior ───────────────────────────────────────────────────────────────
 void drawExterior()
 {
+    // Project shadows onto the ground before drawing actual objects
+    drawExteriorShadows();
+
     drawShopBuilding({ 0, 0, 0 });
     if (showRoof) drawRoof({ 0, 0, 0 });
 
@@ -487,65 +697,292 @@ void drawExterior()
     // Cherry blossom tree prominently displayed to the left of the shop entrance
     drawCherryBlossomTree({ -5.5f, 0, 6.2f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
 
+    // ── Street lamp posts — near-side sidewalk (z≈7) ──────────────────
     drawLamp({ -7.0f, 0, 7.0f }, { 0, -90, 0 });
     drawLamp({  7.0f, 0, 7.0f }, { 0, -90, 0 });
+    drawLamp({ -15.0f, 0, 7.0f }, { 0, -90, 0 });
+    drawLamp({  15.0f, 0, 7.0f }, { 0, -90, 0 });
+    drawLamp({ -23.0f, 0, 7.0f }, { 0, -90, 0 });
+    drawLamp({  23.0f, 0, 7.0f }, { 0, -90, 0 });
+
+    // ── Street lamp posts — far-side sidewalk (z≈17) ────────────────
+    drawLamp({ -8.0f, 0, 17.0f }, { 0, 90, 0 });
+    drawLamp({  8.0f, 0, 17.0f }, { 0, 90, 0 });
+    drawLamp({ -16.0f, 0, 17.0f }, { 0, 90, 0 });
+    drawLamp({  16.0f, 0, 17.0f }, { 0, 90, 0 });
+    drawLamp({ -24.0f, 0, 17.0f }, { 0, 90, 0 });
+    drawLamp({  24.0f, 0, 17.0f }, { 0, 90, 0 });
 
     // Vending machine to the right of the shop entrance, facing the sidewalk
     drawVendingMachine({ 8.5f, 0, 3.5f }, { 0, -90, 0 });
 
     // ── Extended Outdoor Environment ─────────────────────────────────────
+    // Layout: shop at origin facing +Z.  Street at z≈12.  Sidewalks at z≈7, z≈17.
+    // Zone map (clear separation — no overlap with road z=5.5..18.5 or lake z=-16..-32):
+    //   Dedicated Forest:  x<-14, z<-8   (left behind shop — dense pines/maples/jungle)
+    //   Dedicated Bamboo:  x>14,  z<-8   (right behind shop — bamboo/torii/moss/petals)
+    //   Lake:              center z=-24  (bridge + ducks, shore lanterns)
+    //   Flower Gardens:    specific ground spots near shop & houses
+    //   Far-side Forest:   z>25          (behind far houses — mixed forest)
+    //   Perimeter Jungle:  world edges   (|x|>33 or |z|>36)
 
-    // Japanese pine trees scattered around the neighborhood
-    drawJapanesePineTree({ -12.0f, 0,  8.0f }, NO_ROT, { 1.0f, 1.2f, 1.0f });
-    drawJapanesePineTree({  14.0f, 0, -5.0f }, NO_ROT, { 0.9f, 1.0f, 0.9f });
-    drawJapanesePineTree({ -15.0f, 0, -8.0f }, NO_ROT, { 1.1f, 1.4f, 1.1f });
-    drawJapanesePineTree({  18.0f, 0, 10.0f }, NO_ROT, { 0.8f, 0.9f, 0.8f });
+    // ── Near-side houses (same side as shop, facing +Z toward street) ────
+    drawJapaneseHouse({ -15.0f, 0, 2.15f }, NO_ROT, ONE);
+    drawJapaneseHouse({ -23.0f, 0, 2.15f }, NO_ROT, ONE);
+    drawJapaneseHouse({  15.0f, 0, 2.15f }, NO_ROT, ONE);
+    drawJapaneseHouse({  23.0f, 0, 2.15f }, NO_ROT, ONE);
 
-    // Maple trees with autumn foliage
-    drawMapleTree({ -10.0f, 0,  12.0f }, NO_ROT, { 1.0f, 1.0f, 1.0f });
-    drawMapleTree({  12.0f, 0,  14.0f }, NO_ROT, { 1.1f, 1.2f, 1.1f });
-    drawMapleTree({ -18.0f, 0,  -3.0f }, NO_ROT, { 0.9f, 0.9f, 0.9f });
+    // ── Far-side houses (across the street, facing -Z back toward street) ─
+    // House depth 3.5, front at z≈19, centre z = 19 + 1.75 = 20.75
+    drawJapaneseHouse({  -8.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
+    drawJapaneseHouse({ -16.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
+    drawJapaneseHouse({ -24.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
+    drawJapaneseHouse({   8.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
+    drawJapaneseHouse({  16.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
+    drawJapaneseHouse({  24.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
 
-    // Bamboo groves flanking the path
-    drawBambooGrove({ -14.0f, 0,  3.0f }, NO_ROT, { 1.0f, 1.0f, 1.0f });
-    drawBambooGrove({  16.0f, 0,  6.0f }, { 0, 30, 0 }, { 0.9f, 1.1f, 0.9f });
+    // ── Accent trees near the shop (not on road or lake) ──────────────
+    drawMapleTree({ -10.5f, 0,   4.5f }, NO_ROT, { 1.0f, 1.0f, 1.0f });
+    drawMapleTree({  10.5f, 0,   4.5f }, NO_ROT, { 1.1f, 1.2f, 1.1f });
 
-    // Japanese houses along the street
-    drawJapaneseHouse({ -20.0f, 0,  8.0f }, { 0, 45, 0 },  { 1.0f, 1.0f, 1.0f });
-    drawJapaneseHouse({  22.0f, 0,  5.0f }, { 0, -90, 0 }, { 1.1f, 1.0f, 1.1f });
-    drawJapaneseHouse({ -22.0f, 0, -6.0f }, { 0, 60, 0 },  { 0.9f, 0.9f, 0.9f });
-    drawJapaneseHouse({  20.0f, 0, -8.0f }, { 0, -45, 0 }, { 1.0f, 1.1f, 1.0f });
+    // ══════════════════════════════════════════════════════════════════════
+    //  DEDICATED FOREST — left side behind shop (x < -14, z < -8)
+    //  Dense cluster inspired by anime forest: tall trees, varied species,
+    //  lush undergrowth.  Clear of lake (center z=-24) and road (z>5.5).
+    // ══════════════════════════════════════════════════════════════════════
 
-    // Lake behind the shop with a bridge crossing it
-    drawLake({ 0, -0.1f, -18.0f }, NO_ROT, { 3.0f, 1.0f, 2.5f });
-    drawBridge({ 0, 0, -18.0f }, NO_ROT, { 1.2f, 1.0f, 1.0f });
+    // Tall pine trees (primary canopy)
+    drawJapanesePineTree({ -16.0f, 0, -10.0f }, NO_ROT, { 1.2f, 1.5f, 1.2f });
+    drawJapanesePineTree({ -19.0f, 0, -12.0f }, NO_ROT, { 1.1f, 1.8f, 1.1f });
+    drawJapanesePineTree({ -22.0f, 0, -10.0f }, NO_ROT, { 1.0f, 1.6f, 1.0f });
+    drawJapanesePineTree({ -25.0f, 0, -13.0f }, NO_ROT, { 1.3f, 1.7f, 1.3f });
+    drawJapanesePineTree({ -28.0f, 0, -11.0f }, NO_ROT, { 0.9f, 1.4f, 0.9f });
+    drawJapanesePineTree({ -17.0f, 0, -16.0f }, NO_ROT, { 1.0f, 1.9f, 1.0f });
+    drawJapanesePineTree({ -21.0f, 0, -18.0f }, NO_ROT, { 1.2f, 1.6f, 1.2f });
+    drawJapanesePineTree({ -26.0f, 0, -17.0f }, NO_ROT, { 1.1f, 1.5f, 1.1f });
+    drawJapanesePineTree({ -30.0f, 0, -14.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
+    drawJapanesePineTree({ -15.0f, 0, -22.0f }, NO_ROT, { 1.3f, 1.8f, 1.3f });
+    drawJapanesePineTree({ -24.0f, 0, -22.0f }, NO_ROT, { 1.2f, 1.7f, 1.2f });
+    drawJapanesePineTree({ -29.0f, 0, -20.0f }, NO_ROT, { 0.9f, 1.4f, 0.9f });
+    drawJapanesePineTree({ -18.0f, 0, -28.0f }, NO_ROT, { 1.1f, 1.6f, 1.1f });
+    drawJapanesePineTree({ -23.0f, 0, -30.0f }, NO_ROT, { 1.0f, 1.5f, 1.0f });
+    drawJapanesePineTree({ -27.0f, 0, -27.0f }, NO_ROT, { 1.2f, 1.8f, 1.2f });
+    drawJapanesePineTree({ -32.0f, 0, -25.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
 
-    // Stone lanterns around the lake and garden paths
-    drawStoneLantern({  4.0f, 0, -14.0f });
-    drawStoneLantern({ -4.0f, 0, -14.0f });
-    drawStoneLantern({  6.0f, 0, -20.0f });
-    drawStoneLantern({ -6.0f, 0, -20.0f });
+    // Maple trees adding autumn colour variety
+    drawMapleTree({ -17.0f, 0, -14.0f }, NO_ROT, { 1.1f, 1.3f, 1.1f });
+    drawMapleTree({ -24.0f, 0, -16.0f }, NO_ROT, { 1.0f, 1.2f, 1.0f });
+    drawMapleTree({ -20.0f, 0, -21.0f }, NO_ROT, { 1.2f, 1.4f, 1.2f });
+    drawMapleTree({ -28.0f, 0, -23.0f }, NO_ROT, { 0.9f, 1.1f, 0.9f });
+    drawMapleTree({ -16.0f, 0, -26.0f }, NO_ROT, { 1.0f, 1.2f, 1.0f });
+    drawMapleTree({ -31.0f, 0, -18.0f }, NO_ROT, { 1.1f, 1.3f, 1.1f });
 
-    // Grass patches scattered around the grounds
-    drawGrassPatch({ -8.0f,  0.01f,  10.0f }, NO_ROT, { 2.0f, 1.0f, 2.0f });
-    drawGrassPatch({  9.0f,  0.01f,  12.0f }, NO_ROT, { 1.5f, 1.0f, 1.5f });
-    drawGrassPatch({ -6.0f,  0.01f, -10.0f }, NO_ROT, { 2.5f, 1.0f, 2.5f });
-    drawGrassPatch({  5.0f,  0.01f, -12.0f }, NO_ROT, { 1.8f, 1.0f, 1.8f });
-    drawGrassPatch({ -12.0f, 0.01f,  14.0f }, NO_ROT, { 2.0f, 1.0f, 2.0f });
-    drawGrassPatch({  14.0f, 0.01f,  -2.0f }, NO_ROT, { 1.6f, 1.0f, 1.6f });
-    drawGrassPatch({  0.0f,  0.01f, -14.0f }, NO_ROT, { 3.0f, 1.0f, 3.0f });
-    drawGrassPatch({ -16.0f, 0.01f,   0.0f }, NO_ROT, { 2.2f, 1.0f, 2.2f });
+    // Regular broad-leaf trees filling gaps
+    drawTree({ -18.0f, 0, -11.0f }, NO_ROT, { 1.0f, 1.4f, 1.0f });
+    drawTree({ -23.0f, 0, -15.0f }, NO_ROT, { 1.2f, 1.6f, 1.2f });
+    drawTree({ -15.0f, 0, -19.0f }, NO_ROT, { 0.9f, 1.3f, 0.9f });
+    drawTree({ -27.0f, 0, -19.0f }, NO_ROT, { 1.1f, 1.5f, 1.1f });
+    drawTree({ -21.0f, 0, -26.0f }, NO_ROT, { 1.0f, 1.4f, 1.0f });
+    drawTree({ -30.0f, 0, -22.0f }, NO_ROT, { 1.2f, 1.6f, 1.2f });
 
-    // Jungle area off to one side
-    drawJungle({ -25.0f, 0, -15.0f }, NO_ROT, { 1.5f, 1.0f, 1.5f });
-    drawJungle({  25.0f, 0, -12.0f }, { 0, 90, 0 }, { 1.2f, 1.0f, 1.2f });
+    // Cherry blossom accents at forest edge
+    drawCherryBlossomTree({ -25.0f, 0, -9.0f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
+    drawCherryBlossomTree({ -15.0f, 0, -14.0f }, NO_ROT, { 0.9f, 1.0f, 0.9f });
 
-    // Fireflies near the lake and around the garden (night only, handled inside the function)
-    drawFireflies({ 0, 1.5f, -18.0f }, 8.0f, 25);
-    drawFireflies({ -5.0f, 1.0f, -15.0f }, 5.0f, 15);
-    drawFireflies({  5.0f, 1.0f, -15.0f }, 5.0f, 15);
-    drawFireflies({ -10.0f, 1.2f, 8.0f }, 4.0f, 10);
-    drawFireflies({  10.0f, 1.2f, 8.0f }, 4.0f, 10);
+    // Dense jungle undergrowth throughout the forest floor
+    drawJungle({ -20.0f, 0, -12.0f }, NO_ROT, { 1.5f, 0.8f, 1.5f });
+    drawJungle({ -25.0f, 0, -16.0f }, { 0, 30, 0 }, { 1.3f, 0.7f, 1.3f });
+    drawJungle({ -18.0f, 0, -20.0f }, { 0, 60, 0 }, { 1.6f, 0.9f, 1.6f });
+    drawJungle({ -28.0f, 0, -22.0f }, { 0, 45, 0 }, { 1.4f, 0.8f, 1.4f });
+    drawJungle({ -22.0f, 0, -28.0f }, { 0, 15, 0 }, { 1.5f, 0.7f, 1.5f });
+    drawJungle({ -16.0f, 0, -25.0f }, { 0, 75, 0 }, { 1.2f, 0.8f, 1.2f });
+    drawJungle({ -32.0f, 0, -16.0f }, { 0, -20, 0 }, { 1.3f, 0.7f, 1.3f });
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  DEDICATED BAMBOO GROVE — right side behind shop (x > 14, z < -8)
+    //  Mystical bamboo forest with stone lanterns, torii gate, cherry
+    //  blossoms, and mossy ground — inspired by Arashiyama bamboo paths.
+    // ══════════════════════════════════════════════════════════════════════
+
+    // Dense bamboo clusters forming a continuous forest
+    drawBambooGrove({ 16.0f, 0, -12.0f }, NO_ROT, { 1.2f, 1.3f, 1.2f });
+    drawBambooGrove({ 19.0f, 0, -10.0f }, { 0, 25, 0 }, { 1.0f, 1.4f, 1.0f });
+    drawBambooGrove({ 22.0f, 0, -13.0f }, { 0, 50, 0 }, { 1.1f, 1.5f, 1.1f });
+    drawBambooGrove({ 25.0f, 0, -11.0f }, { 0, -15, 0 }, { 1.3f, 1.2f, 1.3f });
+    drawBambooGrove({ 28.0f, 0, -14.0f }, { 0, 35, 0 }, { 1.0f, 1.6f, 1.0f });
+    drawBambooGrove({ 15.0f, 0, -17.0f }, { 0, 70, 0 }, { 1.2f, 1.4f, 1.2f });
+    drawBambooGrove({ 18.0f, 0, -19.0f }, { 0, -30, 0 }, { 1.1f, 1.3f, 1.1f });
+    drawBambooGrove({ 21.0f, 0, -16.0f }, { 0, 10, 0 }, { 1.3f, 1.5f, 1.3f });
+    drawBambooGrove({ 24.0f, 0, -20.0f }, { 0, 55, 0 }, { 1.0f, 1.4f, 1.0f });
+    drawBambooGrove({ 27.0f, 0, -18.0f }, { 0, -40, 0 }, { 1.2f, 1.6f, 1.2f });
+    drawBambooGrove({ 30.0f, 0, -16.0f }, { 0, 20, 0 }, { 1.0f, 1.3f, 1.0f });
+    drawBambooGrove({ 17.0f, 0, -24.0f }, { 0, 45, 0 }, { 1.3f, 1.5f, 1.3f });
+    drawBambooGrove({ 20.0f, 0, -22.0f }, { 0, -25, 0 }, { 1.1f, 1.4f, 1.1f });
+    drawBambooGrove({ 23.0f, 0, -26.0f }, { 0, 60, 0 }, { 1.2f, 1.3f, 1.2f });
+    drawBambooGrove({ 26.0f, 0, -24.0f }, { 0, -10, 0 }, { 1.0f, 1.5f, 1.0f });
+    drawBambooGrove({ 29.0f, 0, -22.0f }, { 0, 30, 0 }, { 1.1f, 1.6f, 1.1f });
+    drawBambooGrove({ 16.0f, 0, -29.0f }, { 0, 75, 0 }, { 1.2f, 1.4f, 1.2f });
+    drawBambooGrove({ 22.0f, 0, -30.0f }, { 0, -50, 0 }, { 1.3f, 1.5f, 1.3f });
+    drawBambooGrove({ 28.0f, 0, -28.0f }, { 0, 15, 0 }, { 1.0f, 1.3f, 1.0f });
+
+    // Cherry blossom trees at bamboo grove edges (blossoms cascading over bamboo)
+    drawCherryBlossomTree({ 15.0f, 0, -9.0f }, NO_ROT, { 1.2f, 1.3f, 1.2f });
+    drawCherryBlossomTree({ 22.0f, 0, -9.0f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
+    drawCherryBlossomTree({ 29.0f, 0, -10.0f }, NO_ROT, { 1.1f, 1.2f, 1.1f });
+    drawCherryBlossomTree({ 14.0f, 0, -20.0f }, NO_ROT, { 0.9f, 1.0f, 0.9f });
+    drawCherryBlossomTree({ 31.0f, 0, -20.0f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
+
+    // Red torii gate at the bamboo grove entrance
+    drawToriiGate({ 20.0f, 0, -9.0f }, { 0, 90, 0 });
+
+    // Stone lanterns along the bamboo path
+    drawStoneLantern({ 15.0f, 0, -11.0f });
+    drawStoneLantern({ 18.0f, 0, -15.0f });
+    drawStoneLantern({ 21.0f, 0, -11.0f });
+    drawStoneLantern({ 24.0f, 0, -16.0f });
+    drawStoneLantern({ 27.0f, 0, -12.0f });
+    drawStoneLantern({ 16.0f, 0, -21.0f });
+    drawStoneLantern({ 20.0f, 0, -26.0f });
+    drawStoneLantern({ 25.0f, 0, -23.0f });
+
+    // Mossy ground patches under the bamboo canopy
+    drawMossGround({ 18.0f, 0, -15.0f }, NO_ROT, { 3.0f, 1.0f, 3.0f });
+    drawMossGround({ 24.0f, 0, -18.0f }, { 0, 30, 0 }, { 2.5f, 1.0f, 2.5f });
+    drawMossGround({ 20.0f, 0, -23.0f }, { 0, 60, 0 }, { 3.5f, 1.0f, 3.5f });
+    drawMossGround({ 26.0f, 0, -26.0f }, { 0, 15, 0 }, { 2.0f, 1.0f, 2.0f });
+    drawMossGround({ 16.0f, 0, -26.0f }, { 0, 45, 0 }, { 2.5f, 1.0f, 2.5f });
+
+    // Falling cherry blossom petals drifting through the bamboo canopy
+    drawFallingPetals({ 22.0f, 5.0f, -18.0f }, 12.0f, 30);
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  FAR-SIDE FOREST — behind the far houses (z > 25)
+    //  Mixed forest: pines, maples, cherry blossoms, undergrowth
+    // ══════════════════════════════════════════════════════════════════════
+
+    // Pine trees (primary canopy)
+    drawJapanesePineTree({ -12.0f, 0, 28.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
+    drawJapanesePineTree({ -20.0f, 0, 30.0f }, NO_ROT, { 1.2f, 1.5f, 1.2f });
+    drawJapanesePineTree({ -28.0f, 0, 28.0f }, NO_ROT, { 1.0f, 1.4f, 1.0f });
+    drawJapanesePineTree({  14.0f, 0, 27.0f }, NO_ROT, { 0.9f, 1.1f, 0.9f });
+    drawJapanesePineTree({  22.0f, 0, 29.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
+    drawJapanesePineTree({  28.0f, 0, 27.0f }, NO_ROT, { 1.1f, 1.4f, 1.1f });
+    drawJapanesePineTree({  -3.0f, 0, 32.0f }, NO_ROT, { 1.1f, 1.6f, 1.1f });
+    drawJapanesePineTree({   5.0f, 0, 33.0f }, NO_ROT, { 0.8f, 1.2f, 0.8f });
+    drawJapanesePineTree({ -16.0f, 0, 34.0f }, NO_ROT, { 1.0f, 1.5f, 1.0f });
+    drawJapanesePineTree({  18.0f, 0, 35.0f }, NO_ROT, { 1.2f, 1.7f, 1.2f });
+    drawJapanesePineTree({ -25.0f, 0, 33.0f }, NO_ROT, { 0.9f, 1.3f, 0.9f });
+    drawJapanesePineTree({  25.0f, 0, 34.0f }, NO_ROT, { 1.0f, 1.4f, 1.0f });
+
+    // Maple trees interspersed
+    drawMapleTree({ -5.0f, 0, 26.0f }, NO_ROT, { 1.0f, 1.2f, 1.0f });
+    drawMapleTree({  18.0f, 0, 28.0f }, NO_ROT, { 1.1f, 1.3f, 1.1f });
+    drawMapleTree({ -25.0f, 0, 32.0f }, NO_ROT, { 0.9f, 1.1f, 0.9f });
+    drawMapleTree({  26.0f, 0, 33.0f }, NO_ROT, { 1.0f, 1.2f, 1.0f });
+    drawMapleTree({  -8.0f, 0, 34.0f }, NO_ROT, { 1.1f, 1.3f, 1.1f });
+    drawMapleTree({  10.0f, 0, 32.0f }, NO_ROT, { 0.9f, 1.0f, 0.9f });
+
+    // Cherry blossom trees for colour accents
+    drawCherryBlossomTree({  3.0f, 0, 27.0f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
+    drawCherryBlossomTree({ -18.0f, 0, 33.0f }, NO_ROT, { 1.1f, 1.2f, 1.1f });
+    drawCherryBlossomTree({  12.0f, 0, 30.0f }, NO_ROT, { 0.9f, 1.0f, 0.9f });
+
+    // Dense undergrowth filling the far forest floor
+    drawJungle({ -10.0f, 0, 30.0f }, { 0, 40, 0 }, { 1.5f, 0.8f, 1.5f });
+    drawJungle({  10.0f, 0, 31.0f }, { 0, -20, 0 }, { 1.4f, 0.7f, 1.4f });
+    drawJungle({ -22.0f, 0, 32.0f }, { 0, 60, 0 }, { 1.6f, 0.9f, 1.6f });
+    drawJungle({  22.0f, 0, 30.0f }, { 0, -40, 0 }, { 1.3f, 0.8f, 1.3f });
+    drawJungle({   0.0f, 0, 36.0f }, { 0, 30, 0 }, { 2.0f, 0.9f, 2.0f });
+    drawJungle({ -15.0f, 0, 38.0f }, { 0, -15, 0 }, { 1.5f, 0.8f, 1.5f });
+    drawJungle({  15.0f, 0, 37.0f }, { 0, 50, 0 }, { 1.4f, 0.7f, 1.4f });
+
+    // ── Lake with swimming ducks (behind the shop, between houses) ──────
+    drawLake({ 0, 0.04f, -24.0f }, NO_ROT, { 1.5f, 1.0f, 1.0f });
+    drawBridge({ 0, 0.10f, -24.0f }, NO_ROT, ONE);
+    // Two ducks swimming in circles on the lake
+    drawDuck({ 0, 0.06f, -24.0f }, NO_ROT, ONE);
+    drawDuck({ 0, 0.06f, -24.0f }, { 0, 120, 0 }, ONE);  // offset orbit phase via rotation
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  DEDICATED FLOWER GARDENS — specific ground spots (not scattered)
+    // ══════════════════════════════════════════════════════════════════════
+
+    // Near the shop entrance (flanking sidewalk)
+    drawFlowerGarden({ -9.0f, 0, 5.0f }, NO_ROT, { 0.8f, 1.0f, 0.8f });
+    drawFlowerGarden({  9.0f, 0, 5.0f }, NO_ROT, { 0.8f, 1.0f, 0.8f });
+    // Between near-side houses
+    drawFlowerGarden({ -19.0f, 0, 4.5f }, { 0, 15, 0 }, { 0.6f, 1.0f, 0.6f });
+    drawFlowerGarden({  19.0f, 0, 4.5f }, { 0, -15, 0 }, { 0.6f, 1.0f, 0.6f });
+    // Between far-side houses
+    drawFlowerGarden({  0.0f, 0, 19.0f }, NO_ROT, { 1.0f, 1.0f, 1.0f });
+    drawFlowerGarden({ -20.0f, 0, 19.0f }, { 0, 30, 0 }, { 0.7f, 1.0f, 0.7f });
+    drawFlowerGarden({  20.0f, 0, 19.0f }, { 0, -30, 0 }, { 0.7f, 1.0f, 0.7f });
+    // At forest entrance (village-to-forest transition)
+    drawFlowerGarden({ -14.0f, 0, -7.0f }, { 0, 20, 0 }, { 0.7f, 1.0f, 0.7f });
+    // At bamboo grove entrance
+    drawFlowerGarden({  14.0f, 0, -7.0f }, { 0, -20, 0 }, { 0.7f, 1.0f, 0.7f });
+
+    // ── Stone lanterns along village pathways ────────────────────────────
+    drawStoneLantern({ -6.5f, 0,  6.2f });
+    drawStoneLantern({  6.5f, 0,  6.2f });
+    drawStoneLantern({ -6.5f, 0, 18.0f });
+    drawStoneLantern({  6.5f, 0, 18.0f });
+    // Near the lake shore (not in the water)
+    drawStoneLantern({  10.0f, 0, -15.0f });
+    drawStoneLantern({ -10.0f, 0, -15.0f });
+    drawStoneLantern({   0.0f, 0, -14.0f });
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  PERIMETER JUNGLE — dense forest wall at world edges
+    //  Moved away from road (z>5.5) and lake (z~-24) zones
+    // ══════════════════════════════════════════════════════════════════════
+    drawJungle({ -35.0f, 0, -15.0f }, NO_ROT, { 2.0f, 1.2f, 2.0f });
+    drawJungle({  35.0f, 0, -12.0f }, { 0, 90, 0 }, { 1.8f, 1.1f, 1.8f });
+    drawJungle({ -35.0f, 0,  30.0f }, { 0, 45, 0 }, { 1.8f, 1.0f, 1.8f });
+    drawJungle({  35.0f, 0,  28.0f }, { 0, -30, 0 }, { 1.7f, 1.1f, 1.7f });
+    drawJungle({   0.0f, 0, -38.0f }, NO_ROT, { 3.0f, 1.2f, 2.0f });
+    drawJungle({   0.0f, 0,  42.0f }, { 0, 90, 0 }, { 2.5f, 1.0f, 2.0f });
+    drawJungle({ -35.0f, 0,   2.0f }, { 0, 20, 0 }, { 1.5f, 1.0f, 1.5f });
+    drawJungle({  35.0f, 0,   2.0f }, { 0,-20, 0 }, { 1.5f, 1.0f, 1.5f });
+    drawJungle({ -35.0f, 0, -30.0f }, { 0, -10, 0 }, { 1.8f, 1.0f, 1.8f });
+    drawJungle({  35.0f, 0, -28.0f }, { 0, 15, 0 }, { 1.6f, 1.0f, 1.6f });
+    drawJungle({ -20.0f, 0, -38.0f }, { 0, 30, 0 }, { 1.5f, 1.0f, 1.5f });
+    drawJungle({  20.0f, 0, -38.0f }, { 0, -30, 0 }, { 1.5f, 1.0f, 1.5f });
+
+    // ── Grass tufts scattered over both sides, skipping buildings/road ──
+    for (float gx = -36.0f; gx <= 36.0f; gx += 3.2f) {
+        for (float gz = -38.0f; gz <= 38.0f; gz += 3.2f) {
+            float x = gx + sinf(gx * 12.9f + gz * 78.2f) * 1.2f;
+            float z = gz + sinf(gx * 39.3f + gz * 11.1f) * 1.2f;
+            // Skip shop + yard
+            if (fabsf(x) < 7.0f && z > -5.5f && z < 6.0f) continue;
+            // Skip near-side houses
+            if (fabsf(x) > 12.0f && fabsf(x) < 26.0f && z > -0.5f && z < 5.0f) continue;
+            // Skip road + sidewalks (z = 5.5 .. 18.5)
+            if (z > 5.5f && z < 18.5f) continue;
+            // Skip far-side houses
+            if (fabsf(x) > 5.0f && fabsf(x) < 27.0f && z > 18.5f && z < 24.0f) continue;
+            // Skip lake area
+            float lx = x / 13.5f, lz = (z + 24.0f) / 9.5f;
+            if (lx * lx + lz * lz < 1.0f) continue;
+            float s = 0.9f + 0.4f * (0.5f + 0.5f * sinf(gx * 3.7f + gz * 5.3f));
+            drawGrassPatch({ x, 0.0f, z }, { 0, gx * 17.0f + gz * 31.0f, 0 }, { s, 1.0f, s });
+        }
+    }
+
+    // ── Mountain Range — distant background behind far-side forest ────
+    // Mt. Fuji-style snow-capped peak with foothills, placed far back
+    drawMountainRange({ 0, 0, -85.0f });
+
+    // ── Fireflies — near gardens, lake, forest and bamboo (night only) ──
+    drawFireflies({ -9.0f, 1.2f, 5.0f }, 4.0f, 10);       // flower garden left
+    drawFireflies({  9.0f, 1.2f, 5.0f }, 4.0f, 10);       // flower garden right
+    drawFireflies({  0.0f, 1.5f, -24.0f }, 10.0f, 25);     // lake
+    drawFireflies({ -22.0f, 2.0f, -18.0f }, 8.0f, 20);    // deep forest
+    drawFireflies({  22.0f, 2.0f, -18.0f }, 8.0f, 20);    // bamboo grove
+    drawFireflies({  0.0f, 1.5f, 30.0f }, 10.0f, 20);      // far-side forest
+    drawFireflies({ -20.0f, 1.5f, 32.0f }, 6.0f, 12);     // far-side forest left
+    drawFireflies({  20.0f, 1.5f, 32.0f }, 6.0f, 12);     // far-side forest right
 }
 
 // ─── Second Floor ────────────────────────────────────────────────────────────

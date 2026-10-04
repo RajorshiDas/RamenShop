@@ -16,7 +16,7 @@ static const Color SKY_DAY   = { 0.45f, 0.65f, 0.90f };
 static const Color SKY_NIGHT = { 0.10f, 0.10f, 0.16f };
 
 // ─── Fog state ─────────────────────────────────────────────────────────────
-bool showFog = true;
+bool showFog = false;
 
 // ─── Light component flags ─────────────────────────────────────────────────
 bool lightAmbient   = true;
@@ -88,7 +88,7 @@ void toggleDayNight() {
 
     GLfloat fogColor[] = { sky.r, sky.g, sky.b, 1.0f };
     glFogfv(GL_FOG_COLOR, fogColor);
-    glFogf(GL_FOG_DENSITY, isDayTime ? 0.012f : 0.025f);
+    glFogf(GL_FOG_DENSITY, isDayTime ? 0.012f : 0.018f);
 
     applyLightingParameters();
 }
@@ -147,10 +147,10 @@ void initLighting()
     glLightf(GL_LIGHT4, GL_LINEAR_ATTENUATION,    0.09f);
     glLightf(GL_LIGHT4, GL_QUADRATIC_ATTENUATION, 0.032f);
 
-    // ── OUTDOOR: Street lamps — wider pool ~5m radius ────────────────
-    glLightf(GL_LIGHT5, GL_CONSTANT_ATTENUATION,  1.0f);
-    glLightf(GL_LIGHT5, GL_LINEAR_ATTENUATION,    0.09f);
-    glLightf(GL_LIGHT5, GL_QUADRATIC_ATTENUATION, 0.032f);
+    // ── OUTDOOR: Street lamps — wide pool ~8m radius ─────────────────
+    glLightf(GL_LIGHT5, GL_CONSTANT_ATTENUATION,  0.8f);
+    glLightf(GL_LIGHT5, GL_LINEAR_ATTENUATION,    0.045f);
+    glLightf(GL_LIGHT5, GL_QUADRATIC_ATTENUATION, 0.012f);
 
     // ── ENTRANCE: Shop sign / awning glow — ~3m radius ──────────────
     glLightf(GL_LIGHT6, GL_CONSTANT_ATTENUATION,  1.0f);
@@ -233,11 +233,11 @@ void applyLightingParameters()
     //  Day:   moderate → fills shadows naturally like diffused skylight
     // ════════════════════════════════════════════════════════════════════
     if (isDayTime) {
-        GLfloat dayAmb[] = { 0.22f, 0.22f, 0.24f, 1.0f };
+        GLfloat dayAmb[] = { 0.42f, 0.42f, 0.46f, 1.0f };
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lightAmbient ? dayAmb : ZERO4);
     } else {
-        // Very low → unlit corners are genuinely dark
-        GLfloat nightAmb[] = { 0.015f, 0.015f, 0.025f, 1.0f };
+        // Low but visible → dark areas maintain shape, pools of light stand out
+        GLfloat nightAmb[] = { 0.04f, 0.04f, 0.06f, 1.0f };
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lightAmbient ? nightAmb : ZERO4);
     }
 
@@ -257,10 +257,10 @@ void applyLightingParameters()
             glLightfv(GL_LIGHT0, GL_DIFFUSE,  lightDiffuse  ? d0 : ZERO4);
             glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular ? s0 : ZERO4);
         } else {
-            // Dim cool moonlight (~6500K blue-silver)
-            GLfloat a0[] = { 0.01f, 0.01f, 0.02f, 1.0f };
-            GLfloat d0[] = { 0.08f, 0.09f, 0.16f, 1.0f };
-            GLfloat s0[] = { 0.18f, 0.20f, 0.30f, 1.0f };
+            // Cool moonlight (~6500K blue-silver) — bright enough to see the landscape
+            GLfloat a0[] = { 0.03f, 0.03f, 0.05f, 1.0f };
+            GLfloat d0[] = { 0.14f, 0.16f, 0.25f, 1.0f };
+            GLfloat s0[] = { 0.22f, 0.25f, 0.35f, 1.0f };
             glLightfv(GL_LIGHT0, GL_AMBIENT,  lightAmbient  ? a0 : ZERO4);
             glLightfv(GL_LIGHT0, GL_DIFFUSE,  lightDiffuse  ? d0 : ZERO4);
             glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular ? s0 : ZERO4);
@@ -270,13 +270,13 @@ void applyLightingParameters()
     }
 
     // ── LIGHT5: Street lamps (~2500K sodium yellow) ──────────────────
-    //   Only visible at night — turned off during day
+    //   Bright at night for visible light pools on the street
     if (lightArea) {
         if (!isDayTime) {
             glEnable(GL_LIGHT5);
-            GLfloat a5[] = { 0.02f, 0.015f, 0.005f, 1.0f };
-            GLfloat d5[] = { 0.65f, 0.50f, 0.18f, 1.0f };
-            GLfloat s5[] = { 0.45f, 0.35f, 0.12f, 1.0f };
+            GLfloat a5[] = { 0.06f, 0.04f, 0.01f, 1.0f };
+            GLfloat d5[] = { 0.95f, 0.75f, 0.28f, 1.0f };
+            GLfloat s5[] = { 0.70f, 0.55f, 0.20f, 1.0f };
             glLightfv(GL_LIGHT5, GL_AMBIENT,  lightAmbient  ? a5 : ZERO4);
             glLightfv(GL_LIGHT5, GL_DIFFUSE,  lightDiffuse  ? d5 : ZERO4);
             glLightfv(GL_LIGHT5, GL_SPECULAR, lightSpecular ? s5 : ZERO4);

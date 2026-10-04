@@ -175,10 +175,43 @@ void drawStreet(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
-    drawTexturedPlane({ 0, 0.02f, 0 }, NO_ROT, { 60, 1, 8 },
-                     getTexID(TEX_ASPHALT), WHITE, 5.0f);
-    for (float x = -28; x <= 28; x += 4)
-        drawPlane({ x, 0.03f, 0 }, NO_ROT, { 2, 1, 0.2f }, WHITE);
+
+    // Japanese-style cobblestone road — warm grey stone base
+    const Color STONE_BASE  = { 0.55f, 0.52f, 0.48f };
+    const Color STONE_LIGHT = { 0.65f, 0.62f, 0.56f };
+    const Color STONE_DARK  = { 0.42f, 0.40f, 0.36f };
+    const Color GROUT       = { 0.35f, 0.32f, 0.28f };
+
+    // Road bed
+    drawPlane({ 0, 0.015f, 0 }, NO_ROT, { 60, 1, 8 }, STONE_BASE);
+
+    // Cobblestone pattern — rows of rectangular stones with grout lines
+    float roadHalfW = 30.0f, roadHalfD = 4.0f;
+    float stoneW = 1.2f, stoneD = 0.8f, gap = 0.06f;
+
+    for (float sx = -roadHalfW; sx < roadHalfW; sx += stoneW + gap) {
+        for (float sz = -roadHalfD; sz < roadHalfD; sz += stoneD + gap) {
+            // Alternate row offset for brick pattern
+            int row = (int)((sz + roadHalfD) / (stoneD + gap));
+            float xOff = (row % 2 == 0) ? 0.0f : stoneW * 0.5f;
+            float px = sx + xOff;
+            if (px > roadHalfW) continue;
+            // Vary stone color slightly based on position
+            float hash = sinf(px * 13.7f + sz * 29.3f) * 0.5f + 0.5f;
+            Color sc = (hash > 0.6f) ? STONE_LIGHT : (hash < 0.3f) ? STONE_DARK : STONE_BASE;
+            drawPlane({ px + stoneW * 0.5f, 0.025f, sz + stoneD * 0.5f },
+                      NO_ROT, { stoneW - 0.04f, 1, stoneD - 0.04f }, sc);
+        }
+    }
+
+    // Raised stone curb edges on both sides
+    const Color CURB = { 0.50f, 0.48f, 0.44f };
+    drawCuboid({ 0, 0.04f,  roadHalfD }, NO_ROT, { 60, 0.08f, 0.18f }, CURB);
+    drawCuboid({ 0, 0.04f, -roadHalfD }, NO_ROT, { 60, 0.08f, 0.18f }, CURB);
+
+    // Center line — inlaid darker stone strip (subtle, not painted)
+    drawPlane({ 0, 0.026f, 0 }, NO_ROT, { 60, 1, 0.12f }, STONE_DARK);
+
     glPopMatrix();
 }
 
@@ -186,12 +219,28 @@ void drawSidewalk(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
-    drawTexturedBox({ 0, 0, 0 }, NO_ROT, { 60, 0.12f, 3 },
-                    getTexID(TEX_CONCRETE), WHITE, 3.0f);
-    drawSubdividedPlane({ 0, 0.121f, 0 }, NO_ROT, { 60, 1, 3 }, SIDEWALK, 30, 6);
-    for (float x = -29; x <= 29; x += 1.5f)
-        drawPlane({ x, 0.125f, 0 }, NO_ROT, { 0.03f, 1, 3 }, GRAY);
-    drawCuboid({ 0, 0, 1.45f }, NO_ROT, { 60, 0.16f, 0.12f }, GRAY);
+
+    // Japanese-style flagstone walkway — large flat stones with grout gaps
+    const Color FLAG_BASE = { 0.68f, 0.65f, 0.60f };
+    const Color FLAG_ALT  = { 0.62f, 0.58f, 0.52f };
+
+    // Raised walkway base
+    drawCuboid({ 0, 0, 0 }, NO_ROT, { 60, 0.10f, 3 }, { 0.55f, 0.52f, 0.48f });
+
+    // Flagstone tiles on top
+    float walkHalf = 30.0f;
+    float tileW = 1.4f, tileD = 1.4f, gap = 0.05f;
+    for (float sx = -walkHalf; sx < walkHalf; sx += tileW + gap) {
+        for (float sz = -1.4f; sz < 1.4f; sz += tileD + gap) {
+            float hash = sinf(sx * 17.3f + sz * 41.7f) * 0.5f + 0.5f;
+            Color tc = (hash > 0.5f) ? FLAG_BASE : FLAG_ALT;
+            drawPlane({ sx + tileW * 0.5f, 0.105f, sz + tileD * 0.5f },
+                      NO_ROT, { tileW - 0.06f, 1, tileD - 0.06f }, tc);
+        }
+    }
+
+    // Low stone edge border
+    drawCuboid({ 0, 0.05f, 1.45f }, NO_ROT, { 60, 0.12f, 0.10f }, { 0.50f, 0.48f, 0.44f });
     glPopMatrix();
 }
 
@@ -212,20 +261,72 @@ void drawLamp(Vec3 pos, Vec3 rot, Vec3 scale)
     drawSphere({ 0.7f, 3.12f, 0 },  NO_ROT, { 0.2f, 0.2f, 0.2f }, GOLD);
     clearEmission();
 
-    // Additive glow halo around lamp bulb (visible light spill at night)
+    // Realistic lamp lighting (visible at night)
     if (!isDayTime) {
+        // Tiny warm halo around the bulb — just a hint of scatter, not a ball
         glPushMatrix();
         glTranslatef(0.7f, 3.12f, 0.0f);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         glDepthMask(GL_FALSE);
         setLighting(false);
-        glColor4f(0.95f, 0.70f, 0.22f, 0.06f);
-        gluSphere(quad, 0.45f, 12, 12);
+        glColor4f(1.0f, 0.80f, 0.30f, 0.12f);
+        gluSphere(quad, 0.25f, 10, 10);
         glDepthMask(GL_TRUE);
         setLighting(true);
         glDisable(GL_BLEND);
         glPopMatrix();
+
+        // Downward light cone — semi-transparent cone from lamp shade to ground
+        // Simulates the visible beam of directed light cast by the shade
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+        setLighting(false);
+        float coneTopY = 3.0f;     // bottom of the lamp shade
+        float coneBaseY = 0.04f;   // ground level
+        float topR = 0.15f;        // narrow opening at shade
+        float bottomR = 2.2f;      // spread on ground
+        int segs = 24;
+        glBegin(GL_TRIANGLE_STRIP);
+        for (int i = 0; i <= segs; i++) {
+            float a = (float)i * 2.0f * PI / segs;
+            float cs = cosf(a), sn = sinf(a);
+            // Top ring (bright, near the bulb)
+            glColor4f(1.0f, 0.80f, 0.30f, 0.06f);
+            glVertex3f(0.7f + topR * cs, coneTopY, topR * sn);
+            // Bottom ring (fades to transparent at ground)
+            glColor4f(0.95f, 0.70f, 0.22f, 0.0f);
+            glVertex3f(0.7f + bottomR * cs, coneBaseY, bottomR * sn);
+        }
+        glEnd();
+        glDepthMask(GL_TRUE);
+        setLighting(true);
+        glDisable(GL_BLEND);
+
+        // Ground light pool — soft radial gradient on the street
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+        setLighting(false);
+        glBegin(GL_TRIANGLE_FAN);
+        glNormal3f(0, 1, 0);
+        // Bright center directly below the lamp
+        glColor4f(0.95f, 0.75f, 0.28f, 0.18f);
+        glVertex3f(0.7f, 0.04f, 0.0f);
+        // Inner ring — still somewhat bright
+        for (int i = 0; i <= 32; i++) {
+            float a = (float)i * 2.0f * PI / 32;
+            float r = 2.5f;
+            float t = (float)i / 32.0f;
+            float fadeAlpha = 0.0f;
+            glColor4f(0.90f, 0.65f, 0.18f, fadeAlpha);
+            glVertex3f(0.7f + r * cosf(a), 0.04f, r * sinf(a));
+        }
+        glEnd();
+        glDepthMask(GL_TRUE);
+        setLighting(true);
+        glDisable(GL_BLEND);
     }
 
     glPopMatrix();
@@ -905,8 +1006,53 @@ void drawJapaneseHouse(Vec3 pos, Vec3 rot, Vec3 scale)
     // Ridge cap
     drawCuboid({ 0, h + 1.42f, 0 }, NO_ROT, { w + 1.0f, 0.10f, 0.18f }, DARK_WOOD);
 
-    // Small garden lantern near entrance
-    drawStoneLantern({ w * 0.3f, 0, d * 0.5f + 0.8f }, NO_ROT, { 0.5f, 0.5f, 0.5f });
+    // Garden stone lantern near entrance (larger, brighter)
+    drawStoneLantern({ w * 0.3f, 0, d * 0.5f + 0.8f }, NO_ROT, { 0.7f, 0.7f, 0.7f });
+
+    // ── Wall-mounted entrance lantern (warm glow at night) ──
+    // Lantern body above the door
+    if (!isDayTime)
+        setEmission(0.90f, 0.60f, 0.15f);
+    else
+        setEmission(0.08f, 0.06f, 0.02f);
+    drawSphere({ 0, 2.3f, d * 0.5f + 0.14f }, NO_ROT,
+               { 0.10f, 0.14f, 0.10f }, { 0.95f, 0.70f, 0.20f });
+    clearEmission();
+    // Lantern bracket
+    drawCuboid({ 0, 2.5f, d * 0.5f + 0.10f }, NO_ROT,
+               { 0.04f, 0.06f, 0.08f }, DARK_WOOD);
+
+    // ── Night glow effects from the house ──
+    if (!isDayTime) {
+        // Glow halo around entrance lantern
+        glPushMatrix();
+        glTranslatef(0, 2.3f, d * 0.5f + 0.14f);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+        setLighting(false);
+        glColor4f(0.95f, 0.65f, 0.18f, 0.14f);
+        gluSphere(quad, 0.6f, 12, 12);
+        glColor4f(0.90f, 0.55f, 0.12f, 0.05f);
+        gluSphere(quad, 1.5f, 12, 12);
+        glPopMatrix();
+
+        // Window light spill — warm glow pool on ground from windows
+        glBegin(GL_TRIANGLE_FAN);
+        glNormal3f(0, 1, 0);
+        glColor4f(0.90f, 0.65f, 0.20f, 0.15f);
+        glVertex3f(0, 0.03f, d * 0.5f + 1.0f);
+        for (int i = 0; i <= 24; i++) {
+            float a = (float)i * 2.0f * PI / 24;
+            glColor4f(0.90f, 0.60f, 0.15f, 0.0f);
+            glVertex3f(2.5f * cosf(a), 0.03f, d * 0.5f + 1.0f + 2.5f * sinf(a));
+        }
+        glEnd();
+
+        glDepthMask(GL_TRUE);
+        setLighting(true);
+        glDisable(GL_BLEND);
+    }
 
     glPopMatrix();
 }
@@ -952,34 +1098,38 @@ void drawBridge(Vec3 pos, Vec3 rot, Vec3 scale)
     applyTransform(pos, rot, scale);
 
     const Color BRIDGE_WOOD = { 0.45f, 0.28f, 0.15f };
-    const float bLen = 3.0f, bW = 1.2f;
+    // Spans the whole lake (lake z-radius is 8 units, drawn at 1.0 scale)
+    const float bLen = 17.0f, bW = 1.6f, arch = 0.6f;
+    const int   NP = 34;     // deck planks
+    const int   NR = 8;      // railing segments per side
 
     // Arched deck planks
-    for (int i = -8; i <= 8; i++) {
-        float z = i * (bLen / 16.0f);
-        float archY = 0.3f * cosf(z * PI / bLen);
-        drawCuboid({ 0, archY, z }, NO_ROT, { bW, 0.06f, bLen / 16.0f + 0.01f }, BRIDGE_WOOD);
+    for (int i = 0; i < NP; i++) {
+        float z = (i + 0.5f) / NP * bLen - bLen * 0.5f;
+        float archY = arch * cosf(z * PI / bLen);
+        drawCuboid({ 0, archY, z }, NO_ROT, { bW, 0.08f, bLen / NP + 0.01f }, BRIDGE_WOOD);
     }
 
     // Railings
     for (int sx = -1; sx <= 1; sx += 2) {
         float rx = sx * bW * 0.5f;
         // Posts
-        for (int i = -3; i <= 3; i++) {
-            float z = i * (bLen / 6.0f);
-            float archY = 0.3f * cosf(z * PI / bLen);
-            drawCuboid({ rx, archY, z }, NO_ROT, { 0.06f, 0.6f, 0.06f }, DARK_WOOD);
+        for (int i = 0; i <= NR; i++) {
+            float z = i * (bLen / NR) - bLen * 0.5f;
+            float archY = arch * cosf(z * PI / bLen);
+            drawCuboid({ rx, archY, z }, NO_ROT, { 0.08f, 0.7f, 0.08f }, DARK_WOOD);
         }
         // Top rail (curved approximation)
-        for (int i = -3; i < 3; i++) {
-            float z0 = i * (bLen / 6.0f);
-            float z1 = (i + 1) * (bLen / 6.0f);
-            float y0 = 0.3f * cosf(z0 * PI / bLen) + 0.55f;
-            float y1 = 0.3f * cosf(z1 * PI / bLen) + 0.55f;
-            float yc = (y0 + y1) * 0.5f;
+        for (int i = 0; i < NR; i++) {
+            float z0 = i * (bLen / NR) - bLen * 0.5f;
+            float z1 = (i + 1) * (bLen / NR) - bLen * 0.5f;
+            float y0 = arch * cosf(z0 * PI / bLen) + 0.65f;
+            float y1 = arch * cosf(z1 * PI / bLen) + 0.65f;
             float zc = (z0 + z1) * 0.5f;
-            drawCuboid({ rx, yc, zc }, NO_ROT,
-                       { 0.05f, 0.05f, bLen / 6.0f + 0.02f }, DARK_WOOD);
+            float len = sqrtf((z1 - z0) * (z1 - z0) + (y1 - y0) * (y1 - y0));
+            float pitch = atanf((y1 - y0) / (z1 - z0)) * 180.0f / PI;
+            drawCuboid({ rx, (y0 + y1) * 0.5f - 0.03f, zc }, { -pitch, 0, 0 },
+                       { 0.06f, 0.06f, len + 0.02f }, DARK_WOOD);
         }
     }
 
@@ -1007,7 +1157,24 @@ void drawLake(Vec3 pos, Vec3 rot, Vec3 scale)
         ? Color{ 0.25f, 0.50f, 0.70f }
         : Color{ 0.08f, 0.15f, 0.30f };
 
-    glColor4f(waterCol.r, waterCol.g, waterCol.b, 0.70f);
+    // Muddy bank under/around the water so the lake sits in a basin, not on the lawn
+    {
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+        setColor({ 0.30f, 0.24f, 0.15f });
+        glBegin(GL_TRIANGLE_FAN);
+        glNormal3f(0, 1, 0);
+        glVertex3f(0, -0.03f, 0);
+        for (int i = 0; i <= 48; i++) {
+            float a = (float)i * 2.0f * PI / 48;
+            glVertex3f(lakeR * 1.10f * cosf(a), -0.03f, lakeR * 1.10f * sinf(a));
+        }
+        glEnd();
+        glEnable(GL_BLEND);
+        glDepthMask(GL_FALSE);
+    }
+
+    glColor4f(waterCol.r, waterCol.g, waterCol.b, 0.88f);
     glBegin(GL_TRIANGLE_FAN);
     glNormal3f(0, 1, 0);
     // Center vertex
@@ -1056,7 +1223,7 @@ void drawLake(Vec3 pos, Vec3 rot, Vec3 scale)
     };
     for (int i = 0; i < 12; i++) {
         Color rc = rocks[i][3] > 0.5f ? ROCK_DARK : ROCK;
-        drawSphere({ rocks[i][0], -0.05f, rocks[i][1] }, NO_ROT,
+        drawSphere({ rocks[i][0] * 1.05f, 0.0f, rocks[i][1] * 1.05f }, NO_ROT,
                    { rocks[i][2], rocks[i][2] * 0.5f, rocks[i][2] }, rc);
     }
 
@@ -1079,32 +1246,32 @@ void drawGrassPatch(Vec3 pos, Vec3 rot, Vec3 scale)
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
-    const Color GRASS_D = { 0.25f, 0.50f, 0.18f };
-    const Color GRASS_L = { 0.35f, 0.62f, 0.25f };
+    const Color GRASS_D = { 0.16f, 0.38f, 0.10f };   // blade root
+    const Color GRASS_L = { 0.45f, 0.70f, 0.22f };   // blade tip
 
-    // Generate blade clusters in a small area
-    for (int i = 0; i < 20; i++) {
-        // Deterministic pseudo-random positions using seed from i
-        float bx = sinf(i * 1.37f + 0.5f) * 0.8f;
-        float bz = cosf(i * 2.14f + 0.3f) * 0.8f;
-        float bh = 0.15f + 0.12f * sinf(i * 0.93f);
-        float sway = sinf(animTime * 1.8f + i * 0.7f) * 4.0f;
-        Color gc = (i % 2 == 0) ? GRASS_D : GRASS_L;
+    // Tuft of tapered blades spread evenly (sunflower spiral) over a ~1 unit
+    // radius disc; all blades go in one glBegin for speed.
+    const int   N = 36;
+    const float GOLDEN = 2.39996f;
+    glBegin(GL_TRIANGLES);
+    glNormal3f(0, 1, 0);
+    for (int i = 0; i < N; i++) {
+        float r   = sqrtf((i + 0.5f) / N);
+        float bx  = r * cosf(i * GOLDEN);
+        float bz  = r * sinf(i * GOLDEN);
+        float bh  = 0.35f + 0.25f * (0.5f + 0.5f * sinf(i * 1.7f));
+        float yaw = i * 1.1f;
+        float dx  = cosf(yaw) * 0.07f, dz = sinf(yaw) * 0.07f;
+        float sway = sinf(animTime * 1.8f + i * 0.7f + bx * 2.0f) * 0.06f;
+        float lean = 0.08f * sinf(i * 2.3f);
 
-        glPushMatrix();
-        glTranslatef(bx, 0, bz);
-        glRotatef(sway, 0, 0, 1);
-        glRotatef(i * 30.0f, 0, 1, 0);
-        // Thin blade quad
-        glBegin(GL_TRIANGLES);
-        setColor(gc);
-        glNormal3f(0, 0, 1);
-        glVertex3f(-0.02f, 0, 0);
-        glVertex3f( 0.02f, 0, 0);
-        glVertex3f( 0.0f, bh, 0.01f);
-        glEnd();
-        glPopMatrix();
+        setColor(GRASS_D);
+        glVertex3f(bx - dx, 0.0f, bz - dz);
+        glVertex3f(bx + dx, 0.0f, bz + dz);
+        setColor(GRASS_L);
+        glVertex3f(bx + sway + lean, bh, bz + sway * 0.5f);
     }
+    glEnd();
 
     glPopMatrix();
 }
@@ -1224,6 +1391,323 @@ void drawFireflies(Vec3 pos, float radius, int count)
     glDepthMask(GL_TRUE);
     setLighting(true);
     glDisable(GL_BLEND);
+
+    glPopMatrix();
+}
+
+// ─── Swimming Duck ──────────────────────────────────────────────────────────
+// Animated duck that swims in a circle on the lake surface
+void drawDuck(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    // Swim in a slow circle
+    float swimAngle = animTime * 0.4f;
+    float swimR = 3.5f;
+    float dx = swimR * cosf(swimAngle);
+    float dz = swimR * sinf(swimAngle);
+    // Bob up and down on waves
+    float bob = 0.03f * sinf(animTime * 2.0f);
+
+    glTranslatef(dx, bob, dz);
+    // Face direction of travel
+    float facing = -swimAngle * (180.0f / PI) + 90.0f;
+    glRotatef(facing, 0, 1, 0);
+
+    const Color DUCK_WHITE  = { 0.95f, 0.95f, 0.90f };
+    const Color DUCK_BROWN  = { 0.50f, 0.32f, 0.12f };
+    const Color DUCK_GREEN  = { 0.15f, 0.40f, 0.18f };
+    const Color DUCK_ORANGE = { 0.90f, 0.55f, 0.10f };
+    const Color DUCK_YELLOW = { 0.95f, 0.85f, 0.20f };
+
+    // Body — oval shape sitting on water
+    setMaterialPBR(Materials::GlazedMatte, DUCK_WHITE);
+    drawSphere({ 0, 0.08f, 0 }, NO_ROT, { 0.22f, 0.16f, 0.30f }, DUCK_WHITE);
+
+    // Brown wing patches
+    setMaterialPBR(Materials::GlazedMatte, DUCK_BROWN);
+    drawSphere({ -0.12f, 0.12f, -0.02f }, { 0, 0, -15 }, { 0.08f, 0.06f, 0.18f }, DUCK_BROWN);
+    drawSphere({  0.12f, 0.12f, -0.02f }, { 0, 0,  15 }, { 0.08f, 0.06f, 0.18f }, DUCK_BROWN);
+
+    // Head — green iridescent (mallard)
+    setMaterialPBR(Materials::GlazedMatte, DUCK_GREEN);
+    drawSphere({ 0, 0.26f, 0.18f }, NO_ROT, { 0.10f, 0.10f, 0.10f }, DUCK_GREEN);
+
+    // Beak
+    setMaterialPBR(Materials::GlazedMatte, DUCK_ORANGE);
+    drawCone({ 0, 0.24f, 0.28f }, { -90, 0, 0 }, { 0.04f, 0.10f, 0.03f }, DUCK_ORANGE);
+
+    // Eyes — tiny black dots
+    drawSphere({ -0.06f, 0.28f, 0.24f }, NO_ROT, { 0.015f, 0.015f, 0.015f }, BLACK);
+    drawSphere({  0.06f, 0.28f, 0.24f }, NO_ROT, { 0.015f, 0.015f, 0.015f }, BLACK);
+
+    // Tail feathers — small upward flick
+    setMaterialPBR(Materials::GlazedMatte, DUCK_BROWN);
+    drawCone({ 0, 0.16f, -0.28f }, { 45, 0, 0 }, { 0.06f, 0.12f, 0.05f }, DUCK_BROWN);
+
+    // Wake ripples behind the duck (small translucent V)
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+    setLighting(false);
+    float wakeAlpha = 0.18f;
+    glColor4f(0.80f, 0.85f, 0.90f, wakeAlpha);
+    glBegin(GL_TRIANGLES);
+    glVertex3f( 0.0f,  0.01f, -0.30f);
+    glVertex3f(-0.25f, 0.01f, -0.70f);
+    glVertex3f( 0.0f,  0.01f, -0.50f);
+    glVertex3f( 0.0f,  0.01f, -0.30f);
+    glVertex3f( 0.25f, 0.01f, -0.70f);
+    glVertex3f( 0.0f,  0.01f, -0.50f);
+    glEnd();
+    glDepthMask(GL_TRUE);
+    setLighting(true);
+    glDisable(GL_BLEND);
+
+    resetMaterialGloss();
+    glPopMatrix();
+}
+
+// ─── Flower Garden ──────────────────────────────────────────────────────────
+// Patch of colorful Japanese flowers: chrysanthemums, cosmos, and lotuses
+void drawFlowerGarden(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    // Flower colors — vibrant Japanese garden palette
+    const Color COLORS[] = {
+        { 0.90f, 0.20f, 0.30f },   // red
+        { 0.95f, 0.45f, 0.55f },   // pink
+        { 0.95f, 0.85f, 0.20f },   // yellow
+        { 0.85f, 0.40f, 0.70f },   // magenta
+        { 0.98f, 0.98f, 0.95f },   // white
+        { 0.70f, 0.30f, 0.60f },   // purple
+        { 0.95f, 0.60f, 0.15f },   // orange
+    };
+    const int NCOLORS = 7;
+    const Color STEM_GREEN = { 0.20f, 0.45f, 0.12f };
+    const Color LEAF_GREEN = { 0.25f, 0.55f, 0.18f };
+    const Color CENTER_YEL = { 0.95f, 0.80f, 0.15f };
+
+    // Scatter flowers in a sunflower-spiral disc of radius ~3
+    const int NFLOWERS = 40;
+    const float GOLDEN = 2.39996f;
+    const float RADIUS = 3.0f;
+
+    for (int i = 0; i < NFLOWERS; i++) {
+        float r = RADIUS * sqrtf((i + 0.5f) / NFLOWERS);
+        float fx = r * cosf(i * GOLDEN);
+        float fz = r * sinf(i * GOLDEN);
+        // Random-ish height and color
+        float h = 0.3f + 0.25f * (0.5f + 0.5f * sinf(i * 3.7f));
+        int ci = i % NCOLORS;
+        float sway = sinf(animTime * 1.5f + i * 0.9f) * 2.5f;
+
+        glPushMatrix();
+        glTranslatef(fx, 0, fz);
+        glRotatef(sway, 0, 0, 1);
+
+        // Stem
+        setMaterialPBR(Materials::WoodMatte, STEM_GREEN);
+        drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.015f, h, 0.015f }, STEM_GREEN);
+
+        // Leaves on stem (1-2 small leaves)
+        setMaterialPBR(Materials::GlazedMatte, LEAF_GREEN);
+        float leafY = h * 0.4f;
+        drawSphere({ 0.06f, leafY, 0 }, { 0, 0, -30 }, { 0.08f, 0.02f, 0.04f }, LEAF_GREEN);
+        if (i % 3 == 0)
+            drawSphere({ -0.05f, leafY + 0.08f, 0 }, { 0, 0, 25 }, { 0.07f, 0.02f, 0.035f }, LEAF_GREEN);
+
+        // Flower head — ring of petals around center
+        glPushMatrix();
+        glTranslatef(0, h, 0);
+        // Slightly tilt flower outward
+        float tilt = 10.0f + 8.0f * sinf(i * 2.1f);
+        glRotatef(tilt, fx > 0 ? 1.0f : -1.0f, 0, fz > 0 ? 1.0f : -1.0f);
+
+        setMaterialPBR(Materials::GlazedMatte, COLORS[ci]);
+        int nPetals = 6 + (i % 3);
+        float petalR = 0.06f + 0.02f * sinf(i * 1.3f);
+        for (int p = 0; p < nPetals; p++) {
+            float pa = (float)p * 360.0f / nPetals;
+            float px2 = cosf(pa * PI / 180.0f) * petalR;
+            float pz2 = sinf(pa * PI / 180.0f) * petalR;
+            drawSphere({ px2, 0.01f, pz2 }, NO_ROT,
+                       { 0.035f, 0.012f, 0.02f }, COLORS[ci]);
+        }
+        // Center (yellow pistil)
+        setMaterialPBR(Materials::GlazedMatte, CENTER_YEL);
+        drawSphere({ 0, 0.015f, 0 }, NO_ROT, { 0.025f, 0.02f, 0.025f }, CENTER_YEL);
+
+        glPopMatrix();
+        glPopMatrix();
+    }
+
+    resetMaterialGloss();
+    glPopMatrix();
+}
+
+// ─── Torii Gate (Shinto shrine gate) ────────────────────────────────────
+// Traditional red torii gate — two pillars with kasagi/nuki cross beams
+void drawToriiGate(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    const Color TORII_RED  = { 0.75f, 0.12f, 0.08f };
+    const Color TORII_DARK = { 0.55f, 0.08f, 0.05f };
+    const Color STONE_COL  = { 0.55f, 0.53f, 0.50f };
+
+    // Two main pillars (hashira)
+    drawCylinder({ -1.2f, 0, 0 }, NO_ROT, { 0.12f, 3.5f, 0.12f }, TORII_RED);
+    drawCylinder({  1.2f, 0, 0 }, NO_ROT, { 0.12f, 3.5f, 0.12f }, TORII_RED);
+
+    // Top beam (kasagi) — extends beyond pillars
+    drawCuboid({ 0, 3.5f, 0 }, NO_ROT, { 3.2f, 0.15f, 0.18f }, TORII_DARK);
+    // Slightly wider cap on top
+    drawCuboid({ 0, 3.65f, 0 }, NO_ROT, { 3.4f, 0.08f, 0.22f }, TORII_DARK);
+
+    // Lower cross beam (nuki)
+    drawCuboid({ 0, 2.8f, 0 }, NO_ROT, { 2.8f, 0.10f, 0.12f }, TORII_RED);
+
+    // Support wedges (kusabi) where nuki meets pillars
+    drawCuboid({ -1.2f, 2.8f, 0.08f }, NO_ROT, { 0.14f, 0.08f, 0.06f }, TORII_DARK);
+    drawCuboid({  1.2f, 2.8f, 0.08f }, NO_ROT, { 0.14f, 0.08f, 0.06f }, TORII_DARK);
+
+    // Base stones (kamebara)
+    drawCylinder({ -1.2f, 0, 0 }, NO_ROT, { 0.22f, 0.10f, 0.22f }, STONE_COL);
+    drawCylinder({  1.2f, 0, 0 }, NO_ROT, { 0.22f, 0.10f, 0.22f }, STONE_COL);
+
+    glPopMatrix();
+}
+
+// ─── Moss Ground Patch ─────────────────────────────────────────────────
+// Mossy ground carpet with small mounds and rocks — bamboo grove floor
+void drawMossGround(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    const Color MOSS_DARK  = { 0.12f, 0.32f, 0.08f };
+    const Color MOSS_MID   = { 0.18f, 0.42f, 0.12f };
+    const Color MOSS_LIGHT = { 0.22f, 0.50f, 0.15f };
+    const Color ROCK_MOSS  = { 0.38f, 0.36f, 0.33f };
+
+    // Flat moss carpet
+    drawCylinder({ 0, 0, 0 }, NO_ROT, { 2.0f, 0.04f, 2.0f }, MOSS_DARK);
+
+    // Scattered mossy mounds
+    for (int i = 0; i < 8; i++) {
+        float mx = sinf(i * 2.4f) * 1.4f;
+        float mz = cosf(i * 3.1f) * 1.4f;
+        float ms = 0.3f + 0.2f * sinf(i * 1.7f);
+        Color mc = (i % 3 == 0) ? MOSS_LIGHT : (i % 3 == 1) ? MOSS_MID : MOSS_DARK;
+        drawSphere({ mx, 0.02f, mz }, NO_ROT, { ms, 0.08f, ms }, mc);
+    }
+
+    // Small rocks nestled in moss
+    drawSphere({  0.5f, 0,  0.3f }, NO_ROT, { 0.15f, 0.08f, 0.12f }, ROCK_MOSS);
+    drawSphere({ -0.8f, 0, -0.4f }, NO_ROT, { 0.12f, 0.06f, 0.10f }, ROCK_MOSS);
+    drawSphere({  0.2f, 0, -0.7f }, NO_ROT, { 0.10f, 0.05f, 0.08f }, ROCK_MOSS);
+
+    glPopMatrix();
+}
+
+// ─── Falling Cherry Blossom Petals ─────────────────────────────────────
+// Animated pink petals drifting and tumbling through the air
+void drawFallingPetals(Vec3 pos, float radius, int count)
+{
+    glPushMatrix();
+    glTranslatef(pos.x, pos.y, pos.z);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    const Color PETAL_PINK  = { 0.95f, 0.75f, 0.80f };
+    const Color PETAL_WHITE = { 1.0f, 0.92f, 0.95f };
+
+    for (int i = 0; i < count; i++) {
+        float seed  = (float)i * 1.618f;
+        float phase = seed * 3.14159f;
+
+        // Slow falling with lateral drift
+        float fallSpeed = 0.3f + 0.2f * sinf(seed * 2.3f);
+        float t = fmodf(animTime * fallSpeed + phase, 8.0f);
+        float progress = t / 8.0f;
+
+        float px = radius * 0.5f * sinf(phase + animTime * 0.2f)
+                 + radius * 0.3f * cosf(seed * 1.3f);
+        float py = -progress * 6.0f;
+        float pz = radius * 0.5f * cosf(phase * 1.5f + animTime * 0.15f)
+                 + radius * 0.2f * sinf(seed * 0.7f);
+
+        // Tumble rotation
+        float spin = animTime * (60.0f + seed * 20.0f);
+        float tilt = sinf(animTime * 1.5f + phase) * 30.0f;
+
+        Color col = (i % 2 == 0) ? PETAL_PINK : PETAL_WHITE;
+
+        glPushMatrix();
+        glTranslatef(px, py, pz);
+        glRotatef(spin, 0, 1, 0);
+        glRotatef(tilt, 1, 0, 0);
+        drawCube({ 0, 0, 0 }, NO_ROT, { 0.04f, 0.005f, 0.03f }, col);
+        glPopMatrix();
+    }
+
+    glDisable(GL_BLEND);
+    glPopMatrix();
+}
+
+// ─── Mountain Range (Mt. Fuji-style background) ───────────────────────
+// Snow-capped volcanic peak with green foothills — placed far behind the scene
+void drawMountainRange(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    // Colors
+    const Color MTN_BASE   = { 0.22f, 0.28f, 0.38f };  // blue-gray rock
+    const Color MTN_MID    = { 0.28f, 0.35f, 0.44f };  // lighter mid slope
+    const Color MTN_SNOW   = { 0.92f, 0.94f, 0.96f };  // white snow cap
+    const Color HILL_GREEN = { 0.18f, 0.38f, 0.14f };  // dark forest green
+    const Color HILL_LIGHT = { 0.24f, 0.45f, 0.18f };  // lighter foothill green
+
+    // ── Main peak (Mt. Fuji style — tall symmetrical cone) ──
+    // Large base cone — mountain body
+    drawCone({ 0, 0, 0 }, NO_ROT, { 28.0f, 32.0f, 28.0f }, MTN_BASE);
+    // Mid-slope layer for colour transition
+    drawCone({ 0, 8.0f, 0 }, NO_ROT, { 20.0f, 24.0f, 20.0f }, MTN_MID);
+    // Snow cap — upper portion
+    drawCone({ 0, 20.0f, 0 }, NO_ROT, { 10.0f, 14.0f, 10.0f }, MTN_SNOW);
+    // Snow tip — bright white peak
+    drawCone({ 0, 28.0f, 0 }, NO_ROT, { 4.0f, 6.0f, 4.0f }, WHITE);
+
+    // ── Secondary peak (smaller companion mountain to the left) ──
+    drawCone({ -35.0f, 0, 5.0f }, NO_ROT, { 18.0f, 20.0f, 18.0f }, MTN_BASE);
+    drawCone({ -35.0f, 10.0f, 5.0f }, NO_ROT, { 11.0f, 12.0f, 11.0f }, MTN_MID);
+    drawCone({ -35.0f, 16.0f, 5.0f }, NO_ROT, { 5.0f, 6.0f, 5.0f }, MTN_SNOW);
+
+    // ── Tertiary peak (smaller, to the right) ──
+    drawCone({ 30.0f, 0, 8.0f }, NO_ROT, { 15.0f, 16.0f, 15.0f }, MTN_BASE);
+    drawCone({ 30.0f, 8.0f, 8.0f }, NO_ROT, { 9.0f, 10.0f, 9.0f }, MTN_MID);
+    drawCone({ 30.0f, 13.0f, 8.0f }, NO_ROT, { 4.0f, 5.0f, 4.0f }, MTN_SNOW);
+
+    // ── Green foothills (overlapping spheres in front of mountains) ──
+    // Front row — closest to viewer
+    drawSphere({ -20.0f, 0, 18.0f }, NO_ROT, { 14.0f, 4.5f, 10.0f }, HILL_GREEN);
+    drawSphere({   0.0f, 0, 20.0f }, NO_ROT, { 16.0f, 5.0f, 12.0f }, HILL_LIGHT);
+    drawSphere({  22.0f, 0, 16.0f }, NO_ROT, { 13.0f, 4.0f,  9.0f }, HILL_GREEN);
+    drawSphere({ -40.0f, 0, 15.0f }, NO_ROT, { 12.0f, 3.5f,  8.0f }, HILL_LIGHT);
+    drawSphere({  42.0f, 0, 18.0f }, NO_ROT, { 11.0f, 3.8f,  9.0f }, HILL_GREEN);
+
+    // Back row — taller, behind the front row
+    drawSphere({ -10.0f, 0, 8.0f }, NO_ROT, { 18.0f, 6.0f, 12.0f }, HILL_GREEN);
+    drawSphere({  15.0f, 0, 6.0f }, NO_ROT, { 15.0f, 5.5f, 10.0f }, HILL_LIGHT);
+    drawSphere({ -35.0f, 0, 10.0f }, NO_ROT, { 14.0f, 5.0f, 10.0f }, HILL_GREEN);
+    drawSphere({  38.0f, 0, 8.0f }, NO_ROT, { 13.0f, 4.5f,  9.0f }, HILL_LIGHT);
 
     glPopMatrix();
 }
