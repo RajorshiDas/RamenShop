@@ -1,10 +1,10 @@
 #include "scene.h"
+#include "lighting.h"
 #include "objects.h"
 #include "shader.h"
 
 // ─── Scene feature flags ────────────────────────────────────────────────────
 bool showRoof   = true;
-bool showFog    = true;
 bool showSteam  = true;
 bool animPaused = false;
 
@@ -19,114 +19,6 @@ float slideDoorOffset = 0.0f;
 // Upper room door state
 bool upperDoorOpen   = false;
 float upperDoorOffset = 0.0f;
-
-// ─── Day/Night cycle ────────────────────────────────────────────────────────
-DayNightMode dayNightMode = NIGHT;
-bool isDayTime = false;
-
-// Sky colors for each mode
-static const Color SKY_DAY   = { 0.45f, 0.65f, 0.90f };   // clear blue sky
-static const Color SKY_NIGHT = { 0.10f, 0.10f, 0.16f };   // dark evening sky (original)
-
-// ─── Light component flags (Ambient, Diffuse, Specular) ────────────────────
-bool lightAmbient     = true;
-bool lightDiffuse     = true;
-bool lightSpecular    = true;
-
-// ─── Light source flags (Directional, Point, Spot, Area) ─────────────────────
-bool lightDirectional = true;
-bool lightPoint       = true;
-bool lightSpot        = true;
-bool lightArea        = true;
-
-// ─── Preset System ──────────────────────────────────────────────────────────
-static int currentPresetIdx = 0;
-struct LightPreset {
-    const char* name;
-    bool amb, dif, spec, dir, pt, spot, area;
-};
-
-static const LightPreset PRESETS[] = {
-    { "All Lights On (Full Realism)",   true,  true,  true,  true,  true,  true,  true  },
-    { "Spotlight Focus (Chef Station)", true,  true,  true,  false, false, true,  false },
-    { "Area Light Softbox (Diffused)",  true,  true,  true,  false, false, false, true  },
-    { "Cozy Night (Lanterns & Moon)",   true,  true,  true,  true,  true,  false, false },
-    { "Specular Highlights Only",       false, false, true,  true,  true,  true,  true  },
-    { "Diffuse Shading Only",           true,  true,  false, true,  true,  true,  true  },
-    { "Ambient Base Only",              true,  false, false, false, false, false, false }
-};
-
-void cycleLightingPreset() {
-    currentPresetIdx = (currentPresetIdx + 1) % 7;
-    const auto& p = PRESETS[currentPresetIdx];
-    lightAmbient     = p.amb;
-    lightDiffuse     = p.dif;
-    lightSpecular    = p.spec;
-    lightDirectional = p.dir;
-    lightPoint       = p.pt;
-    lightSpot        = p.spot;
-    lightArea        = p.area;
-    applyLightingParameters();
-}
-
-const char* getCurrentPresetName() {
-    return PRESETS[currentPresetIdx].name;
-}
-
-void toggleAmbient() {
-    lightAmbient = !lightAmbient;
-    applyLightingParameters();
-}
-void toggleDiffuse() {
-    lightDiffuse = !lightDiffuse;
-    applyLightingParameters();
-}
-void toggleSpecular() {
-    lightSpecular = !lightSpecular;
-    applyLightingParameters();
-}
-void toggleDirectional() {
-    lightDirectional = !lightDirectional;
-    applyLightingParameters();
-}
-void togglePointLights() {
-    lightPoint = !lightPoint;
-    applyLightingParameters();
-}
-void toggleSpotLight() {
-    lightSpot = !lightSpot;
-    applyLightingParameters();
-}
-void toggleAreaLight() {
-    lightArea = !lightArea;
-    applyLightingParameters();
-}
-
-void toggleDayNight() {
-    if (dayNightMode == NIGHT) {
-        dayNightMode = DAY;
-        isDayTime = true;
-    } else {
-        dayNightMode = NIGHT;
-        isDayTime = false;
-    }
-
-    // Update sky / clear color
-    Color sky = isDayTime ? SKY_DAY : SKY_NIGHT;
-    glClearColor(sky.r, sky.g, sky.b, 1.0f);
-
-    // Update fog color to match sky
-    GLfloat fogColor[] = { sky.r, sky.g, sky.b, 1.0f };
-    glFogfv(GL_FOG_COLOR, fogColor);
-    // Day uses lighter fog, night uses denser fog
-    glFogf(GL_FOG_DENSITY, isDayTime ? 0.012f : 0.022f);
-
-    applyLightingParameters();
-}
-
-const char* getDayNightModeName() {
-    return isDayTime ? "DAY" : "NIGHT";
-}
 
 // ─── Sky dome with Sun / Moon ──────────────────────────────────────────────
 // Uses skybox technique: strips camera translation from the modelview matrix
@@ -261,6 +153,14 @@ void drawSky()
             { -45 + drift*0.7f,  8,  55, 14, 2.5f, 7 },
             {  30 + drift*0.5f,  5, -65, 10, 1.8f, 5 },
             { -60 + drift*0.8f,  7,  30, 11, 2.2f, 6 },
+            {  70 + drift*0.6f,  9, -20, 15, 2.8f, 8 },
+            { -30 + drift*0.9f,  5,  70, 10, 1.6f, 5 },
+            {  15 + drift*0.4f, 10, -50, 13, 2.4f, 7 },
+            { -75 + drift*0.5f,  6,  15,  9, 1.5f, 5 },
+            {  40 + drift*0.3f,  7,  45, 11, 2.0f, 6 },
+            { -20 + drift*0.8f,  8, -75, 16, 3.0f, 8 },
+            {  80 + drift*0.4f,  5,  10,  8, 1.4f, 4 },
+            { -55 + drift*0.6f, 11, -35, 12, 2.2f, 6 },
         };
         for (auto& c : clouds) {
             float wx = fmodf(c.x + 90, 180) - 90;
@@ -289,166 +189,7 @@ void drawSky()
     if (showFog) glEnable(GL_FOG);
 }
 
-void applyLightingParameters() {
-    // Zero vector for disabled light components
-    static const GLfloat ZERO4[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-
-    // ════════════════════════════════════════════════════════════════════════
-    //  GLOBAL AMBIENT — very low; pools of light come from placed fixtures
-    // ════════════════════════════════════════════════════════════════════════
-    if (isDayTime) {
-        GLfloat dayAmb[] = { 0.25f, 0.25f, 0.24f, 1.0f };
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lightAmbient ? dayAmb : ZERO4);
-    } else {
-        GLfloat nightAmb[] = { 0.04f, 0.04f, 0.06f, 1.0f };
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lightAmbient ? nightAmb : ZERO4);
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    //  OUTDOOR LIGHTING
-    // ════════════════════════════════════════════════════════════════════════
-
-    // ── LIGHT0: Moon / Sun (Directional) ──────────────────────────────────
-    if (lightDirectional) {
-        glEnable(GL_LIGHT0);
-        if (isDayTime) {
-            GLfloat a0[] = { 0.12f, 0.12f, 0.10f, 1.0f };
-            GLfloat d0[] = { 0.80f, 0.75f, 0.60f, 1.0f };    // warm gold sunlight
-            GLfloat s0[] = { 0.95f, 0.90f, 0.75f, 1.0f };
-            glLightfv(GL_LIGHT0, GL_AMBIENT,  lightAmbient  ? a0 : ZERO4);
-            glLightfv(GL_LIGHT0, GL_DIFFUSE,  lightDiffuse  ? d0 : ZERO4);
-            glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular ? s0 : ZERO4);
-        } else {
-            GLfloat a0[] = { 0.02f, 0.02f, 0.04f, 1.0f };
-            GLfloat d0[] = { 0.12f, 0.13f, 0.22f, 1.0f };    // cool blue moonlight
-            GLfloat s0[] = { 0.30f, 0.32f, 0.45f, 1.0f };
-            glLightfv(GL_LIGHT0, GL_AMBIENT,  lightAmbient  ? a0 : ZERO4);
-            glLightfv(GL_LIGHT0, GL_DIFFUSE,  lightDiffuse  ? d0 : ZERO4);
-            glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular ? s0 : ZERO4);
-        }
-    } else {
-        glDisable(GL_LIGHT0);
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    //  INTERIOR LIGHTING
-    // ════════════════════════════════════════════════════════════════════════
-
-    // Organic flicker — subtle incandescent bulb variation
-    float flickPendant = 1.0f + 0.04f * sinf(animTime * 4.2f) + 0.03f * sinf(animTime * 11.7f);
-    float flickLanL    = 1.0f + 0.07f * sinf(animTime * 4.3f) + 0.04f * cosf(animTime * 12.4f);
-    float flickLanR    = 1.0f + 0.07f * sinf(animTime * 4.1f + 1.2f) + 0.04f * sinf(animTime * 13.1f);
-    float flickHang    = 1.0f + 0.06f * sinf(animTime * 3.8f) + 0.03f * cosf(animTime * 10.5f);
-
-    // ── LIGHT1: Dining pendant lamps + box lantern cluster ────────────────
-    //    Primary warm interior light. Warm amber (~2700K incandescent).
-    if (lightPoint) {
-        glEnable(GL_LIGHT1);
-        float dayScale = isDayTime ? 0.4f : 1.0f;
-        GLfloat a1[] = { 0.05f * dayScale, 0.04f * dayScale, 0.02f * dayScale, 1.0f };
-        GLfloat d1[] = { 0.80f * flickPendant * dayScale, 0.55f * flickPendant * dayScale, 0.22f * flickPendant * dayScale, 1.0f };
-        GLfloat s1[] = { 0.90f * dayScale, 0.80f * dayScale, 0.60f * dayScale, 1.0f };
-        glLightfv(GL_LIGHT1, GL_AMBIENT,  lightAmbient  ? a1 : ZERO4);
-        glLightfv(GL_LIGHT1, GL_DIFFUSE,  lightDiffuse  ? d1 : ZERO4);
-        glLightfv(GL_LIGHT1, GL_SPECULAR, lightSpecular ? s1 : ZERO4);
-    } else {
-        glDisable(GL_LIGHT1);
-    }
-
-    // ── LIGHT2 & LIGHT3: Exterior chochin lanterns ────────────────────────
-    //    Warm orange paper lanterns at the shop entrance (~2200K candle-warm).
-    if (lightPoint) {
-        glEnable(GL_LIGHT2);
-        glEnable(GL_LIGHT3);
-        float dayLan = isDayTime ? 0.25f : 1.0f;
-        GLfloat aLan[]  = { 0.02f * dayLan, 0.01f * dayLan, 0.00f, 1.0f };
-        GLfloat dLanL[] = { 0.85f * flickLanL * dayLan, 0.38f * flickLanL * dayLan, 0.07f * flickLanL * dayLan, 1.0f };
-        GLfloat dLanR[] = { 0.85f * flickLanR * dayLan, 0.38f * flickLanR * dayLan, 0.07f * flickLanR * dayLan, 1.0f };
-        GLfloat sLan[]  = { 0.60f * dayLan, 0.28f * dayLan, 0.06f * dayLan, 1.0f };
-
-        glLightfv(GL_LIGHT2, GL_AMBIENT,  lightAmbient  ? aLan  : ZERO4);
-        glLightfv(GL_LIGHT2, GL_DIFFUSE,  lightDiffuse  ? dLanL : ZERO4);
-        glLightfv(GL_LIGHT2, GL_SPECULAR, lightSpecular ? sLan  : ZERO4);
-
-        glLightfv(GL_LIGHT3, GL_AMBIENT,  lightAmbient  ? aLan  : ZERO4);
-        glLightfv(GL_LIGHT3, GL_DIFFUSE,  lightDiffuse  ? dLanR : ZERO4);
-        glLightfv(GL_LIGHT3, GL_SPECULAR, lightSpecular ? sLan  : ZERO4);
-    } else {
-        glDisable(GL_LIGHT2);
-        glDisable(GL_LIGHT3);
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    //  KITCHEN LIGHTING
-    // ════════════════════════════════════════════════════════════════════════
-
-    // ── LIGHT4: Kitchen spotlight — functional task lighting ──────────────
-    //    Neutral white, slightly warm (~4000K fluorescent).
-    if (lightSpot) {
-        glEnable(GL_LIGHT4);
-        float daySpot = isDayTime ? 0.6f : 1.0f;
-        GLfloat a4[] = { 0.02f * daySpot, 0.02f * daySpot, 0.02f * daySpot, 1.0f };
-        GLfloat d4[] = { 0.95f * daySpot, 0.92f * daySpot, 0.82f * daySpot, 1.0f };
-        GLfloat s4[] = { 1.00f * daySpot, 0.98f * daySpot, 0.92f * daySpot, 1.0f };
-        glLightfv(GL_LIGHT4, GL_AMBIENT,  lightAmbient  ? a4 : ZERO4);
-        glLightfv(GL_LIGHT4, GL_DIFFUSE,  lightDiffuse  ? d4 : ZERO4);
-        glLightfv(GL_LIGHT4, GL_SPECULAR, lightSpecular ? s4 : ZERO4);
-    } else {
-        glDisable(GL_LIGHT4);
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    //  STREET / ATMOSPHERE / SECOND FLOOR
-    // ════════════════════════════════════════════════════════════════════════
-
-    // ── LIGHT5: Street lamps (outdoor pavement illumination) ─────────────
-    //    Warm sodium-yellow (~2500K). Only meaningful at night.
-    if (lightArea) {
-        if (!isDayTime) {
-            glEnable(GL_LIGHT5);
-            GLfloat a5[] = { 0.03f, 0.02f, 0.01f, 1.0f };
-            GLfloat d5[] = { 0.70f, 0.55f, 0.20f, 1.0f };    // warm sodium yellow
-            GLfloat s5[] = { 0.50f, 0.40f, 0.15f, 1.0f };
-            glLightfv(GL_LIGHT5, GL_AMBIENT,  lightAmbient  ? a5 : ZERO4);
-            glLightfv(GL_LIGHT5, GL_DIFFUSE,  lightDiffuse  ? d5 : ZERO4);
-            glLightfv(GL_LIGHT5, GL_SPECULAR, lightSpecular ? s5 : ZERO4);
-        } else {
-            glDisable(GL_LIGHT5);   // street lamps off during day
-        }
-    } else {
-        glDisable(GL_LIGHT5);
-    }
-
-    // ── LIGHT6: Hanging red lanterns (warm dining atmosphere) ─────────────
-    //    Warm red-amber glow from decorative chochin lanterns inside.
-    if (lightArea) {
-        glEnable(GL_LIGHT6);
-        float dayHang = isDayTime ? 0.2f : 1.0f;
-        GLfloat a6[] = { 0.03f * dayHang, 0.01f * dayHang, 0.00f, 1.0f };
-        GLfloat d6[] = { 0.55f * flickHang * dayHang, 0.20f * flickHang * dayHang, 0.06f * flickHang * dayHang, 1.0f };
-        GLfloat s6[] = { 0.40f * dayHang, 0.15f * dayHang, 0.05f * dayHang, 1.0f };
-        glLightfv(GL_LIGHT6, GL_AMBIENT,  lightAmbient  ? a6 : ZERO4);
-        glLightfv(GL_LIGHT6, GL_DIFFUSE,  lightDiffuse  ? d6 : ZERO4);
-        glLightfv(GL_LIGHT6, GL_SPECULAR, lightSpecular ? s6 : ZERO4);
-    } else {
-        glDisable(GL_LIGHT6);
-    }
-
-    // ── LIGHT7: Second-floor ceiling dome (soft upstairs illumination) ────
-    //    Soft warm white through paper shade (~3000K).
-    if (lightArea) {
-        glEnable(GL_LIGHT7);
-        float dayUp = isDayTime ? 0.3f : 1.0f;
-        GLfloat a7[] = { 0.03f * dayUp, 0.02f * dayUp, 0.01f * dayUp, 1.0f };
-        GLfloat d7[] = { 0.45f * dayUp, 0.35f * dayUp, 0.18f * dayUp, 1.0f };
-        GLfloat s7[] = { 0.30f * dayUp, 0.25f * dayUp, 0.15f * dayUp, 1.0f };
-        glLightfv(GL_LIGHT7, GL_AMBIENT,  lightAmbient  ? a7 : ZERO4);
-        glLightfv(GL_LIGHT7, GL_DIFFUSE,  lightDiffuse  ? d7 : ZERO4);
-        glLightfv(GL_LIGHT7, GL_SPECULAR, lightSpecular ? s7 : ZERO4);
-    } else {
-        glDisable(GL_LIGHT7);
-    }
-}
+// ─── Lighting is now in lighting.h / lighting.cpp ───────────────────────────
 
 // ─── Floor Reflection (stencil-based ray-tracing approximation) ─────────────
 // Renders key interior objects mirrored through y=0 as a semi-transparent
@@ -537,9 +278,12 @@ static void drawShadows()
     glDisable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
 
-    // Override all materials to black + 35% alpha → darkens floor by 35%
+    // Shadow darkness depends on time of day:
+    //   Night: stronger shadows from artificial lights (45% darkening)
+    //   Day:   softer diffused shadows (25% darkening)
+    float shadowAlpha = isDayTime ? 0.25f : 0.45f;
     glDisable(GL_COLOR_MATERIAL);
-    GLfloat sAmb[]  = { 0.0f, 0.0f, 0.0f, 0.35f };
+    GLfloat sAmb[]  = { 0.0f, 0.0f, 0.0f, shadowAlpha };
     GLfloat sSpec[] = { 0.0f, 0.0f, 0.0f, 0.0f  };
     GLfloat sEm[]   = { 0.0f, 0.0f, 0.0f, 1.0f  };
     glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT,  sAmb);
@@ -679,27 +423,52 @@ void drawExterior()
     float swayL  = sin(animTime * 2.0f) * 2.5f;
     float swayR  = sin(animTime * 1.9f + 0.8f) * 2.5f;
 
-    // Left lantern — selectable as OBJ_LANTERN_L (bright yellow chochin)
-    float dayLanScale = isDayTime ? 0.25f : 1.0f;   // dim during day
+    // Left lantern — selectable as OBJ_LANTERN_L (warm orange chochin)
+    //   Emissive surface + additive glow halo → visible glowing lantern
+    float dayLanScale = isDayTime ? 0.15f : 1.0f;
     glPushMatrix();
     glTranslatef(-3.8f, 2.95f, 4.5f);
     applyObjDelta(OBJ_LANTERN_L);
     glRotatef(swayL, 0, 0, 1);
     drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.02f, 0.4f, 0.02f }, BLACK);
-    setEmission(0.95f * flickL * dayLanScale, 0.85f * flickL * dayLanScale, 0.15f * flickL * dayLanScale);
-    drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, GOLD);
+    // Glowing lantern body (warm orange-amber, matching LIGHT2 color)
+    setEmission(0.95f * flickL * dayLanScale, 0.55f * flickL * dayLanScale, 0.10f * flickL * dayLanScale);
+    drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, { 0.95f, 0.65f, 0.15f });
     clearEmission();
+    // Additive glow halo around lantern (visible light spill)
+    if (!isDayTime) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+        setLighting(false);
+        glColor4f(0.95f, 0.55f, 0.10f, 0.08f * flickL);
+        gluSphere(quad, 0.55f, 12, 12);
+        glDepthMask(GL_TRUE);
+        setLighting(true);
+        glDisable(GL_BLEND);
+    }
     glPopMatrix();
 
-    // Right lantern — selectable as OBJ_LANTERN_R (bright yellow chochin)
+    // Right lantern — selectable as OBJ_LANTERN_R (warm orange chochin)
     glPushMatrix();
     glTranslatef(3.8f, 2.95f, 4.5f);
     applyObjDelta(OBJ_LANTERN_R);
     glRotatef(swayR, 0, 0, 1);
     drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.02f, 0.4f, 0.02f }, BLACK);
-    setEmission(0.95f * flickR * dayLanScale, 0.85f * flickR * dayLanScale, 0.15f * flickR * dayLanScale);
-    drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, GOLD);
+    setEmission(0.95f * flickR * dayLanScale, 0.55f * flickR * dayLanScale, 0.10f * flickR * dayLanScale);
+    drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, { 0.95f, 0.65f, 0.15f });
     clearEmission();
+    if (!isDayTime) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+        setLighting(false);
+        glColor4f(0.95f, 0.55f, 0.10f, 0.08f * flickR);
+        gluSphere(quad, 0.55f, 12, 12);
+        glDepthMask(GL_TRUE);
+        setLighting(true);
+        glDisable(GL_BLEND);
+    }
     glPopMatrix();
 
     for (int i = -5; i <= 5; i++)
@@ -723,6 +492,60 @@ void drawExterior()
 
     // Vending machine to the right of the shop entrance, facing the sidewalk
     drawVendingMachine({ 8.5f, 0, 3.5f }, { 0, -90, 0 });
+
+    // ── Extended Outdoor Environment ─────────────────────────────────────
+
+    // Japanese pine trees scattered around the neighborhood
+    drawJapanesePineTree({ -12.0f, 0,  8.0f }, NO_ROT, { 1.0f, 1.2f, 1.0f });
+    drawJapanesePineTree({  14.0f, 0, -5.0f }, NO_ROT, { 0.9f, 1.0f, 0.9f });
+    drawJapanesePineTree({ -15.0f, 0, -8.0f }, NO_ROT, { 1.1f, 1.4f, 1.1f });
+    drawJapanesePineTree({  18.0f, 0, 10.0f }, NO_ROT, { 0.8f, 0.9f, 0.8f });
+
+    // Maple trees with autumn foliage
+    drawMapleTree({ -10.0f, 0,  12.0f }, NO_ROT, { 1.0f, 1.0f, 1.0f });
+    drawMapleTree({  12.0f, 0,  14.0f }, NO_ROT, { 1.1f, 1.2f, 1.1f });
+    drawMapleTree({ -18.0f, 0,  -3.0f }, NO_ROT, { 0.9f, 0.9f, 0.9f });
+
+    // Bamboo groves flanking the path
+    drawBambooGrove({ -14.0f, 0,  3.0f }, NO_ROT, { 1.0f, 1.0f, 1.0f });
+    drawBambooGrove({  16.0f, 0,  6.0f }, { 0, 30, 0 }, { 0.9f, 1.1f, 0.9f });
+
+    // Japanese houses along the street
+    drawJapaneseHouse({ -20.0f, 0,  8.0f }, { 0, 45, 0 },  { 1.0f, 1.0f, 1.0f });
+    drawJapaneseHouse({  22.0f, 0,  5.0f }, { 0, -90, 0 }, { 1.1f, 1.0f, 1.1f });
+    drawJapaneseHouse({ -22.0f, 0, -6.0f }, { 0, 60, 0 },  { 0.9f, 0.9f, 0.9f });
+    drawJapaneseHouse({  20.0f, 0, -8.0f }, { 0, -45, 0 }, { 1.0f, 1.1f, 1.0f });
+
+    // Lake behind the shop with a bridge crossing it
+    drawLake({ 0, -0.1f, -18.0f }, NO_ROT, { 3.0f, 1.0f, 2.5f });
+    drawBridge({ 0, 0, -18.0f }, NO_ROT, { 1.2f, 1.0f, 1.0f });
+
+    // Stone lanterns around the lake and garden paths
+    drawStoneLantern({  4.0f, 0, -14.0f });
+    drawStoneLantern({ -4.0f, 0, -14.0f });
+    drawStoneLantern({  6.0f, 0, -20.0f });
+    drawStoneLantern({ -6.0f, 0, -20.0f });
+
+    // Grass patches scattered around the grounds
+    drawGrassPatch({ -8.0f,  0.01f,  10.0f }, NO_ROT, { 2.0f, 1.0f, 2.0f });
+    drawGrassPatch({  9.0f,  0.01f,  12.0f }, NO_ROT, { 1.5f, 1.0f, 1.5f });
+    drawGrassPatch({ -6.0f,  0.01f, -10.0f }, NO_ROT, { 2.5f, 1.0f, 2.5f });
+    drawGrassPatch({  5.0f,  0.01f, -12.0f }, NO_ROT, { 1.8f, 1.0f, 1.8f });
+    drawGrassPatch({ -12.0f, 0.01f,  14.0f }, NO_ROT, { 2.0f, 1.0f, 2.0f });
+    drawGrassPatch({  14.0f, 0.01f,  -2.0f }, NO_ROT, { 1.6f, 1.0f, 1.6f });
+    drawGrassPatch({  0.0f,  0.01f, -14.0f }, NO_ROT, { 3.0f, 1.0f, 3.0f });
+    drawGrassPatch({ -16.0f, 0.01f,   0.0f }, NO_ROT, { 2.2f, 1.0f, 2.2f });
+
+    // Jungle area off to one side
+    drawJungle({ -25.0f, 0, -15.0f }, NO_ROT, { 1.5f, 1.0f, 1.5f });
+    drawJungle({  25.0f, 0, -12.0f }, { 0, 90, 0 }, { 1.2f, 1.0f, 1.2f });
+
+    // Fireflies near the lake and around the garden (night only, handled inside the function)
+    drawFireflies({ 0, 1.5f, -18.0f }, 8.0f, 25);
+    drawFireflies({ -5.0f, 1.0f, -15.0f }, 5.0f, 15);
+    drawFireflies({  5.0f, 1.0f, -15.0f }, 5.0f, 15);
+    drawFireflies({ -10.0f, 1.2f, 8.0f }, 4.0f, 10);
+    drawFireflies({  10.0f, 1.2f, 8.0f }, 4.0f, 10);
 }
 
 // ─── Second Floor ────────────────────────────────────────────────────────────
@@ -836,9 +659,13 @@ static void drawSecondFloor()
     }
 
     // ── Simple flush ceiling light (paper dome — no hanging cords) ──
+    //   The dome itself glows visibly, matching LIGHT7 color temperature
     if (lightArea) {
-        float dayDome = isDayTime ? 0.25f : 1.0f;
-        setEmission(0.60f * dayDome, 0.45f * dayDome, 0.15f * dayDome);
+        float dayDome = isDayTime ? 0.20f : 1.0f;
+        float flickDome = 1.0f + 0.03f * sinf(animTime * 3.0f);
+        setEmission(0.80f * dayDome * flickDome,
+                    0.58f * dayDome * flickDome,
+                    0.20f * dayDome * flickDome);
     }
     drawSphere({ 0.0f, GH + UH - 0.05f, 0.0f }, NO_ROT, { 0.30f, 0.10f, 0.30f }, PAPER);
     if (lightArea) clearEmission();

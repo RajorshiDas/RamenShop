@@ -100,11 +100,31 @@ void drawCylinderLantern(Vec3 pos, Vec3 rot, Vec3 scale)
         float flicker = 1.0f + 0.08f * sin(animTime * 4.2f + pos.x);
 
         // ────── Solid glowing red lantern body ──────
+        //   Warm red-orange glow — the lantern surface itself looks lit
         const Color LANTERN_RED = { 0.90f, 0.10f, 0.08f };
-        setEmission(0.85f * flicker, 0.12f * flicker, 0.08f * flicker);
+        float dayLanHang = isDayTime ? 0.20f : 1.0f;
+        setEmission(0.90f * flicker * dayLanHang,
+                    0.18f * flicker * dayLanHang,
+                    0.06f * flicker * dayLanHang);
         setMaterialPBR(Materials::GlazedMatte, LANTERN_RED);
         drawSphere({ 0, -0.08f, 0 }, NO_ROT, { 0.36f, 0.54f, 0.36f }, LANTERN_RED);
         clearEmission();
+
+        // Additive glow halo (visible warm light spill around the lantern)
+        if (!isDayTime) {
+            glPushMatrix();
+            glTranslatef(0, -0.08f, 0);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            glDepthMask(GL_FALSE);
+            setLighting(false);
+            glColor4f(0.90f, 0.20f, 0.06f, 0.06f * flicker);
+            gluSphere(quad, 0.50f, 12, 12);
+            glDepthMask(GL_TRUE);
+            setLighting(true);
+            glDisable(GL_BLEND);
+            glPopMatrix();
+        }
 
         // ────── Top metal cap with hanging loop ──────
         setMaterialPBRMetallic(Materials::BrushedMetal, DARK_GRAY);
@@ -236,8 +256,9 @@ void drawSignBoard(Vec3 pos, Vec3 rot, Vec3 scale)
     applyTransform(pos, rot, scale);
 
     drawCube({ 0, 0, -0.02f }, NO_ROT, { 2.8f, 0.85f, 0.10f }, DARK_WOOD);   // frame
+    // Sign board illumination — matches LIGHT6 (shop sign light)
     if (!isDayTime)
-        setEmission(0.35f, 0.30f, 0.18f);   // illuminated sign at night
+        setEmission(0.55f, 0.42f, 0.18f);   // bright warm-white illuminated sign
     else
         setEmission(0.06f, 0.05f, 0.04f);   // subtle during day
     drawCube({ 0, 0,  0.03f }, NO_ROT, { 2.6f, 0.70f, 0.06f }, WHITE);       // white board

@@ -18,3 +18,15 @@ void drawShojiDoor(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, float width = 
 void drawShojiWindow(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, float width = 2.8f, float height = 2.6f);
 void drawEntranceDoor(float angle);
 void drawSlidingShoji(Vec3 pos, Vec3 rot, float offset, float totalW = 2.4f, float height = 2.8f);
+
+// ── Extended Outdoor Environment ─────────────────────────────────────────
+void drawJapanesePineTree(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawBambooGrove(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawMapleTree(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawJapaneseHouse(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawLake(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawGrassPatch(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawJungle(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawFireflies(Vec3 pos, float radius, int count);
+void drawStoneLantern(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawBridge(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);

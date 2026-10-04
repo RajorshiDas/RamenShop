@@ -61,6 +61,7 @@
 
 #include "shapes.h"
 #include "scene.h"
+#include "lighting.h"
 #include "camera.h"
 #include "texture.h"
 #include "shader.h"
@@ -88,46 +89,8 @@ void display()
         return;
     }
 
-    // ── Place lights in world space (after camera transform) ─────────────
-    // Each GL light corresponds to a visible object in the scene.
-    //
-    // LIGHT0  Directional  Moon / Sun                 (outdoor sky)
-    // LIGHT1  Point        Pendant lamps + box cluster (dining center)
-    // LIGHT2  Point        Left exterior chochin       (entrance)
-    // LIGHT3  Point        Right exterior chochin      (entrance)
-    // LIGHT4  Spot         Kitchen spotlight fixture    (chef counter)
-    // LIGHT5  Point        Street lamps                (sidewalk)
-    // LIGHT6  Point        Hanging red lanterns         (dining atmosphere)
-    // LIGHT7  Point        Second-floor ceiling dome    (upstairs room)
-
-    // 1. Directional sky light (w = 0)
-    GLfloat pos0[] = { 0.5f, 0.35f, -0.7f, 0.0f };
-
-    // 2. Interior / Exterior point lights (w = 1)
-    GLfloat pos1[] = {  0.3f, 2.80f,  0.0f, 1.0f };     // dining pendant center
-    GLfloat pos2[] = { -3.8f, 2.60f,  4.5f, 1.0f };     // left chochin
-    GLfloat pos3[] = {  3.8f, 2.60f,  4.5f, 1.0f };     // right chochin
-
-    // 3. Kitchen spot (pointing straight down)
-    GLfloat pos4[] = { -1.5f, 3.25f, -0.3f, 1.0f };
-    GLfloat dir4[] = {  0.0f, -1.0f,  0.0f };
-
-    // 4. Street / Atmosphere / Second-floor point lights
-    GLfloat pos5[] = {  0.0f, 3.40f,  7.0f, 1.0f };     // street lamp (avg of both)
-    GLfloat pos6[] = {  0.0f, 2.90f,  0.3f, 1.0f };     // hanging lanterns center
-    GLfloat pos7[] = {  0.0f, 5.15f,  0.0f, 1.0f };     // 2nd floor ceiling dome
-
-    glLightfv(GL_LIGHT0, GL_POSITION, pos0);
-    glLightfv(GL_LIGHT1, GL_POSITION, pos1);
-    glLightfv(GL_LIGHT2, GL_POSITION, pos2);
-    glLightfv(GL_LIGHT3, GL_POSITION, pos3);
-
-    glLightfv(GL_LIGHT4, GL_POSITION, pos4);
-    glLightfv(GL_LIGHT4, GL_SPOT_DIRECTION, dir4);
-
-    glLightfv(GL_LIGHT5, GL_POSITION, pos5);
-    glLightfv(GL_LIGHT6, GL_POSITION, pos6);
-    glLightfv(GL_LIGHT7, GL_POSITION, pos7);
+    // Place all lights in world space (positions defined in lighting.cpp)
+    placeLightsInWorldSpace();
 
     drawSky();
 
@@ -223,63 +186,8 @@ void init()
     glHint(GL_FOG_HINT, GL_NICEST);
     if (showFog) glEnable(GL_FOG);
 
-    // Lighting setup — each GL light matches a visible object
-    setLighting(true);
-    glEnable(GL_LIGHT0); // Directional moon / sun
-    glEnable(GL_LIGHT1); // Interior dining pendant + box lantern cluster
-    glEnable(GL_LIGHT2); // Left exterior chochin lantern
-    glEnable(GL_LIGHT3); // Right exterior chochin lantern
-    glEnable(GL_LIGHT4); // Kitchen spotlight fixture
-    glEnable(GL_LIGHT5); // Street lamps (outdoor)
-    glEnable(GL_LIGHT6); // Hanging red lanterns (dining atmosphere)
-    glEnable(GL_LIGHT7); // Second-floor ceiling dome light
-
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    glEnable(GL_NORMALIZE);
-    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE); // Local eye viewer for realistic specular highlights
-    glShadeModel(GL_SMOOTH);
-
-    // ── Attenuation: atten = 1 / (Kc + Kl*d + Kq*d²) ────────────────────
-    // Values chosen per light based on room size (~10m across) and
-    // the realistic range each fixture would illuminate.
-
-    // LIGHT1: Interior dining pendant — warm ~5m range, primary indoor source
-    glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION,  1.0f);
-    glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION,    0.09f);
-    glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, 0.032f);
-
-    // LIGHT2 & LIGHT3: Exterior chochin lanterns — small ~3m range, strong falloff
-    for (int i = 2; i <= 3; i++) {
-        glLightf(GL_LIGHT0 + i, GL_CONSTANT_ATTENUATION,  1.0f);
-        glLightf(GL_LIGHT0 + i, GL_LINEAR_ATTENUATION,    0.14f);
-        glLightf(GL_LIGHT0 + i, GL_QUADRATIC_ATTENUATION, 0.07f);
-    }
-
-    // LIGHT4: Kitchen spotlight — focused ~3m, narrow beam pointing down
-    glLightf(GL_LIGHT4, GL_SPOT_CUTOFF,    30.0f);
-    glLightf(GL_LIGHT4, GL_SPOT_EXPONENT,  25.0f);
-    glLightf(GL_LIGHT4, GL_CONSTANT_ATTENUATION,  1.0f);
-    glLightf(GL_LIGHT4, GL_LINEAR_ATTENUATION,    0.05f);
-    glLightf(GL_LIGHT4, GL_QUADRATIC_ATTENUATION, 0.015f);
-
-    // LIGHT5: Street lamps — outdoor ~6m range
-    glLightf(GL_LIGHT5, GL_CONSTANT_ATTENUATION,  1.0f);
-    glLightf(GL_LIGHT5, GL_LINEAR_ATTENUATION,    0.07f);
-    glLightf(GL_LIGHT5, GL_QUADRATIC_ATTENUATION, 0.017f);
-
-    // LIGHT6: Hanging lanterns — soft atmospheric ~3m range
-    glLightf(GL_LIGHT6, GL_CONSTANT_ATTENUATION,  1.0f);
-    glLightf(GL_LIGHT6, GL_LINEAR_ATTENUATION,    0.12f);
-    glLightf(GL_LIGHT6, GL_QUADRATIC_ATTENUATION, 0.05f);
-
-    // LIGHT7: Second-floor ceiling dome — gentle ~3m range
-    glLightf(GL_LIGHT7, GL_CONSTANT_ATTENUATION,  1.0f);
-    glLightf(GL_LIGHT7, GL_LINEAR_ATTENUATION,    0.14f);
-    glLightf(GL_LIGHT7, GL_QUADRATIC_ATTENUATION, 0.07f);
-
-    applyLightingParameters();
+    // Lighting setup — all light configuration in lighting.cpp
+    initLighting();
 
     // Compile Phong GLSL shader (press G to toggle)
     initPhongShader();

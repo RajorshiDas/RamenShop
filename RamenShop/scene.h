@@ -5,24 +5,12 @@
 #include "food.h"
 #include "exterior.h"
 #include "decorations.h"
+#include "lighting.h"
 
 // Scene feature toggles
 extern bool showRoof;
 extern bool showSteam;
 extern bool animPaused;
-
-// Day/Night cycle
-enum DayNightMode { DAY, NIGHT };
-extern DayNightMode dayNightMode;
-extern bool isDayTime;  // true = day, false = night
-
-// Restaurant lights master switch (L key)
-extern bool restaurantLightsOn;
-
-void toggleRestaurantLights();
-void toggleDayNight();
-const char* getDayNightModeName();
-void applyLightingParameters();
 
 // Entrance door state (click to open/close)
 extern bool doorOpen;

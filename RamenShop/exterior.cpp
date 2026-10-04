@@ -1,5 +1,6 @@
 #include "exterior.h"
 #include "scene.h"    // isDayTime for day/night conditional emission
+#include "shader.h"   // setLighting for glow halos
 
 void drawShopBuilding(Vec3 pos, Vec3 rot, Vec3 scale)
 {
@@ -202,12 +203,31 @@ void drawLamp(Vec3 pos, Vec3 rot, Vec3 scale)
     drawCylinder({ 0, 0.2f, 0 },    NO_ROT, { 0.12f, 3.3f, 0.12f }, DARK_GRAY);
     drawCube({ 0.35f, 3.45f, 0 },   NO_ROT, { 0.8f, 0.08f, 0.08f }, DARK_GRAY);
     drawCone({ 0.7f, 3.15f, 0 },    NO_ROT, { 0.5f, 0.3f, 0.5f },   DARK_GRAY);
+
+    // Lamp bulb — bright sodium-warm glow at night, subtle during day
     if (!isDayTime)
-        setEmission(0.95f, 0.75f, 0.30f);   // bright warm glow at night
+        setEmission(0.95f, 0.70f, 0.22f);
     else
-        setEmission(0.15f, 0.12f, 0.05f);   // barely visible during day
-    drawSphere({ 0.7f, 3.12f, 0 },  NO_ROT, { 0.2f, 0.2f, 0.2f },   GOLD);
+        setEmission(0.12f, 0.10f, 0.04f);
+    drawSphere({ 0.7f, 3.12f, 0 },  NO_ROT, { 0.2f, 0.2f, 0.2f }, GOLD);
     clearEmission();
+
+    // Additive glow halo around lamp bulb (visible light spill at night)
+    if (!isDayTime) {
+        glPushMatrix();
+        glTranslatef(0.7f, 3.12f, 0.0f);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+        setLighting(false);
+        glColor4f(0.95f, 0.70f, 0.22f, 0.06f);
+        gluSphere(quad, 0.45f, 12, 12);
+        glDepthMask(GL_TRUE);
+        setLighting(true);
+        glDisable(GL_BLEND);
+        glPopMatrix();
+    }
+
     glPopMatrix();
 }
 
@@ -729,6 +749,481 @@ void drawShojiWindow(Vec3 pos, Vec3 rot, Vec3 scale, float width, float height)
 
     // Sill
     drawCube({ 0, -hh - 0.05f, 0.08f }, NO_ROT, { width + 0.16f, 0.05f, 0.25f }, WOOD);
+
+    glPopMatrix();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  EXTENDED OUTDOOR ENVIRONMENT
+// ════════════════════════════════════════════════════════════════════════════
+
+// ─── Japanese Pine Tree (Matsu) ─────────────────────────────────────────────
+// Layered conical tiers of dark green foliage on a gnarled brown trunk
+void drawJapanesePineTree(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    // Trunk — slightly bent / gnarled
+    const Color PINE_TRUNK = { 0.28f, 0.18f, 0.10f };
+    drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.12f, 2.0f, 0.12f }, PINE_TRUNK);
+    drawCylinder({ 0.05f, 2.0f, 0 }, { 0, 0, 5 }, { 0.10f, 0.8f, 0.10f }, PINE_TRUNK);
+
+    // Foliage tiers — dark pine green cones stacked
+    const Color PINE_DARK  = { 0.08f, 0.30f, 0.12f };
+    const Color PINE_LIGHT = { 0.12f, 0.38f, 0.15f };
+
+    drawCone({ 0, 1.2f, 0 }, NO_ROT, { 1.8f, 1.0f, 1.8f }, PINE_DARK);
+    drawCone({ 0, 1.8f, 0 }, NO_ROT, { 1.5f, 0.9f, 1.5f }, PINE_LIGHT);
+    drawCone({ 0, 2.3f, 0 }, NO_ROT, { 1.2f, 0.8f, 1.2f }, PINE_DARK);
+    drawCone({ 0, 2.7f, 0 }, NO_ROT, { 0.8f, 0.7f, 0.8f }, PINE_LIGHT);
+
+    glPopMatrix();
+}
+
+// ─── Bamboo Grove ───────────────────────────────────────────────────────────
+// Cluster of tall bamboo stalks with small leaf tufts at the top
+void drawBambooGrove(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    const Color BAMBOO_GREEN = { 0.35f, 0.55f, 0.25f };
+    const Color BAMBOO_LIGHT = { 0.45f, 0.65f, 0.30f };
+    const Color BAMBOO_LEAF  = { 0.25f, 0.50f, 0.18f };
+
+    // 8 bamboo stalks at slightly random positions
+    const float stalks[][3] = {
+        { 0.0f, 0, 0.0f }, { 0.3f, 0, -0.2f }, { -0.25f, 0, 0.15f },
+        { 0.15f, 0, 0.3f }, { -0.35f, 0, -0.1f }, { 0.4f, 0, 0.15f },
+        { -0.1f, 0, -0.35f }, { 0.2f, 0, -0.4f }
+    };
+    const float heights[] = { 4.0f, 3.5f, 4.2f, 3.8f, 4.5f, 3.3f, 3.7f, 4.1f };
+
+    for (int i = 0; i < 8; i++) {
+        float h = heights[i];
+        Color col = (i % 2 == 0) ? BAMBOO_GREEN : BAMBOO_LIGHT;
+
+        // Main stalk
+        drawCylinder({ stalks[i][0], 0, stalks[i][2] }, NO_ROT,
+                     { 0.04f, h, 0.04f }, col);
+
+        // Nodes (bamboo joints) every 0.6 units
+        for (float y = 0.4f; y < h; y += 0.6f) {
+            drawTorus({ stalks[i][0], y, stalks[i][2] }, { 90, 0, 0 },
+                      ONE, col, 0.008f, 0.045f);
+        }
+
+        // Leaf tufts at top
+        float sway = sinf(animTime * 1.5f + i * 0.8f) * 3.0f;
+        glPushMatrix();
+        glTranslatef(stalks[i][0], h, stalks[i][2]);
+        glRotatef(sway, 0, 0, 1);
+        for (int j = 0; j < 3; j++) {
+            float angle = j * 120.0f + i * 30.0f;
+            glPushMatrix();
+            glRotatef(angle, 0, 1, 0);
+            glRotatef(-35, 1, 0, 0);
+            drawCube({ 0, 0, 0.15f }, NO_ROT, { 0.02f, 0.005f, 0.25f }, BAMBOO_LEAF);
+            glPopMatrix();
+        }
+        glPopMatrix();
+    }
+
+    glPopMatrix();
+}
+
+// ─── Maple Tree (Momiji) ────────────────────────────────────────────────────
+// Autumn-red maple tree with spreading canopy
+void drawMapleTree(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    // Trunk with slight lean
+    drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.15f, 1.6f, 0.15f }, TRUNK);
+    // Major branch split
+    drawCylinder({ 0.1f, 1.6f, 0 }, { 0, 0, 15 }, { 0.08f, 0.8f, 0.08f }, TRUNK);
+    drawCylinder({ -0.1f, 1.6f, 0.05f }, { 0, 0, -12 }, { 0.07f, 0.7f, 0.07f }, TRUNK);
+
+    // Autumn foliage — red/orange/gold maple leaves
+    const Color MAPLE_RED    = { 0.85f, 0.15f, 0.08f };
+    const Color MAPLE_ORANGE = { 0.92f, 0.45f, 0.10f };
+    const Color MAPLE_GOLD   = { 0.95f, 0.70f, 0.15f };
+
+    drawSphere({ 0.0f, 2.3f, 0.0f }, NO_ROT, { 1.6f, 1.3f, 1.6f }, MAPLE_RED);
+    drawSphere({ 0.6f, 2.5f, 0.3f }, NO_ROT, { 1.2f, 1.0f, 1.2f }, MAPLE_ORANGE);
+    drawSphere({ -0.5f, 2.4f, -0.2f }, NO_ROT, { 1.1f, 0.9f, 1.1f }, MAPLE_GOLD);
+    drawSphere({ 0.2f, 2.8f, -0.1f }, NO_ROT, { 0.9f, 0.8f, 0.9f }, MAPLE_RED);
+    drawSphere({ -0.3f, 2.0f, 0.4f }, NO_ROT, { 0.8f, 0.7f, 0.8f }, MAPLE_ORANGE);
+
+    glPopMatrix();
+}
+
+// ─── Japanese Neighboring House ─────────────────────────────────────────────
+// Simple traditional Japanese house with cream walls, dark wood frame, tiled roof
+void drawJapaneseHouse(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    float w = 4.0f, d = 3.5f, h = 2.8f;
+
+    // Walls — cream plaster
+    GLuint wallTex = getTexID(TEX_WALL);
+    // Front wall
+    drawTexturedBox({ 0, 0, d * 0.5f }, NO_ROT, { w, h, 0.15f }, wallTex, WHITE, 2.0f);
+    // Back wall
+    drawTexturedBox({ 0, 0, -d * 0.5f }, NO_ROT, { w, h, 0.15f }, wallTex, WHITE, 2.0f);
+    // Left wall
+    drawTexturedBox({ -w * 0.5f, 0, 0 }, NO_ROT, { 0.15f, h, d }, wallTex, WHITE, 2.0f);
+    // Right wall
+    drawTexturedBox({ w * 0.5f, 0, 0 }, NO_ROT, { 0.15f, h, d }, wallTex, WHITE, 2.0f);
+
+    // Dark wood frame — corner posts
+    for (int sx = -1; sx <= 1; sx += 2)
+        for (int sz = -1; sz <= 1; sz += 2)
+            drawCuboid({ sx * w * 0.5f, 0, sz * d * 0.5f }, NO_ROT,
+                       { 0.20f, h, 0.20f }, DARK_WOOD);
+
+    // Top beam
+    drawCuboid({ 0, h - 0.08f, d * 0.52f }, NO_ROT, { w + 0.2f, 0.12f, 0.10f }, DARK_WOOD);
+    drawCuboid({ 0, h - 0.08f, -d * 0.52f }, NO_ROT, { w + 0.2f, 0.12f, 0.10f }, DARK_WOOD);
+
+    // Shoji windows on front — glowing at night
+    drawShojiWindow({ -0.8f, 1.5f, d * 0.5f + 0.08f }, NO_ROT, ONE, 1.2f, 1.0f);
+    drawShojiWindow({  0.8f, 1.5f, d * 0.5f + 0.08f }, NO_ROT, ONE, 1.2f, 1.0f);
+
+    // Door
+    drawCuboid({ 0, 0, d * 0.5f + 0.05f }, NO_ROT, { 0.7f, 1.8f, 0.06f }, WOOD);
+    drawSphere({ 0.25f, 0.9f, d * 0.5f + 0.10f }, NO_ROT, { 0.04f, 0.04f, 0.04f }, DARK_GRAY);
+
+    // Gable roof
+    drawCuboid({ 0, h, 0 }, NO_ROT, { w + 0.8f, 0.08f, d + 0.8f }, DARK_GRAY);
+    drawWedge({ 0, h + 0.08f, 0 }, NO_ROT, { w + 0.8f, 1.4f, d + 0.8f }, ROOF_TILE);
+
+    // Ridge cap
+    drawCuboid({ 0, h + 1.42f, 0 }, NO_ROT, { w + 1.0f, 0.10f, 0.18f }, DARK_WOOD);
+
+    // Small garden lantern near entrance
+    drawStoneLantern({ w * 0.3f, 0, d * 0.5f + 0.8f }, NO_ROT, { 0.5f, 0.5f, 0.5f });
+
+    glPopMatrix();
+}
+
+// ─── Stone Lantern (Toro) ───────────────────────────────────────────────────
+// Traditional Japanese garden stone lantern
+void drawStoneLantern(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    const Color STONE = { 0.60f, 0.58f, 0.55f };
+    const Color STONE_DARK = { 0.45f, 0.43f, 0.40f };
+
+    // Base
+    drawCuboid({ 0, 0, 0 }, NO_ROT, { 0.5f, 0.15f, 0.5f }, STONE);
+    // Pillar
+    drawCylinder({ 0, 0.15f, 0 }, NO_ROT, { 0.10f, 0.8f, 0.10f }, STONE);
+    // Light chamber
+    drawCuboid({ 0, 0.95f, 0 }, NO_ROT, { 0.35f, 0.35f, 0.35f }, STONE_DARK);
+
+    // Glowing chamber interior at night
+    if (!isDayTime) {
+        setEmission(0.70f, 0.45f, 0.12f);
+        drawCuboid({ 0, 0.97f, 0 }, NO_ROT, { 0.28f, 0.25f, 0.28f }, { 0.95f, 0.75f, 0.30f });
+        clearEmission();
+    }
+
+    // Roof cap — pagoda-style
+    drawCuboid({ 0, 1.30f, 0 }, NO_ROT, { 0.50f, 0.06f, 0.50f }, STONE);
+    drawCone({ 0, 1.36f, 0 }, NO_ROT, { 0.45f, 0.30f, 0.45f }, STONE_DARK);
+    // Finial
+    drawSphere({ 0, 1.66f, 0 }, NO_ROT, { 0.06f, 0.08f, 0.06f }, STONE);
+
+    glPopMatrix();
+}
+
+// ─── Wooden Bridge ──────────────────────────────────────────────────────────
+// Small arched wooden bridge over water
+void drawBridge(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    const Color BRIDGE_WOOD = { 0.45f, 0.28f, 0.15f };
+    const float bLen = 3.0f, bW = 1.2f;
+
+    // Arched deck planks
+    for (int i = -8; i <= 8; i++) {
+        float z = i * (bLen / 16.0f);
+        float archY = 0.3f * cosf(z * PI / bLen);
+        drawCuboid({ 0, archY, z }, NO_ROT, { bW, 0.06f, bLen / 16.0f + 0.01f }, BRIDGE_WOOD);
+    }
+
+    // Railings
+    for (int sx = -1; sx <= 1; sx += 2) {
+        float rx = sx * bW * 0.5f;
+        // Posts
+        for (int i = -3; i <= 3; i++) {
+            float z = i * (bLen / 6.0f);
+            float archY = 0.3f * cosf(z * PI / bLen);
+            drawCuboid({ rx, archY, z }, NO_ROT, { 0.06f, 0.6f, 0.06f }, DARK_WOOD);
+        }
+        // Top rail (curved approximation)
+        for (int i = -3; i < 3; i++) {
+            float z0 = i * (bLen / 6.0f);
+            float z1 = (i + 1) * (bLen / 6.0f);
+            float y0 = 0.3f * cosf(z0 * PI / bLen) + 0.55f;
+            float y1 = 0.3f * cosf(z1 * PI / bLen) + 0.55f;
+            float yc = (y0 + y1) * 0.5f;
+            float zc = (z0 + z1) * 0.5f;
+            drawCuboid({ rx, yc, zc }, NO_ROT,
+                       { 0.05f, 0.05f, bLen / 6.0f + 0.02f }, DARK_WOOD);
+        }
+    }
+
+    glPopMatrix();
+}
+
+// ─── Lake / Pond ────────────────────────────────────────────────────────────
+// Reflective water surface with shore rocks and subtle wave animation
+void drawLake(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    float lakeR = 8.0f;
+
+    // Water surface — semi-transparent reflective blue
+    setMaterialDielectric(100.0f);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+
+    // Animated subtle wave using vertex displacement
+    float waveT = animTime * 0.8f;
+    Color waterCol = isDayTime
+        ? Color{ 0.25f, 0.50f, 0.70f }
+        : Color{ 0.08f, 0.15f, 0.30f };
+
+    glColor4f(waterCol.r, waterCol.g, waterCol.b, 0.70f);
+    glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0, 1, 0);
+    // Center vertex
+    float cy = 0.02f + 0.02f * sinf(waveT);
+    glVertex3f(0, cy, 0);
+    // Outer ring
+    int segs = 48;
+    for (int i = 0; i <= segs; i++) {
+        float a = (float)i * 2.0f * PI / segs;
+        float rx = lakeR * cosf(a);
+        float rz = lakeR * sinf(a);
+        float wy = 0.02f + 0.015f * sinf(waveT + a * 3.0f);
+        glVertex3f(rx, wy, rz);
+    }
+    glEnd();
+
+    // Specular highlight shimmer layer
+    glColor4f(0.70f, 0.80f, 0.95f, 0.12f);
+    glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0, 1, 0);
+    glVertex3f(0, cy + 0.005f, 0);
+    for (int i = 0; i <= segs; i++) {
+        float a = (float)i * 2.0f * PI / segs;
+        float rx = lakeR * 0.85f * cosf(a);
+        float rz = lakeR * 0.85f * sinf(a);
+        float wy = 0.025f + 0.01f * sinf(waveT * 1.3f + a * 5.0f);
+        glVertex3f(rx, wy, rz);
+    }
+    glEnd();
+
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    resetMaterialGloss();
+
+    // Shore rocks around the edge
+    const Color ROCK = { 0.40f, 0.38f, 0.35f };
+    const Color ROCK_DARK = { 0.30f, 0.28f, 0.25f };
+    const float rocks[][4] = {
+        // x, z, size, which_color
+        { 7.5f, 1.0f, 0.5f, 0 }, { 7.0f, -2.0f, 0.4f, 1 },
+        { -6.8f, 2.5f, 0.6f, 0 }, { -7.2f, -1.5f, 0.35f, 1 },
+        { 5.0f, 5.5f, 0.45f, 0 }, { -4.5f, 6.0f, 0.5f, 1 },
+        { 3.0f, -6.5f, 0.55f, 0 }, { -3.5f, -7.0f, 0.4f, 1 },
+        { 6.5f, 4.0f, 0.3f, 0 }, { -6.0f, -4.5f, 0.35f, 1 },
+        { 0.5f, 7.8f, 0.45f, 0 }, { -1.0f, -7.5f, 0.5f, 1 },
+    };
+    for (int i = 0; i < 12; i++) {
+        Color rc = rocks[i][3] > 0.5f ? ROCK_DARK : ROCK;
+        drawSphere({ rocks[i][0], -0.05f, rocks[i][1] }, NO_ROT,
+                   { rocks[i][2], rocks[i][2] * 0.5f, rocks[i][2] }, rc);
+    }
+
+    // Lily pads
+    const Color LILY_GREEN = { 0.18f, 0.45f, 0.15f };
+    const float lilies[][2] = { {2.0f, 1.5f}, {-1.5f, 3.0f}, {3.5f, -2.0f}, {-2.5f, -1.0f} };
+    for (int i = 0; i < 4; i++) {
+        float ly = 0.035f + 0.01f * sinf(waveT * 0.7f + i);
+        drawCylinder({ lilies[i][0], ly, lilies[i][1] }, NO_ROT,
+                     { 0.25f, 0.008f, 0.25f }, LILY_GREEN);
+    }
+
+    glPopMatrix();
+}
+
+// ─── Grass Patch ────────────────────────────────────────────────────────────
+// Cluster of grass blade quads rising from the ground
+void drawGrassPatch(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    const Color GRASS_D = { 0.25f, 0.50f, 0.18f };
+    const Color GRASS_L = { 0.35f, 0.62f, 0.25f };
+
+    // Generate blade clusters in a small area
+    for (int i = 0; i < 20; i++) {
+        // Deterministic pseudo-random positions using seed from i
+        float bx = sinf(i * 1.37f + 0.5f) * 0.8f;
+        float bz = cosf(i * 2.14f + 0.3f) * 0.8f;
+        float bh = 0.15f + 0.12f * sinf(i * 0.93f);
+        float sway = sinf(animTime * 1.8f + i * 0.7f) * 4.0f;
+        Color gc = (i % 2 == 0) ? GRASS_D : GRASS_L;
+
+        glPushMatrix();
+        glTranslatef(bx, 0, bz);
+        glRotatef(sway, 0, 0, 1);
+        glRotatef(i * 30.0f, 0, 1, 0);
+        // Thin blade quad
+        glBegin(GL_TRIANGLES);
+        setColor(gc);
+        glNormal3f(0, 0, 1);
+        glVertex3f(-0.02f, 0, 0);
+        glVertex3f( 0.02f, 0, 0);
+        glVertex3f( 0.0f, bh, 0.01f);
+        glEnd();
+        glPopMatrix();
+    }
+
+    glPopMatrix();
+}
+
+// ─── Dense Jungle Vegetation ────────────────────────────────────────────────
+// Thick cluster of tropical-looking plants, ferns, and small trees
+void drawJungle(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    const Color JUNGLE_DARK  = { 0.10f, 0.35f, 0.12f };
+    const Color JUNGLE_MID   = { 0.15f, 0.45f, 0.15f };
+    const Color JUNGLE_LIGHT = { 0.22f, 0.55f, 0.20f };
+    const Color FERN         = { 0.18f, 0.48f, 0.18f };
+
+    // Dense undergrowth spheres (ground cover)
+    drawSphere({ 0.0f, 0.3f, 0.0f }, NO_ROT, { 2.5f, 0.6f, 2.5f }, JUNGLE_DARK);
+    drawSphere({ 1.2f, 0.35f, 0.8f }, NO_ROT, { 2.0f, 0.5f, 2.0f }, JUNGLE_MID);
+    drawSphere({ -1.0f, 0.3f, -0.6f }, NO_ROT, { 1.8f, 0.55f, 1.8f }, JUNGLE_LIGHT);
+
+    // Mid-level bushes
+    drawSphere({ 0.5f, 0.8f, 0.3f }, NO_ROT, { 1.5f, 1.2f, 1.5f }, JUNGLE_MID);
+    drawSphere({ -0.8f, 0.7f, 0.5f }, NO_ROT, { 1.3f, 1.0f, 1.3f }, JUNGLE_DARK);
+    drawSphere({ 0.3f, 0.9f, -0.8f }, NO_ROT, { 1.4f, 1.1f, 1.4f }, JUNGLE_LIGHT);
+
+    // Tall jungle trees rising above the canopy
+    for (int i = 0; i < 4; i++) {
+        float tx = sinf(i * 1.8f) * 1.5f;
+        float tz = cosf(i * 2.3f) * 1.5f;
+        float th = 3.0f + i * 0.5f;
+        drawCylinder({ tx, 0, tz }, NO_ROT, { 0.08f, th, 0.08f }, TRUNK);
+        drawSphere({ tx, th + 0.5f, tz }, NO_ROT,
+                   { 1.2f, 1.0f, 1.2f }, (i % 2) ? JUNGLE_MID : JUNGLE_DARK);
+        drawSphere({ tx + 0.3f, th + 0.8f, tz - 0.2f }, NO_ROT,
+                   { 0.8f, 0.7f, 0.8f }, JUNGLE_LIGHT);
+    }
+
+    // Fern fronds (flat leaf-like quads fanning out from ground)
+    for (int i = 0; i < 6; i++) {
+        float fx = sinf(i * 1.1f) * 1.0f;
+        float fz = cosf(i * 1.5f) * 1.0f;
+        float sway = sinf(animTime * 1.2f + i * 0.9f) * 3.0f;
+        glPushMatrix();
+        glTranslatef(fx, 0, fz);
+        glRotatef(i * 60.0f, 0, 1, 0);
+        glRotatef(-40 + sway, 1, 0, 0);
+        drawCube({ 0, 0.3f, 0 }, NO_ROT, { 0.06f, 0.5f, 0.01f }, FERN);
+        // Smaller sub-fronds
+        for (int j = 0; j < 3; j++) {
+            float fy = 0.15f + j * 0.12f;
+            drawCube({ 0.08f, fy, 0 }, { 0, 0, -30 }, { 0.04f, 0.18f, 0.005f }, FERN);
+            drawCube({ -0.08f, fy, 0 }, { 0, 0, 30 }, { 0.04f, 0.18f, 0.005f }, FERN);
+        }
+        glPopMatrix();
+    }
+
+    glPopMatrix();
+}
+
+// ─── Fireflies ──────────────────────────────────────────────────────────────
+// Animated glowing particles that drift and dim/brighten — visible at night only
+void drawFireflies(Vec3 pos, float radius, int count)
+{
+    if (isDayTime) return;   // only at night
+
+    glPushMatrix();
+    glTranslatef(pos.x, pos.y, pos.z);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);   // additive glow
+    glDepthMask(GL_FALSE);
+    setLighting(false);
+
+    for (int i = 0; i < count; i++) {
+        // Deterministic but organic-looking motion
+        float seed  = (float)i * 1.618f;   // golden ratio spacing
+        float phase = seed * 3.14159f;
+
+        // Slow drifting orbit
+        float speed = 0.3f + 0.15f * sinf(seed * 2.3f);
+        float fx = radius * 0.6f * sinf(animTime * speed + phase)
+                 + radius * 0.3f * cosf(animTime * speed * 0.7f + seed);
+        float fy = 0.5f + 1.2f * (0.5f + 0.5f * sinf(seed * 1.7f))
+                 + 0.3f * sinf(animTime * 0.5f + phase * 2.0f);
+        float fz = radius * 0.6f * cosf(animTime * speed * 0.8f + phase * 1.3f)
+                 + radius * 0.3f * sinf(animTime * speed * 0.6f + seed * 0.5f);
+
+        // Pulsing glow — each firefly dims and brightens independently
+        float pulse = 0.5f + 0.5f * sinf(animTime * (2.0f + seed * 0.5f) + phase);
+        // Occasional complete dim-out (firefly "off" period)
+        float onOff = sinf(animTime * (0.8f + seed * 0.2f) + seed * 5.0f);
+        float brightness = pulse * (onOff > -0.3f ? 1.0f : 0.0f);
+
+        if (brightness < 0.05f) continue;   // skip invisible fireflies
+
+        // Warm yellow-green glow
+        glColor4f(0.70f, 0.90f, 0.25f, brightness * 0.6f);
+
+        glPushMatrix();
+        glTranslatef(fx, fy, fz);
+
+        // Small glowing point
+        glPointSize(4.0f);
+        glBegin(GL_POINTS);
+        glVertex3f(0, 0, 0);
+        glEnd();
+
+        // Soft glow halo around each firefly
+        glColor4f(0.65f, 0.85f, 0.20f, brightness * 0.08f);
+        gluSphere(quad, 0.08f, 6, 6);
+
+        glPopMatrix();
+    }
+
+    glPointSize(1.0f);
+    glDepthMask(GL_TRUE);
+    setLighting(true);
+    glDisable(GL_BLEND);
 
     glPopMatrix();
 }

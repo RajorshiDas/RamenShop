@@ -1,5 +1,6 @@
 #include "shader.h"
 #include "scene.h"
+#include "lighting.h"
 #include <cstdio>
 #include <cstdlib>
 
