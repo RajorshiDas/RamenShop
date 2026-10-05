@@ -713,8 +713,7 @@ void drawExterior()
     drawLamp({ -24.0f, 0, 17.0f }, { 0, 90, 0 });
     drawLamp({  24.0f, 0, 17.0f }, { 0, 90, 0 });
 
-    // Vending machine to the right of the shop entrance, facing the sidewalk
-    drawVendingMachine({ 8.5f, 0, 3.5f }, { 0, -90, 0 });
+    // (vending machine removed)
 
     // ── Extended Outdoor Environment ─────────────────────────────────────
     // Layout: shop at origin facing +Z.  Street at z≈12.  Sidewalks at z≈7, z≈17.
@@ -727,18 +726,18 @@ void drawExterior()
     //   Perimeter Jungle:  world edges   (|x|>33 or |z|>36)
 
     // ── Near-side houses (same side as shop, facing +Z toward street) ────
-    drawJapaneseHouse({ -15.0f, 0, 2.15f }, NO_ROT, ONE);
+    drawJapaneseHouse2({ -15.0f, 0, 2.15f }, NO_ROT, ONE);
     drawJapaneseHouse({ -23.0f, 0, 2.15f }, NO_ROT, ONE);
     drawJapaneseHouse({  15.0f, 0, 2.15f }, NO_ROT, ONE);
-    drawJapaneseHouse({  23.0f, 0, 2.15f }, NO_ROT, ONE);
+    drawJapaneseHouse2({  23.0f, 0, 2.15f }, NO_ROT, ONE);
 
     // ── Far-side houses (across the street, facing -Z back toward street) ─
     // House depth 3.5, front at z≈19, centre z = 19 + 1.75 = 20.75
-    drawJapaneseHouse({  -8.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
+    drawJapaneseHouse2({  -8.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
     drawJapaneseHouse({ -16.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
-    drawJapaneseHouse({ -24.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
+    drawJapaneseHouse2({ -24.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
     drawJapaneseHouse({   8.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
-    drawJapaneseHouse({  16.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
+    drawJapaneseHouse2({  16.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
     drawJapaneseHouse({  24.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
 
     // ── Accent trees near the shop (not on road or lake) ──────────────
@@ -907,12 +906,12 @@ void drawExterior()
     //  DEDICATED FLOWER GARDENS — specific ground spots (not scattered)
     // ══════════════════════════════════════════════════════════════════════
 
-    // Near the shop entrance (flanking sidewalk)
-    drawFlowerGarden({ -9.0f, 0, 5.0f }, NO_ROT, { 0.8f, 1.0f, 0.8f });
-    drawFlowerGarden({  9.0f, 0, 5.0f }, NO_ROT, { 0.8f, 1.0f, 0.8f });
-    // Between near-side houses
-    drawFlowerGarden({ -19.0f, 0, 4.5f }, { 0, 15, 0 }, { 0.6f, 1.0f, 0.6f });
-    drawFlowerGarden({  19.0f, 0, 4.5f }, { 0, -15, 0 }, { 0.6f, 1.0f, 0.6f });
+    // Near the shop (on grass behind houses, not on the road)
+    drawFlowerGarden({ -9.0f, 0, -2.0f }, NO_ROT, { 0.8f, 1.0f, 0.8f });
+    drawFlowerGarden({  9.0f, 0, -2.0f }, NO_ROT, { 0.8f, 1.0f, 0.8f });
+    // Between near-side houses (on grass side)
+    drawFlowerGarden({ -19.0f, 0, -1.5f }, { 0, 15, 0 }, { 0.6f, 1.0f, 0.6f });
+    drawFlowerGarden({  19.0f, 0, -1.5f }, { 0, -15, 0 }, { 0.6f, 1.0f, 0.6f });
     // Between far-side houses
     drawFlowerGarden({  0.0f, 0, 19.0f }, NO_ROT, { 1.0f, 1.0f, 1.0f });
     drawFlowerGarden({ -20.0f, 0, 19.0f }, { 0, 30, 0 }, { 0.7f, 1.0f, 0.7f });

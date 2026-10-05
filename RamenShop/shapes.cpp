@@ -1257,6 +1257,126 @@ void drawTexturedBox(Vec3 pos, Vec3 rot, Vec3 size, GLuint texID, Color tint, fl
     glPopMatrix();
 }
 
+// Textured wedge (gable roof shape) with UV-mapped sloped faces.
+// Falls back to plain drawWedge when texID == 0.
+// The wedge has its base at y=0, ridge at y=1, slopes along Z.
+void drawTexturedWedge(Vec3 pos, Vec3 rot, Vec3 scale, GLuint texID, Color tint, float uvScale)
+{
+    if (!texID) { drawWedge(pos, rot, scale, tint); return; }
+
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texID);
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    shaderSetTexture(true);
+    setColor(tint);
+
+    // Subdivide sloped faces for smooth per-pixel lighting + texturing
+    const int subX = 16;  // subdivisions along X (ridge direction)
+    const int subS = 12;  // subdivisions along the slope
+
+    // South slope: from (x, 0, 0.5) to (x, 1, 0)
+    {
+        float nx = 0, ny = 1.0f, nz = 2.0f;
+        float len = sqrtf(ny*ny + nz*nz);
+        ny /= len; nz /= len;
+
+        float slopeLen = sqrtf(0.5f * 0.5f + 1.0f * 1.0f);
+        float uScale = 1.0f / uvScale;
+        float vScale = slopeLen / uvScale;
+
+        glBegin(GL_QUADS);
+        for (int i = 0; i < subX; i++) {
+            float x0 = -0.5f + (float)i / subX;
+            float x1 = -0.5f + (float)(i+1) / subX;
+            float u0 = (x0 + 0.5f) * uScale;
+            float u1 = (x1 + 0.5f) * uScale;
+
+            for (int j = 0; j < subS; j++) {
+                float t0 = (float)j / subS;
+                float t1 = (float)(j+1) / subS;
+                float y0s = t0 * 1.0f;
+                float z0s = 0.5f - t0 * 0.5f;
+                float y1s = t1 * 1.0f;
+                float z1s = 0.5f - t1 * 0.5f;
+                float v0 = t0 * vScale;
+                float v1 = t1 * vScale;
+
+                glNormal3f(nx, ny, nz);
+                glTexCoord2f(u0, v0); glVertex3f(x0, y0s, z0s);
+                glTexCoord2f(u1, v0); glVertex3f(x1, y0s, z0s);
+                glTexCoord2f(u1, v1); glVertex3f(x1, y1s, z1s);
+                glTexCoord2f(u0, v1); glVertex3f(x0, y1s, z1s);
+            }
+        }
+        glEnd();
+    }
+
+    // North slope: from (x, 0, -0.5) to (x, 1, 0)
+    {
+        float nx = 0, ny = 1.0f, nz = -2.0f;
+        float len = sqrtf(ny*ny + nz*nz);
+        ny /= len; nz /= len;
+
+        float slopeLen = sqrtf(0.5f * 0.5f + 1.0f * 1.0f);
+        float uScale = 1.0f / uvScale;
+        float vScale = slopeLen / uvScale;
+
+        glBegin(GL_QUADS);
+        for (int i = 0; i < subX; i++) {
+            float x0 = -0.5f + (float)i / subX;
+            float x1 = -0.5f + (float)(i+1) / subX;
+            float u0 = (x0 + 0.5f) * uScale;
+            float u1 = (x1 + 0.5f) * uScale;
+
+            for (int j = 0; j < subS; j++) {
+                float t0 = (float)j / subS;
+                float t1 = (float)(j+1) / subS;
+                float y0s = t0 * 1.0f;
+                float z0s = -0.5f + t0 * 0.5f;
+                float y1s = t1 * 1.0f;
+                float z1s = -0.5f + t1 * 0.5f;
+                float v0 = t0 * vScale;
+                float v1 = t1 * vScale;
+
+                glNormal3f(nx, ny, nz);
+                glTexCoord2f(u0, v0); glVertex3f(x0, y0s, z0s);
+                glTexCoord2f(u0, v1); glVertex3f(x0, y1s, z1s);
+                glTexCoord2f(u1, v1); glVertex3f(x1, y1s, z1s);
+                glTexCoord2f(u1, v0); glVertex3f(x1, y0s, z0s);
+            }
+        }
+        glEnd();
+    }
+
+    // Bottom face
+    glBegin(GL_QUADS);
+    glNormal3f(0, -1, 0);
+    glTexCoord2f(0, 0); glVertex3f(-0.5f, 0, -0.5f);
+    glTexCoord2f(1, 0); glVertex3f( 0.5f, 0, -0.5f);
+    glTexCoord2f(1, 1); glVertex3f( 0.5f, 0,  0.5f);
+    glTexCoord2f(0, 1); glVertex3f(-0.5f, 0,  0.5f);
+    glEnd();
+
+    // Triangular end caps
+    glBegin(GL_TRIANGLES);
+    glNormal3f(-1, 0, 0);
+    glTexCoord2f(0, 0);    glVertex3f(-0.5f, 0, -0.5f);
+    glTexCoord2f(1, 0);    glVertex3f(-0.5f, 0,  0.5f);
+    glTexCoord2f(0.5f, 1); glVertex3f(-0.5f, 1,  0);
+    glNormal3f( 1, 0, 0);
+    glTexCoord2f(0, 0);    glVertex3f( 0.5f, 0, -0.5f);
+    glTexCoord2f(1, 0);    glVertex3f( 0.5f, 0,  0.5f);
+    glTexCoord2f(0.5f, 1); glVertex3f( 0.5f, 1,  0);
+    glEnd();
+
+    shaderSetTexture(false);
+    glDisable(GL_TEXTURE_2D);
+    glPopMatrix();
+}
+
 // Horizontal textured plane (Y=0), subdivided for smooth per-pixel lighting.
 void drawTexturedPlane(Vec3 pos, Vec3 rot, Vec3 scale, GLuint texID, Color tint, float uvScale)
 {

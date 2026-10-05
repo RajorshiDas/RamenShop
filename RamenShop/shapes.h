@@ -184,3 +184,4 @@ void drawJapaneseFloorLanternTower(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE
 // Textured geometry (falls back to solid color when texID == 0)
 void drawTexturedBox  (Vec3 pos, Vec3 rot, Vec3 size, GLuint texID, Color tint = WHITE, float uvScale = 1.0f);
 void drawTexturedPlane(Vec3 pos, Vec3 rot, Vec3 scale, GLuint texID, Color tint = WHITE, float uvScale = 1.0f);
+void drawTexturedWedge(Vec3 pos, Vec3 rot, Vec3 scale, GLuint texID, Color tint = WHITE, float uvScale = 1.0f);

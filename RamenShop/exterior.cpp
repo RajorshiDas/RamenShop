@@ -98,7 +98,9 @@ void drawRoof(Vec3 pos, Vec3 rot, Vec3 scale)
     drawCuboid({ 0, TH, 0 }, NO_ROT, { 11.4f, 0.12f, 9.4f }, DARK_GRAY);
 
     // Traditional Japanese gable roof (ridge runs E–W, slopes N and S)
-    drawWedge({ 0, TH + 0.12f, 0 }, NO_ROT, { 11.4f, 2.2f, 9.4f }, ROOF_TILE);
+    // Textured with corrugated hon-kawara tile pattern (dark brown ridges)
+    drawTexturedWedge({ 0, TH + 0.12f, 0 }, NO_ROT, { 11.4f, 2.2f, 9.4f },
+                      getTexID(TEX_ROOF_TILE), WHITE, 1.2f);
 
     // Ridge cap beam along the peak
     drawCuboid({ 0, TH + 2.24f, 0 }, NO_ROT, { 11.6f, 0.16f, 0.24f }, DARK_WOOD);
@@ -109,8 +111,9 @@ void drawRoof(Vec3 pos, Vec3 rot, Vec3 scale)
     drawCuboid({ -5.7f, TH + 0.02f,  0    }, NO_ROT, { 0.14f, 0.22f, 9.6f  }, DARK_WOOD);
     drawCuboid({  5.7f, TH + 0.02f,  0    }, NO_ROT, { 0.14f, 0.22f, 9.6f  }, DARK_WOOD);
 
-    // Zigzag blue awning over open front
-    drawBoard({ 0, 3.22f, 4.7f }, { 12, 0, 0 }, { 10.6f, 1.2f, 1.4f }, AWNING_BLUE);
+    // Tiled lower awning over open front
+    drawTexturedBox({ 0, 3.22f, 4.7f }, { 12, 0, 0 }, { 10.6f, 0.06f, 1.4f },
+                    getTexID(TEX_ROOF_TILE), WHITE, 1.2f);
     for (int i = -18; i <= 18; i++) {
         float x = i * 0.28f;
         drawCone({ x, 2.95f, 5.15f }, { 15, 0, 0 }, { 0.28f, 0.25f, 0.18f }, AWNING_BLUE);
@@ -451,7 +454,7 @@ void drawCherryBlossomTree(Vec3 pos, Vec3 rot, Vec3 scale)
     // Left side flowering cluster
     drawSphere({ -0.8f, 2.6f, -0.3f }, NO_ROT, { 1.2f, 1.4f, 1.2f }, cherryPinkLight);
 
-    // Right side flowering cluster  
+    // Right side flowering cluster
     drawSphere({ 0.7f, 2.7f, 0.4f }, NO_ROT, { 1.3f, 1.5f, 1.3f }, cherryPinkLight);
 
     // Top crown bloom
@@ -962,82 +965,135 @@ void drawMapleTree(Vec3 pos, Vec3 rot, Vec3 scale)
 }
 
 // ─── Japanese Neighboring House ─────────────────────────────────────────────
-// Simple traditional Japanese house with cream walls, dark wood frame, tiled roof
+// Traditional Japanese house with exposed rafters, veranda, red lanterns, foundation stones
 void drawJapaneseHouse(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
     float w = 4.0f, d = 3.5f, h = 2.8f;
+    float verandaD = 1.0f;  // veranda depth extending from front
+    const Color LANTERN_RED = { 0.85f, 0.15f, 0.10f };
 
-    // Walls — cream plaster
-    GLuint wallTex = getTexID(TEX_WALL);
-    // Front wall
-    drawTexturedBox({ 0, 0, d * 0.5f }, NO_ROT, { w, h, 0.15f }, wallTex, WHITE, 2.0f);
-    // Back wall
-    drawTexturedBox({ 0, 0, -d * 0.5f }, NO_ROT, { w, h, 0.15f }, wallTex, WHITE, 2.0f);
-    // Left wall
-    drawTexturedBox({ -w * 0.5f, 0, 0 }, NO_ROT, { 0.15f, h, d }, wallTex, WHITE, 2.0f);
-    // Right wall
-    drawTexturedBox({ w * 0.5f, 0, 0 }, NO_ROT, { 0.15f, h, d }, wallTex, WHITE, 2.0f);
-
-    // Dark wood frame — corner posts
+    // ── Foundation stones under corner posts ──
     for (int sx = -1; sx <= 1; sx += 2)
         for (int sz = -1; sz <= 1; sz += 2)
             drawCuboid({ sx * w * 0.5f, 0, sz * d * 0.5f }, NO_ROT,
-                       { 0.20f, h, 0.20f }, DARK_WOOD);
+                       { 0.28f, 0.10f, 0.28f }, WHITE);
+    // Foundation stones under veranda posts
+    for (int sx = -1; sx <= 1; sx += 2)
+        drawCuboid({ sx * w * 0.5f, 0, d * 0.5f + verandaD }, NO_ROT,
+                   { 0.24f, 0.10f, 0.24f }, WHITE);
+    drawCuboid({ 0, 0, d * 0.5f + verandaD }, NO_ROT, { 0.24f, 0.10f, 0.24f }, WHITE);
 
-    // Top beam
-    drawCuboid({ 0, h - 0.08f, d * 0.52f }, NO_ROT, { w + 0.2f, 0.12f, 0.10f }, DARK_WOOD);
-    drawCuboid({ 0, h - 0.08f, -d * 0.52f }, NO_ROT, { w + 0.2f, 0.12f, 0.10f }, DARK_WOOD);
+    // ── Walls — cream plaster ──
+    GLuint wallTex = getTexID(TEX_WALL);
+    // Back wall
+    drawTexturedBox({ 0, 0.10f, -d * 0.5f }, NO_ROT, { w, h - 0.10f, 0.12f }, wallTex, WHITE, 2.0f);
+    // Left wall
+    drawTexturedBox({ -w * 0.5f, 0.10f, 0 }, NO_ROT, { 0.12f, h - 0.10f, d }, wallTex, WHITE, 2.0f);
+    // Right wall
+    drawTexturedBox({ w * 0.5f, 0.10f, 0 }, NO_ROT, { 0.12f, h - 0.10f, d }, wallTex, WHITE, 2.0f);
+    // Front wall (shorter, above veranda level)
+    drawTexturedBox({ 0, 0.10f, d * 0.5f }, NO_ROT, { w, h - 0.10f, 0.12f }, wallTex, WHITE, 2.0f);
 
-    // Shoji windows on front — glowing at night
+    // ── Dark wood frame — corner posts ──
+    for (int sx = -1; sx <= 1; sx += 2)
+        for (int sz = -1; sz <= 1; sz += 2)
+            drawCuboid({ sx * w * 0.5f, 0.10f, sz * d * 0.5f }, NO_ROT,
+                       { 0.16f, h - 0.10f, 0.16f }, DARK_WOOD);
+
+    // ── Horizontal frame beams — top and mid ──
+    // Top beams (all 4 sides)
+    drawCuboid({ 0, h - 0.06f,  d * 0.52f }, NO_ROT, { w + 0.2f, 0.10f, 0.08f }, DARK_WOOD);
+    drawCuboid({ 0, h - 0.06f, -d * 0.52f }, NO_ROT, { w + 0.2f, 0.10f, 0.08f }, DARK_WOOD);
+    drawCuboid({  w * 0.52f, h - 0.06f, 0 }, NO_ROT, { 0.08f, 0.10f, d + 0.2f }, DARK_WOOD);
+    drawCuboid({ -w * 0.52f, h - 0.06f, 0 }, NO_ROT, { 0.08f, 0.10f, d + 0.2f }, DARK_WOOD);
+    // Mid beams (sides only, not front)
+    float midH = 1.4f;
+    drawCuboid({  w * 0.52f, midH, 0 }, NO_ROT, { 0.06f, 0.08f, d + 0.2f }, DARK_WOOD);
+    drawCuboid({ -w * 0.52f, midH, 0 }, NO_ROT, { 0.06f, 0.08f, d + 0.2f }, DARK_WOOD);
+
+    // ── Shoji windows on front ──
     drawShojiWindow({ -0.8f, 1.5f, d * 0.5f + 0.08f }, NO_ROT, ONE, 1.2f, 1.0f);
     drawShojiWindow({  0.8f, 1.5f, d * 0.5f + 0.08f }, NO_ROT, ONE, 1.2f, 1.0f);
 
-    // Door
-    drawCuboid({ 0, 0, d * 0.5f + 0.05f }, NO_ROT, { 0.7f, 1.8f, 0.06f }, WOOD);
-    drawSphere({ 0.25f, 0.9f, d * 0.5f + 0.10f }, NO_ROT, { 0.04f, 0.04f, 0.04f }, DARK_GRAY);
+    // ── Door ──
+    drawCuboid({ 0, 0.10f, d * 0.5f + 0.05f }, NO_ROT, { 0.7f, 1.8f, 0.06f }, WOOD);
+    drawSphere({ 0.25f, 1.0f, d * 0.5f + 0.10f }, NO_ROT, { 0.04f, 0.04f, 0.04f }, DARK_GRAY);
 
-    // Gable roof
-    drawCuboid({ 0, h, 0 }, NO_ROT, { w + 0.8f, 0.08f, d + 0.8f }, DARK_GRAY);
-    drawWedge({ 0, h + 0.08f, 0 }, NO_ROT, { w + 0.8f, 1.4f, d + 0.8f }, ROOF_TILE);
+    // ── Raised wooden veranda/engawa at front ──
+    // Veranda deck
+    drawTexturedBox({ 0, 0.28f, d * 0.5f + verandaD * 0.5f }, NO_ROT,
+                    { w + 0.3f, 0.06f, verandaD + 0.1f },
+                    getTexID(TEX_WOOD), LIGHT_WOOD, 1.0f);
+    // Veranda support posts
+    for (int sx = -1; sx <= 1; sx += 2) {
+        drawCuboid({ sx * w * 0.5f, 0.10f, d * 0.5f + verandaD }, NO_ROT,
+                   { 0.12f, h - 0.10f, 0.12f }, DARK_WOOD);
+    }
+    drawCuboid({ 0, 0.10f, d * 0.5f + verandaD }, NO_ROT,
+               { 0.10f, 0.18f, 0.10f }, DARK_WOOD);
 
+    // ── Gable roof with tile texture ──
+    float roofW = w + 1.4f, roofD = d + 1.4f + verandaD;
+    // Eave slab
+    drawCuboid({ 0, h, verandaD * 0.3f }, NO_ROT, { roofW, 0.06f, roofD }, DARK_GRAY);
+    // Tiled roof
+    drawTexturedWedge({ 0, h + 0.06f, verandaD * 0.3f }, NO_ROT,
+                      { roofW, 1.4f, roofD },
+                      getTexID(TEX_ROOF_TILE), WHITE, 1.2f);
     // Ridge cap
-    drawCuboid({ 0, h + 1.42f, 0 }, NO_ROT, { w + 1.0f, 0.10f, 0.18f }, DARK_WOOD);
+    drawCuboid({ 0, h + 1.40f, verandaD * 0.3f }, NO_ROT,
+               { roofW + 0.2f, 0.10f, 0.18f }, DARK_WOOD);
 
-    // Garden stone lantern near entrance (larger, brighter)
-    drawStoneLantern({ w * 0.3f, 0, d * 0.5f + 0.8f }, NO_ROT, { 0.7f, 0.7f, 0.7f });
+    // ── Exposed roof rafters under the eaves ──
+    {
+        int numRafters = 8;
+        float rafterSpacing = roofW / (numRafters + 1);
+        float eaveOverhang = (roofD - d) * 0.5f;
+        // Front eave rafters
+        for (int i = 1; i <= numRafters; i++) {
+            float rx = -roofW * 0.5f + i * rafterSpacing;
+            drawCuboid({ rx, h - 0.02f, d * 0.5f + verandaD * 0.3f + eaveOverhang * 0.5f },
+                       NO_ROT, { 0.05f, 0.05f, eaveOverhang + 0.2f }, WOOD);
+        }
+        // Back eave rafters
+        for (int i = 1; i <= numRafters; i++) {
+            float rx = -roofW * 0.5f + i * rafterSpacing;
+            drawCuboid({ rx, h - 0.02f, -d * 0.5f - eaveOverhang * 0.3f },
+                       NO_ROT, { 0.05f, 0.05f, eaveOverhang + 0.2f }, WOOD);
+        }
+    }
 
-    // ── Wall-mounted entrance lantern (warm glow at night) ──
-    // Lantern body above the door
-    if (!isDayTime)
-        setEmission(0.90f, 0.60f, 0.15f);
-    else
-        setEmission(0.08f, 0.06f, 0.02f);
-    drawSphere({ 0, 2.3f, d * 0.5f + 0.14f }, NO_ROT,
-               { 0.10f, 0.14f, 0.10f }, { 0.95f, 0.70f, 0.20f });
-    clearEmission();
-    // Lantern bracket
-    drawCuboid({ 0, 2.5f, d * 0.5f + 0.10f }, NO_ROT,
-               { 0.04f, 0.06f, 0.08f }, DARK_WOOD);
+    // ── Red paper lanterns on front wall ──
+    {
+        float lanternY = 2.2f;
+        float lanternZ = d * 0.5f + 0.16f;
+        float positions[] = { -1.4f, -0.5f, 0.5f, 1.4f };
+        for (int i = 0; i < 4; i++) {
+            // Bracket
+            drawCuboid({ positions[i], lanternY + 0.18f, lanternZ - 0.04f }, NO_ROT,
+                       { 0.03f, 0.04f, 0.08f }, DARK_WOOD);
+            // Lantern body (oval)
+            if (!isDayTime)
+                setEmission(0.85f, 0.20f, 0.08f);
+            else
+                setEmission(0.06f, 0.01f, 0.01f);
+            drawSphere({ positions[i], lanternY, lanternZ }, NO_ROT,
+                       { 0.12f, 0.16f, 0.12f }, LANTERN_RED);
+            clearEmission();
+        }
+    }
 
-    // ── Night glow effects from the house ──
+    // ── Night glow effects ──
     if (!isDayTime) {
-        // Glow halo around entrance lantern
-        glPushMatrix();
-        glTranslatef(0, 2.3f, d * 0.5f + 0.14f);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         glDepthMask(GL_FALSE);
         setLighting(false);
-        glColor4f(0.95f, 0.65f, 0.18f, 0.14f);
-        gluSphere(quad, 0.6f, 12, 12);
-        glColor4f(0.90f, 0.55f, 0.12f, 0.05f);
-        gluSphere(quad, 1.5f, 12, 12);
-        glPopMatrix();
 
-        // Window light spill — warm glow pool on ground from windows
+        // Window light spill on ground
         glBegin(GL_TRIANGLE_FAN);
         glNormal3f(0, 1, 0);
         glColor4f(0.90f, 0.65f, 0.20f, 0.15f);
@@ -1049,6 +1105,146 @@ void drawJapaneseHouse(Vec3 pos, Vec3 rot, Vec3 scale)
         }
         glEnd();
 
+        glDepthMask(GL_TRUE);
+        setLighting(true);
+        glDisable(GL_BLEND);
+    }
+
+    glPopMatrix();
+}
+
+// ─── Japanese House Variant 2 ───────────────────────────────────────────────
+// Wider, lower house with large sliding doors, side porch, raised floor
+void drawJapaneseHouse2(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+
+    float w = 6.0f, d = 3.5f, h = 2.4f;
+    float floorH = 0.35f;  // raised floor height
+
+    // ── Foundation posts ──
+    for (int i = 0; i < 3; i++) {
+        float fx = -w * 0.4f + i * w * 0.4f;
+        for (int sz = -1; sz <= 1; sz += 2) {
+            drawCuboid({ fx, 0, sz * d * 0.45f }, NO_ROT,
+                       { 0.14f, floorH, 0.14f }, DARK_WOOD);
+            // Stone base
+            drawCuboid({ fx, 0, sz * d * 0.45f }, NO_ROT,
+                       { 0.22f, 0.06f, 0.22f }, WHITE);
+        }
+    }
+
+    // ── Raised floor platform ──
+    drawTexturedBox({ 0, floorH, 0 }, NO_ROT, { w + 0.2f, 0.08f, d + 0.2f },
+                    getTexID(TEX_WOOD), LIGHT_WOOD, 1.5f);
+
+    // ── Walls ──
+    GLuint wallTex = getTexID(TEX_WALL);
+    float wallBase = floorH + 0.08f;
+    float wallH = h - wallBase;
+    // Back wall
+    drawTexturedBox({ 0, wallBase, -d * 0.5f }, NO_ROT, { w, wallH, 0.10f }, wallTex, WHITE, 2.0f);
+    // Left wall (solid wood panel)
+    drawTexturedBox({ -w * 0.5f, wallBase, 0 }, NO_ROT, { 0.10f, wallH, d },
+                    getTexID(TEX_DARK_WOOD), WOOD, 1.5f);
+    // Right wall (partial - has side entrance)
+    drawTexturedBox({ w * 0.5f, wallBase, -d * 0.25f }, NO_ROT, { 0.10f, wallH, d * 0.5f },
+                    getTexID(TEX_DARK_WOOD), WOOD, 1.5f);
+
+    // ── Front: large sliding glass/shoji panels ──
+    float panelW = w / 4.0f;
+    for (int i = 0; i < 4; i++) {
+        float px = -w * 0.5f + panelW * 0.5f + i * panelW;
+        // Shoji window panel
+        drawShojiWindow({ px, wallBase + wallH * 0.5f, d * 0.5f + 0.06f },
+                        NO_ROT, ONE, panelW - 0.08f, wallH - 0.1f);
+        // Vertical divider post
+        if (i > 0) {
+            drawCuboid({ px - panelW * 0.5f, wallBase, d * 0.5f }, NO_ROT,
+                       { 0.08f, wallH, 0.08f }, DARK_WOOD);
+        }
+    }
+
+    // ── Wood frame — corner posts ──
+    for (int sx = -1; sx <= 1; sx += 2)
+        for (int sz = -1; sz <= 1; sz += 2)
+            drawCuboid({ sx * w * 0.5f, wallBase, sz * d * 0.5f }, NO_ROT,
+                       { 0.14f, wallH, 0.14f }, DARK_WOOD);
+
+    // ── Top beams ──
+    drawCuboid({ 0, h - 0.05f,  d * 0.52f }, NO_ROT, { w + 0.2f, 0.08f, 0.07f }, DARK_WOOD);
+    drawCuboid({ 0, h - 0.05f, -d * 0.52f }, NO_ROT, { w + 0.2f, 0.08f, 0.07f }, DARK_WOOD);
+    drawCuboid({  w * 0.52f, h - 0.05f, 0 }, NO_ROT, { 0.07f, 0.08f, d + 0.2f }, DARK_WOOD);
+    drawCuboid({ -w * 0.52f, h - 0.05f, 0 }, NO_ROT, { 0.07f, 0.08f, d + 0.2f }, DARK_WOOD);
+
+    // ── Side porch on right ──
+    float porchW = 1.2f, porchD = d;
+    float porchX = w * 0.5f + porchW * 0.5f;
+    // Porch floor
+    drawTexturedBox({ porchX, floorH, 0 }, NO_ROT, { porchW, 0.06f, porchD },
+                    getTexID(TEX_WOOD), LIGHT_WOOD, 1.0f);
+    // Porch corner posts
+    drawCuboid({ w * 0.5f + porchW, wallBase, d * 0.5f }, NO_ROT,
+               { 0.10f, wallH, 0.10f }, DARK_WOOD);
+    drawCuboid({ w * 0.5f + porchW, wallBase, -d * 0.5f }, NO_ROT,
+               { 0.10f, wallH, 0.10f }, DARK_WOOD);
+    // Porch foundation stones
+    drawCuboid({ w * 0.5f + porchW, 0, d * 0.45f }, NO_ROT, { 0.20f, 0.06f, 0.20f }, WHITE);
+    drawCuboid({ w * 0.5f + porchW, 0, -d * 0.45f }, NO_ROT, { 0.20f, 0.06f, 0.20f }, WHITE);
+
+    // ── Roof (wider to cover porch) ──
+    float roofW = w + porchW + 1.2f, roofD = d + 1.2f;
+    float roofOffX = porchW * 0.3f;
+    drawCuboid({ roofOffX, h, 0 }, NO_ROT, { roofW, 0.05f, roofD }, DARK_GRAY);
+    drawTexturedWedge({ roofOffX, h + 0.05f, 0 }, NO_ROT, { roofW, 1.1f, roofD },
+                      getTexID(TEX_ROOF_TILE), WHITE, 1.2f);
+    drawCuboid({ roofOffX, h + 1.1f, 0 }, NO_ROT, { roofW + 0.2f, 0.08f, 0.16f }, DARK_WOOD);
+
+    // ── Exposed rafters under front eave ──
+    {
+        int numRafters = 10;
+        float eaveOver = (roofD - d) * 0.5f;
+        for (int i = 1; i <= numRafters; i++) {
+            float rx = -roofW * 0.5f + roofOffX + i * (roofW / (numRafters + 1));
+            drawCuboid({ rx, h - 0.01f, d * 0.5f + eaveOver * 0.4f }, NO_ROT,
+                       { 0.04f, 0.04f, eaveOver + 0.1f }, WOOD);
+        }
+    }
+
+    // ── Red lanterns (2 on front) ──
+    {
+        float lanternZ = d * 0.5f + 0.14f;
+        float lx[] = { -w * 0.25f, w * 0.25f };
+        for (int i = 0; i < 2; i++) {
+            drawCuboid({ lx[i], h - 0.12f, lanternZ }, NO_ROT,
+                       { 0.03f, 0.10f, 0.06f }, DARK_WOOD);
+            if (!isDayTime)
+                setEmission(0.85f, 0.20f, 0.08f);
+            else
+                setEmission(0.06f, 0.01f, 0.01f);
+            drawSphere({ lx[i], h - 0.30f, lanternZ }, NO_ROT,
+                       { 0.12f, 0.16f, 0.12f }, { 0.85f, 0.15f, 0.10f });
+            clearEmission();
+        }
+    }
+
+    // ── Night glow ──
+    if (!isDayTime) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+        setLighting(false);
+        glBegin(GL_TRIANGLE_FAN);
+        glNormal3f(0, 1, 0);
+        glColor4f(0.90f, 0.65f, 0.20f, 0.12f);
+        glVertex3f(0, 0.03f, d * 0.5f + 1.0f);
+        for (int i = 0; i <= 24; i++) {
+            float a = (float)i * 2.0f * PI / 24;
+            glColor4f(0.90f, 0.60f, 0.15f, 0.0f);
+            glVertex3f(2.5f * cosf(a), 0.03f, d * 0.5f + 1.0f + 2.5f * sinf(a));
+        }
+        glEnd();
         glDepthMask(GL_TRUE);
         setLighting(true);
         glDisable(GL_BLEND);
@@ -1091,45 +1287,121 @@ void drawStoneLantern(Vec3 pos, Vec3 rot, Vec3 scale)
 }
 
 // ─── Wooden Bridge ──────────────────────────────────────────────────────────
-// Small arched wooden bridge over water
+// Japanese arched bridge with red posts, dark railings, string lights
 void drawBridge(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
-    const Color BRIDGE_WOOD = { 0.45f, 0.28f, 0.15f };
-    // Spans the whole lake (lake z-radius is 8 units, drawn at 1.0 scale)
+    const Color BRIDGE_WOOD = { 0.35f, 0.22f, 0.13f };
+    const Color POST_RED    = { 0.82f, 0.12f, 0.10f };
+    const Color RAIL_DARK   = { 0.12f, 0.10f, 0.10f };
+    const Color EDGE_METAL  = { 0.70f, 0.72f, 0.75f };
     const float bLen = 17.0f, bW = 1.6f, arch = 0.6f;
     const int   NP = 34;     // deck planks
-    const int   NR = 8;      // railing segments per side
+    const int   NR = 8;      // railing post count per side
 
-    // Arched deck planks
+    // ── Metallic edge trim along bridge underside ──
+    setMaterialConductive(EDGE_METAL, 80.0f);
+    for (int i = 0; i < NP; i++) {
+        float z = (i + 0.5f) / NP * bLen - bLen * 0.5f;
+        float archY = arch * cosf(z * PI / bLen);
+        for (int sx = -1; sx <= 1; sx += 2) {
+            drawCuboid({ sx * bW * 0.52f, archY - 0.04f, z }, NO_ROT,
+                       { 0.06f, 0.08f, bLen / NP + 0.01f }, EDGE_METAL);
+        }
+    }
+    resetMaterialGloss();
+
+    // ── Arched deck planks (dark wood) ──
+    setMaterialPBR(Materials::WoodMatte, BRIDGE_WOOD);
     for (int i = 0; i < NP; i++) {
         float z = (i + 0.5f) / NP * bLen - bLen * 0.5f;
         float archY = arch * cosf(z * PI / bLen);
         drawCuboid({ 0, archY, z }, NO_ROT, { bW, 0.08f, bLen / NP + 0.01f }, BRIDGE_WOOD);
     }
+    resetMaterialGloss();
 
-    // Railings
+    // ── Red posts with spherical finials ──
     for (int sx = -1; sx <= 1; sx += 2) {
         float rx = sx * bW * 0.5f;
-        // Posts
         for (int i = 0; i <= NR; i++) {
             float z = i * (bLen / NR) - bLen * 0.5f;
             float archY = arch * cosf(z * PI / bLen);
-            drawCuboid({ rx, archY, z }, NO_ROT, { 0.08f, 0.7f, 0.08f }, DARK_WOOD);
+
+            // Corner posts are taller
+            bool isCorner = (i == 0 || i == NR);
+            float postH = isCorner ? 1.4f : 0.8f;
+
+            // Red post
+            drawCuboid({ rx, archY, z }, NO_ROT, { 0.09f, postH, 0.09f }, POST_RED);
+
+            // Red sphere finial on top
+            drawSphere({ rx, archY + postH + 0.06f, z }, NO_ROT,
+                       { 0.10f, 0.10f, 0.10f }, POST_RED);
         }
-        // Top rail (curved approximation)
-        for (int i = 0; i < NR; i++) {
-            float z0 = i * (bLen / NR) - bLen * 0.5f;
-            float z1 = (i + 1) * (bLen / NR) - bLen * 0.5f;
-            float y0 = arch * cosf(z0 * PI / bLen) + 0.65f;
-            float y1 = arch * cosf(z1 * PI / bLen) + 0.65f;
-            float zc = (z0 + z1) * 0.5f;
-            float len = sqrtf((z1 - z0) * (z1 - z0) + (y1 - y0) * (y1 - y0));
-            float pitch = atanf((y1 - y0) / (z1 - z0)) * 180.0f / PI;
-            drawCuboid({ rx, (y0 + y1) * 0.5f - 0.03f, zc }, { -pitch, 0, 0 },
-                       { 0.06f, 0.06f, len + 0.02f }, DARK_WOOD);
+
+        // ── Dark horizontal railings (2 rails) ──
+        for (int rail = 0; rail < 2; rail++) {
+            float railOff = (rail == 0) ? 0.35f : 0.65f;
+            for (int i = 0; i < NR; i++) {
+                float z0 = i * (bLen / NR) - bLen * 0.5f;
+                float z1 = (i + 1) * (bLen / NR) - bLen * 0.5f;
+                float y0 = arch * cosf(z0 * PI / bLen) + railOff;
+                float y1 = arch * cosf(z1 * PI / bLen) + railOff;
+                float zc = (z0 + z1) * 0.5f;
+                float len = sqrtf((z1 - z0) * (z1 - z0) + (y1 - y0) * (y1 - y0));
+                float pitch = atanf((y1 - y0) / (z1 - z0)) * 180.0f / PI;
+                drawCuboid({ rx, (y0 + y1) * 0.5f - 0.025f, zc }, { -pitch, 0, 0 },
+                           { 0.05f, 0.05f, len + 0.02f }, RAIL_DARK);
+            }
+        }
+    }
+
+    // ── String lights between tall corner posts ──
+    {
+        // The 4 corner post tops
+        float zFront = -bLen * 0.5f;
+        float zBack  =  bLen * 0.5f;
+        float yFront = arch * cosf(zFront * PI / bLen) + 1.4f + 0.06f;
+        float yBack  = arch * cosf(zBack  * PI / bLen) + 1.4f + 0.06f;
+
+        // String lights on each side
+        for (int sx = -1; sx <= 1; sx += 2) {
+            float rx = sx * bW * 0.5f;
+            int numLights = 10;
+            for (int i = 0; i <= numLights; i++) {
+                float t = (float)i / numLights;
+                float z = zFront + t * (zBack - zFront);
+                float yLine = yFront + t * (yBack - yFront);
+                // Catenary sag
+                float sag = -0.4f * sinf(t * PI);
+                float ly = yLine + sag;
+
+                // Thin wire
+                if (i < numLights) {
+                    float zNext = zFront + (t + 1.0f / numLights) * (zBack - zFront);
+                    float yNext = yFront + (t + 1.0f / numLights) * (yBack - yFront)
+                                  - 0.4f * sinf((t + 1.0f / numLights) * PI);
+                    float zc = (z + zNext) * 0.5f;
+                    float yc = (ly + yNext) * 0.5f;
+                    float segLen = sqrtf((zNext - z) * (zNext - z) + (yNext - ly) * (yNext - ly));
+                    float pitch = atanf((yNext - ly) / (zNext - z + 0.001f)) * 180.0f / PI;
+                    drawCuboid({ rx, yc - 0.005f, zc }, { -pitch, 0, 0 },
+                               { 0.012f, 0.012f, segLen }, DARK_GRAY);
+                }
+
+                // Light bulb
+                if (i > 0 && i < numLights) {
+                    if (!isDayTime)
+                        setEmission(1.0f, 0.85f, 0.5f);
+                    else
+                        setEmission(0.05f, 0.04f, 0.02f);
+                    drawSphere({ rx, ly - 0.08f, z }, NO_ROT,
+                               { 0.055f, 0.065f, 0.055f }, WHITE);
+                    clearEmission();
+                }
+            }
         }
     }
 
@@ -1174,11 +1446,23 @@ void drawLake(Vec3 pos, Vec3 rot, Vec3 scale)
         glDepthMask(GL_FALSE);
     }
 
-    glColor4f(waterCol.r, waterCol.g, waterCol.b, 0.88f);
+    // Textured water surface with wave pattern and gradient
+    GLuint waterTex = getTexID(TEX_WATER);
+    if (waterTex) {
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, waterTex);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        shaderSetTexture(true);
+    }
+
+    glColor4f(waterCol.r * 1.4f, waterCol.g * 1.3f, waterCol.b * 1.1f, 0.88f);
     glBegin(GL_TRIANGLE_FAN);
     glNormal3f(0, 1, 0);
     // Center vertex
     float cy = 0.02f + 0.02f * sinf(waveT);
+    // Animated UV scroll for moving water effect
+    float uvOff = waveT * 0.04f;
+    glTexCoord2f(0.5f + uvOff, 0.5f + uvOff * 0.3f);
     glVertex3f(0, cy, 0);
     // Outer ring
     int segs = 48;
@@ -1187,9 +1471,17 @@ void drawLake(Vec3 pos, Vec3 rot, Vec3 scale)
         float rx = lakeR * cosf(a);
         float rz = lakeR * sinf(a);
         float wy = 0.02f + 0.015f * sinf(waveT + a * 3.0f);
+        float tu = 0.5f + 0.5f * cosf(a) + uvOff;
+        float tv = 0.5f + 0.5f * sinf(a) + uvOff * 0.3f;
+        glTexCoord2f(tu, tv);
         glVertex3f(rx, wy, rz);
     }
     glEnd();
+
+    if (waterTex) {
+        shaderSetTexture(false);
+        glDisable(GL_TEXTURE_2D);
+    }
 
     // Specular highlight shimmer layer
     glColor4f(0.70f, 0.80f, 0.95f, 0.12f);

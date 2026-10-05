@@ -24,6 +24,7 @@ void drawJapanesePineTree(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawBambooGrove(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawMapleTree(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawJapaneseHouse(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
+void drawJapaneseHouse2(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawLake(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawGrassPatch(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawJungle(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
