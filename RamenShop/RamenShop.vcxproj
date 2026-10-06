@@ -101,6 +101,7 @@ exit /b 0</Command>
     <ClCompile Include="lighting.cpp" />
     <ClCompile Include="shader.cpp" />
     <ClCompile Include="raytracer.cpp" />
+    <ClCompile Include="game.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="shapes.h" />
@@ -115,6 +116,7 @@ exit /b 0</Command>
     <ClInclude Include="lighting.h" />
     <ClInclude Include="shader.h" />
     <ClInclude Include="raytracer.h" />
+    <ClInclude Include="game.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="CODE_CHANGES_DETAIL.md" />

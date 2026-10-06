@@ -66,11 +66,21 @@
 #include "texture.h"
 #include "shader.h"
 #include "raytracer.h"
+#include "game.h"
 #include <cstdio>
 
 void display()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    // Wider field of view in game mode so the kitchen fits on screen at arm's length
+    {
+        int vw = glutGet(GLUT_WINDOW_WIDTH), vh = glutGet(GLUT_WINDOW_HEIGHT);
+        if (vh < 1) vh = 1;
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        gluPerspective(gameActive ? 62.0 : 45.0, (double)vw / vh, 0.3, 200.0);
+    }
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
@@ -85,6 +95,7 @@ void display()
         int w = glutGet(GLUT_WINDOW_WIDTH);
         int h = glutGet(GLUT_WINDOW_HEIGHT);
         renderRayTracedFrame(w, h);
+        drawGameHUD(w, h);
         glutSwapBuffers();
         return;
     }
@@ -94,15 +105,22 @@ void display()
 
     drawSky();
 
-    // Enable Phong shader for lit scene geometry
-    enablePhongShader();
-    updatePhongUniforms();
+    // Enable Phong shader for lit scene geometry (G toggles Gouraud ↔ Phong)
+    if (usePhongShading) {
+        enablePhongShader();
+        updatePhongUniforms();
+    }
 
     drawGround();
     drawExterior();
     drawInterior();
 
-    disablePhongShader();
+    if (usePhongShading) {
+        disablePhongShader();
+    }
+
+    // 2D game overlay (order board, prompts, results) - drawn last
+    drawGameHUD(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
 
     glutSwapBuffers();
 }
@@ -152,6 +170,9 @@ void updateTimer(int value)
         upperDoorOffset -= 0.025f;
         if (upperDoorOffset < targetUpper) upperDoorOffset = targetUpper;
     }
+
+    // Game logic (state machine, cooking timers, customer) - uses real elapsed time
+    updateGame();
 
     // Process continuous WASD movement when in FPS mode
     updateCameraMovement();
@@ -204,6 +225,7 @@ int main(int argc, char** argv)
     glutCreateWindow("3D Ramen Shop");
 
     init();
+    initGame();
     updateWindowTitle();
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);

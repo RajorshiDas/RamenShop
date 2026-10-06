@@ -2,6 +2,7 @@
 #include "lighting.h"
 #include "objects.h"
 #include "shader.h"
+#include "game.h"
 
 // ─── Scene feature flags ────────────────────────────────────────────────────
 bool showRoof   = true;
@@ -116,28 +117,84 @@ void drawSky()
     // Low-elevation stars (Y ≈ 2-10) are visible in the default view;
     // higher ones appear when the camera tilts upward.
     if (!isDayTime) {
-        glPointSize(2.5f);
-        glBegin(GL_POINTS);
-        const float stars[][3] = {
+        // ── Bright stars (larger points) ──────────────────────────────
+        const float brightStars[][3] = {
             // low-elevation band (visible by default)
             {  70,  4, -50 }, { -60,  3,  55 }, {  40,  6, -75 },
             { -80,  5,  30 }, {  55,  7, -60 }, { -45,  4,  70 },
             {  85,  3, -20 }, { -30,  8,  80 }, {  20,  5, -85 },
             { -70,  6,  45 }, {  65,  9, -40 }, { -50,  3,  65 },
-            // mid-elevation (visible when looking up a bit)
+            {  90,  5, -45 }, { -75,  7,  60 }, {  35,  4, -90 },
+            { -85,  6,  15 }, {  60,  8, -35 }, { -40,  3,  85 },
+            {  75,  5, -70 }, { -55,  9,  50 }, {  45,  3, -80 },
+            { -90,  4,  25 }, {  80,  6, -55 }, { -65,  5,  75 },
+            // mid-elevation
             {  50, 18, -60 }, { -40, 22,  55 }, {  30, 20, -70 },
             { -65, 15,  35 }, {  45, 25, -50 }, { -55, 19,  40 },
-            // high-elevation (visible in FPS mode looking up)
+            {  60, 16, -45 }, { -35, 24,  65 }, {  25, 21, -55 },
+            { -70, 17,  25 }, {  55, 23, -35 }, { -50, 14,  50 },
+            {  40, 26, -65 }, { -60, 20,  30 }, {  35, 18, -40 },
+            { -45, 22,  60 }, {  70, 15, -30 }, { -30, 25,  45 },
+            // high-elevation
             {  20, 55, -30 }, { -25, 50,  20 }, {  10, 60, -15 },
             { -15, 45,  35 }, {  30, 48, -25 }, { -35, 52,  10 },
+            {  15, 58, -20 }, { -20, 42,  30 }, {  25, 62, -10 },
+            { -30, 47,  15 }, {  35, 53, -35 }, { -10, 56,  25 },
+            {   5, 65, -5  }, { -40, 44,  20 }, {  40, 50, -15 },
         };
-        int n = sizeof(stars) / sizeof(stars[0]);
-        for (int i = 0; i < n; i++) {
+        int nBright = sizeof(brightStars) / sizeof(brightStars[0]);
+
+        glPointSize(3.0f);
+        glBegin(GL_POINTS);
+        for (int i = 0; i < nBright; i++) {
             float tw = 0.7f + 0.3f * sinf(animTime * (2.0f + i * 0.3f) + i * 1.7f);
             glColor3f(tw, tw, tw * 0.95f);
-            glVertex3f(stars[i][0], stars[i][1], stars[i][2]);
+            glVertex3f(brightStars[i][0], brightStars[i][1], brightStars[i][2]);
         }
         glEnd();
+
+        // ── Dim stars (smaller points, fills the sky) ─────────────────
+        const float dimStars[][3] = {
+            // low-elevation
+            {  78,  3, -42 }, { -52,  5,  68 }, {  33,  7, -82 },
+            { -88,  4,  22 }, {  48,  6, -68 }, { -38,  3,  78 },
+            {  92,  5, -15 }, { -22,  7,  88 }, {  15,  4, -92 },
+            { -68,  8,  38 }, {  58,  3, -52 }, { -42,  6,  72 },
+            {  82,  4, -28 }, { -78,  5,  42 }, {  28,  7, -78 },
+            { -92,  3,  18 }, {  72,  6, -62 }, { -48,  4,  82 },
+            {  62,  5, -48 }, { -82,  7,  32 }, {  42,  3, -88 },
+            { -58,  6,  58 }, {  88,  4, -38 }, { -32,  5,  92 },
+            {  52,  8, -72 }, { -72,  3,  48 }, {  38,  5, -58 },
+            { -95,  4,  10 }, {  95,  3, -10 }, { -28,  6,  78 },
+            // mid-elevation
+            {  55, 12, -52 }, { -48, 16,  62 }, {  22, 14, -78 },
+            { -72, 13,  28 }, {  38, 19, -42 }, { -58, 11,  48 },
+            {  65, 17, -22 }, { -32, 21,  72 }, {  18, 13, -65 },
+            { -62, 18,  38 }, {  48, 22, -32 }, { -42, 12,  58 },
+            {  72, 14, -18 }, { -28, 23,  48 }, {  32, 16, -58 },
+            { -52, 19,  22 }, {  58, 11, -42 }, { -38, 24,  32 },
+            {  42, 20, -28 }, { -68, 15,  18 }, {  28, 17, -48 },
+            { -45, 13,  42 }, {  52, 21, -55 }, { -35, 16,  68 },
+            // high-elevation
+            {  18, 40, -28 }, { -22, 48,  18 }, {   8, 55, -12 },
+            { -12, 42,  28 }, {  28, 52, -18 }, { -32, 46,   8 },
+            {  12, 58,  -8 }, { -18, 50,  22 }, {  22, 44, -32 },
+            { -28, 54,  12 }, {   5, 62,  -5 }, { -35, 40,  18 },
+            {  32, 46, -12 }, {  -8, 58,  15 }, {  15, 52, -22 },
+            { -25, 43,  28 }, {  38, 48,  -8 }, { -42, 51,   5 },
+            {   3, 64, -10 }, { -15, 57,  32 }, {  25, 60, -18 },
+        };
+        int nDim = sizeof(dimStars) / sizeof(dimStars[0]);
+
+        glPointSize(1.5f);
+        glBegin(GL_POINTS);
+        for (int i = 0; i < nDim; i++) {
+            float tw = 0.5f + 0.25f * sinf(animTime * (1.5f + i * 0.2f) + i * 2.3f);
+            glColor3f(tw * 0.9f, tw * 0.9f, tw);
+            glVertex3f(dimStars[i][0], dimStars[i][1], dimStars[i][2]);
+        }
+        glEnd();
+
         glPointSize(1.0f);
     }
 
@@ -573,8 +630,7 @@ void drawExterior()
     drawEntranceDoor(doorAngle);
 
     // Clear glass windows on side walls (left and right) — walls have matching openings
-    drawClearGlassWindow({ -4.90f, 2.2f, 0.5f }, { 0, -90, 0 }, ONE, 2.40f, 2.00f);   // left wall center
-    drawClearGlassWindow({  4.90f, 2.2f, 0.5f }, { 0,  90, 0 }, ONE, 2.40f, 2.00f);   // right wall center
+    // (glass panes themselves are drawn in the transparent pass at the end of drawInterior)
 
     // Side wall window frames (wooden mullions around clear glass)
     for (int sx = -1; sx <= 1; sx += 2) {
@@ -594,9 +650,6 @@ void drawExterior()
         float wW = 1.2f, wH = 1.0f;
         float hW = wW * 0.5f, hH = wH * 0.5f;
         float ft = 0.08f;
-
-        // Glass pane
-        drawClearGlassWindow({ wx, wy, wz }, NO_ROT, ONE, wW, wH);
 
         // Frame: top/bottom rails and left/right stiles
         drawCube({ wx, wy + hH + ft * 0.5f, wz }, NO_ROT,
@@ -1152,6 +1205,60 @@ static void drawSecondFloor()
     }
 }
 
+// ─── Transparent pass ───────────────────────────────────────────────────────
+// Glass and steam are alpha-blended and do not write depth, so they MUST be drawn
+// after all opaque geometry (cabinets, walls, kitchen).  Drawn earlier, the opaque
+// scenery behind them is painted over the glass and cuts it off.  Order is
+// roughly far to near.
+static void drawTransparentPass()
+{
+    float FY = FLOOR_Y;
+    float counterTop = FY + 1.06f;
+
+    // Window panes (back wall x2, side walls x2)
+    for (int sx = -1; sx <= 1; sx += 2)
+        drawClearGlassWindow({ sx * 3.5f, 1.8f, -3.85f }, NO_ROT, ONE, 1.2f, 1.0f);
+    drawClearGlassWindow({ -4.90f, 2.2f, 0.5f }, { 0, -90, 0 }, ONE, 2.40f, 2.00f);
+    drawClearGlassWindow({  4.90f, 2.2f, 0.5f }, { 0,  90, 0 }, ONE, 2.40f, 2.00f);
+
+    // Steam above the cooking pots (far)
+    float kitchenTop = FY + 0.94f;
+    if (showSteam) {
+        drawSteam({ -0.55f, kitchenTop + 0.65f, -3.2f }, 0.40f * gameSteamScale(0), 0.4f);   // large pot, left burner
+        drawSteam({  0.55f, kitchenTop + 0.65f, -3.2f }, 0.38f * gameSteamScale(1), 1.8f);   // large pot, right burner
+    }
+
+    // Clear glass pendant lamps above the dining counter
+    drawPendantGlassLamp({ -1.2f, 2.85f, -0.2f }, NO_ROT, ONE, lightPoint);
+    drawPendantGlassLamp({  1.2f, 2.85f, -0.2f }, NO_ROT, ONE, lightPoint);
+
+    // Clear glass condiment jars, water pitcher and tumblers on the counter
+    drawClearGlassJar({ 1.65f, counterTop + 0.004f, -0.36f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.85f, 0.20f, 0.10f }); // shichimi chili
+    drawClearGlassJar({ 1.90f, counterTop + 0.004f, -0.36f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.95f, 0.90f, 0.70f }); // pickled garlic
+    drawClearGlassJar({ 2.15f, counterTop + 0.004f, -0.36f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.20f, 0.18f, 0.15f }); // sesame seeds
+    drawClearGlassPitcher({ 0.35f, counterTop + 0.004f, -0.36f }, NO_ROT, { 0.30f, 0.30f, 0.30f });
+    drawClearGlassTumbler({ -1.85f, counterTop + 0.004f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
+    drawClearGlassTumbler({ -0.35f, counterTop + 0.004f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
+    drawClearGlassTumbler({  1.15f, counterTop + 0.004f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
+    drawClearGlassTumbler({  2.65f, counterTop + 0.004f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
+
+    // Steam above the ramen bowls (nearest; first bowl follows its OBJ_BOWL transform)
+    if (showSteam) {
+        for (int i = 0; i < 4; i++) {
+            float x = -2.2f + i * 1.5f;
+            if (i == 0) {
+                glPushMatrix();
+                glTranslatef(x, counterTop, -0.3f);
+                applyObjDelta(OBJ_BOWL);
+                drawSteam({ 0, 0.09f, 0 }, 0.22f, 0.0f);
+                glPopMatrix();
+            } else {
+                drawSteam({ x, counterTop + 0.09f, -0.3f }, 0.22f, (float)i * 1.35f);
+            }
+        }
+    }
+}
+
 // ─── Interior ───────────────────────────────────────────────────────────────
 void drawInterior()
 {
@@ -1183,13 +1290,11 @@ void drawInterior()
             applyObjDelta(OBJ_BOWL);
             drawRamenBowl({ 0, 0, 0 }, NO_ROT, { 0.24f, 0.24f, 0.24f });
             drawChopsticks({ 0.18f, 0.005f, -0.12f }, { 0, 25, 0 }, { 0.24f, 0.24f, 0.24f });
-            if (showSteam) drawSteam({ 0, 0.09f, 0 }, 0.22f, 0.0f);
             glPopMatrix();
         } else {
             drawRamenBowl({ x, counterTop, -0.3f }, NO_ROT, { 0.24f, 0.24f, 0.24f });
             drawChopsticks({ x + 0.18f, counterTop + 0.005f, -0.12f },
                            { 0, 25, 0 }, { 0.24f, 0.24f, 0.24f });
-            if (showSteam) drawSteam({ x, counterTop + 0.09f, -0.3f }, 0.22f, (float)i * 1.35f);
         }
     }
 
@@ -1203,26 +1308,8 @@ void drawInterior()
     // Ceiling Rectangular Area Light Luminaire (Softbox) above kitchen and counter
     drawAreaLightFixture({ 0.0f, 3.22f, -1.2f }, NO_ROT, ONE, lightArea);
 
-    // Clear Glass Pendant Lamps hanging above the dining counter
-    drawPendantGlassLamp({ -1.2f, 2.85f, -0.2f }, NO_ROT, ONE, lightPoint);
-    drawPendantGlassLamp({  1.2f, 2.85f, -0.2f }, NO_ROT, ONE, lightPoint);
-
     // Japanese Box Lantern Cluster — andon-style washi-paper lanterns above dining area
     drawJapaneseBoxLanternCluster({ 0.5f, 3.30f, 0.55f }, NO_ROT, ONE, lightPoint);
-
-    // ── Clear Glass Drinking Tumblers at each dining seat (with water & ice) ──
-    drawClearGlassTumbler({ -1.85f, counterTop + 0.06f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
-    drawClearGlassTumbler({ -0.35f, counterTop + 0.06f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
-    drawClearGlassTumbler({  1.15f, counterTop + 0.06f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
-    drawClearGlassTumbler({  2.65f, counterTop + 0.06f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
-
-    // ── Clear Glass Water Pitcher / Carafe with fresh lemon slice ─────────────
-    drawClearGlassPitcher({ 0.35f, counterTop + 0.06f, -0.36f }, NO_ROT, { 0.30f, 0.30f, 0.30f });
-
-    // ── Clear Glass Condiment / Spice Jars ────────────────────────────────────
-    drawClearGlassJar({ 1.65f, counterTop + 0.06f, -0.36f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.85f, 0.20f, 0.10f }); // shichimi chili
-    drawClearGlassJar({ 1.90f, counterTop + 0.06f, -0.36f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.95f, 0.90f, 0.70f }); // pickled garlic
-    drawClearGlassJar({ 2.15f, counterTop + 0.06f, -0.36f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.20f, 0.18f, 0.15f }); // sesame seeds
 
     drawBottle({  2.7f, counterTop, -0.35f }, NO_ROT, { 0.3f, 0.3f, 0.3f }, SOY);
     drawBottle({  2.9f, counterTop, -0.25f }, NO_ROT, { 0.3f, 0.3f, 0.3f }, RED, GOLD);
@@ -1232,15 +1319,6 @@ void drawInterior()
     drawCashRegister({ 3.1f, counterTop, -0.38f }, { 0, 180, 0 });
 
     drawKitchen({ 0, FY, -3.2f });
-
-    // Steam above cooking pots (world coordinates matching centered pot positions)
-    float kitchenTop = FY + 0.94f;
-    if (showSteam) {
-        drawSteam({ -0.85f, kitchenTop + 0.65f, -3.2f }, 0.40f, 0.4f);   // large pot left burner
-        drawSteam({  0.0f,  kitchenTop + 0.65f, -3.2f }, 0.38f, 1.8f);   // large pot center burner
-        drawSteam({  0.85f, kitchenTop + 0.42f, -3.2f }, 0.25f, 3.2f);   // small pot right burner
-        drawSteam({  1.6f,  kitchenTop + 0.38f, -3.2f }, 0.30f, 5.0f);   // noodle station
-    }
 
     drawHangingLantern({ -1.8f, 3.1f, 0.0f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
     drawHangingLantern({  1.8f, 3.1f, 0.0f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
@@ -1286,4 +1364,10 @@ void drawInterior()
 
     // Second floor: tatami room with low table and tea
     drawSecondFloor();
+
+    // Game objects (customer, noodles in the pot, held item) - opaque, so before the glass
+    drawGameWorld();
+
+    // All glass and steam last (see drawTransparentPass)
+    drawTransparentPass();
 }

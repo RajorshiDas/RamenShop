@@ -1,14 +1,26 @@
 #include "furniture.h"
 #include "objects.h"
 
+// Glossy wood: white-ish specular strength + shininess.  Wood needs a strong,
+// fairly tight highlight (0.4-0.8, shininess 60-110) to read as lacquered under
+// the pendant lamps; the PBR "dielectric" presets give only ~0.02 which is
+// effectively invisible.
+static void woodGloss(float strength, float shininess)
+{
+    setMaterialGloss(strength, strength * 0.96f, strength * 0.88f, shininess);
+}
+
 void drawTable(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    woodGloss(0.60f, 90.0f);   // lacquered tabletop
     drawCuboid({ 0, 0.72f, 0 }, NO_ROT, { 1.2f, 0.06f, 0.8f }, LIGHT_WOOD);
+    woodGloss(0.25f, 45.0f);
     for (int sx = -1; sx <= 1; sx += 2)
         for (int sz = -1; sz <= 1; sz += 2)
             drawCuboid({ sx * 0.52f, 0, sz * 0.32f }, NO_ROT, { 0.07f, 0.72f, 0.07f }, DARK_WOOD);
+    resetMaterialGloss();
     glPopMatrix();
 }
 
@@ -16,13 +28,16 @@ void drawChair(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    woodGloss(0.50f, 70.0f);   // seat + backrest
     drawCuboid({ 0, 0.42f, 0 }, NO_ROT, { 0.45f, 0.05f, 0.45f }, WOOD);
+    drawCube({ 0, 0.85f, -0.2f }, NO_ROT, { 0.45f, 0.15f, 0.04f }, WOOD);
+    woodGloss(0.25f, 45.0f);   // legs + back posts
     for (int sx = -1; sx <= 1; sx += 2)
         for (int sz = -1; sz <= 1; sz += 2)
             drawCuboid({ sx * 0.19f, 0, sz * 0.19f }, NO_ROT, { 0.05f, 0.42f, 0.05f }, DARK_WOOD);
     drawCuboid({ -0.19f, 0.47f, -0.2f }, NO_ROT, { 0.05f, 0.5f, 0.05f }, DARK_WOOD);
     drawCuboid({  0.19f, 0.47f, -0.2f }, NO_ROT, { 0.05f, 0.5f, 0.05f }, DARK_WOOD);
-    drawCube({ 0, 0.85f, -0.2f }, NO_ROT, { 0.45f, 0.15f, 0.04f }, WOOD);
+    resetMaterialGloss();
     glPopMatrix();
 }
 
@@ -32,11 +47,11 @@ void drawStool(Vec3 pos, Vec3 rot, Vec3 scale)
     applyTransform(pos, rot, scale);
 
     // Wide base disc
-    setMaterialPBR(Materials::WoodPolished, DARK_WOOD);
+    woodGloss(0.40f, 70.0f);
     drawCylinder({ 0, 0.02f, 0 }, NO_ROT, { 0.36f, 0.04f, 0.36f }, DARK_WOOD);
 
     // Thick central wooden pedestal post
-    setMaterialPBR(Materials::WoodMatte, WOOD);
+    woodGloss(0.30f, 55.0f);
     drawCylinderCustom({ 0, 0.06f, 0 }, NO_ROT, ONE, WOOD, 0.065f, 0.055f, 0.64f);
 
     // Decorative ring at mid-height
@@ -44,7 +59,7 @@ void drawStool(Vec3 pos, Vec3 rot, Vec3 scale)
     drawTorus({ 0, 0.36f, 0 }, NO_ROT, ONE, DARK_WOOD, 0.018f, 0.13f);
 
     // Round wooden seat
-    setMaterialPBR(Materials::WoodPolished, LIGHT_WOOD);
+    woodGloss(0.75f, 100.0f);   // glossy seat top catches the pendant light
     drawCylinder({ 0, 0.70f, 0 }, NO_ROT, { 0.38f, 0.055f, 0.38f }, LIGHT_WOOD);
 
     resetMaterialGloss();
@@ -55,10 +70,13 @@ void drawBench(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    woodGloss(0.55f, 80.0f);
     drawCuboid({ 0, 0.42f, 0 }, NO_ROT, { 1.8f, 0.06f, 0.4f }, WOOD);
+    woodGloss(0.25f, 45.0f);
     drawCuboid({ -0.75f, 0, 0 }, NO_ROT, { 0.06f, 0.42f, 0.36f }, DARK_WOOD);
     drawCuboid({  0.75f, 0, 0 }, NO_ROT, { 0.06f, 0.42f, 0.36f }, DARK_WOOD);
     drawCuboid({ 0, 0.15f, 0 }, NO_ROT, { 1.5f, 0.05f, 0.05f }, DARK_WOOD);
+    resetMaterialGloss();
     glPopMatrix();
 }
 
@@ -68,12 +86,12 @@ void drawCounter(Vec3 pos, Vec3 rot, Vec3 scale)
     applyTransform(pos, rot, scale);
 
     // Main counter body: polished wood with satin finish
-    setMaterialPBR(Materials::WoodPolished, WOOD);
+    woodGloss(0.40f, 60.0f);
     drawTexturedBox({ 0, 0, 0 }, NO_ROT, { 6, 1.0f, 0.6f },
                     getTexID(TEX_WOOD), WHITE, 1.0f);
 
     // Top surface: slightly more glossy, like finished lacquer
-    setMaterialGloss(0.48f, 0.42f, 0.30f, 35.0f);
+    woodGloss(0.85f, 120.0f);   // lacquered counter top: bright, tight highlight
     drawTexturedBox({ 0, 1.0f, 0.05f }, NO_ROT, { 6.2f, 0.06f, 0.8f },
                     getTexID(TEX_WOOD), WHITE, 0.5f);
 
@@ -262,21 +280,14 @@ void drawKitchen(Vec3 pos, Vec3 rot, Vec3 scale)
     // Commercial gas stove top — centered as focal point
     drawStoveTop({ 0, top, 0 });
 
-    // ── Large ramen pot on left burner (selectable as OBJ_KETTLE) ──
+    // ── Two large ramen pots, one per burner (left one selectable as OBJ_KETTLE) ──
     glPushMatrix();
-    glTranslatef(-0.85f, top + 0.07f, 0);
+    glTranslatef(-0.55f, top + 0.07f, 0);
     applyObjDelta(OBJ_KETTLE);
     drawLargeRamenPot({ 0, 0, 0 });
     glPopMatrix();
 
-    // ── Large ramen pot on center burner ──
-    drawLargeRamenPot({ 0, top + 0.07f, 0 });
-
-    // ── Smaller cooking pot on right burner (for tare / sauce) ──
-    drawCookingPot({ 0.85f, top + 0.07f, 0 }, NO_ROT, { 0.7f, 0.7f, 0.7f });
-
-    // ── Noodle boiling station to right of stove ──
-    drawNoodleStation({ 1.6f, top, 0 });
+    drawLargeRamenPot({ 0.55f, top + 0.07f, 0 });
 
     // ═══════════════════════════════════════════════════════════════════════
     //  ZONE 3: SINK STATION  (RIGHT, x ≈ +1.8 to +3.0)
@@ -310,10 +321,8 @@ void drawKitchen(Vec3 pos, Vec3 rot, Vec3 scale)
     // ═══════════════════════════════════════════════════════════════════════
 
     // ── Exhaust hood centered over cooking station ──
-    drawKitchenHood({ 0, 1.30f, 0 });
-
-    // ── Order ticket rail above the pass ──
-    drawTicketRail({ 0.2f, 0.95f, 0.32f });
+    // Hood must clear the tops of the pots (rim ~ y 1.58): bottom lip at 1.95-0.08
+    drawKitchenHood({ 0, 1.95f, 0 });
 
     // ── Wall shelves (flanking the hood) ──
     float shelfY = 1.65f;
@@ -362,11 +371,6 @@ void drawKitchen(Vec3 pos, Vec3 rot, Vec3 scale)
                { 0.30f, 0.20f, 0.10f });   // sesame oil
     drawBottle({ -2.25f, 1.48f, -0.48f }, NO_ROT, { 0.22f, 0.22f, 0.22f },
                { 0.85f, 0.78f, 0.55f });   // mirin
-
-    // ═══════════════════════════════════════════════════════════════════════
-    //  FRONT: SERVING PASS-THROUGH LEDGE
-    // ═══════════════════════════════════════════════════════════════════════
-    drawServingCounter({ 0, top, 0.40f });
 
     glPopMatrix();
 }
@@ -542,8 +546,8 @@ void drawKitchenHood(Vec3 pos, Vec3 rot, Vec3 scale)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Commercial Gas Stove Top ────────────────────────────────────────────────
-// 3-burner commercial gas range with cast-iron grates, gas flame glow, control
-// knobs, and stainless steel splash guards.
+// 2-burner gas range with cast-iron grates, gas flame glow, control knobs and
+// a plain stainless back panel.
 void drawStoveTop(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
@@ -552,23 +556,18 @@ void drawStoveTop(Vec3 pos, Vec3 rot, Vec3 scale)
     // Stainless steel cooking surface
     setMaterialPBRMetallic(Materials::BrushedMetal, STEEL);
     beginSphereReflect();
-    drawCuboid({ 0, 0, 0 }, NO_ROT, { 2.6f, 0.06f, 0.55f }, STEEL);
+    drawCuboid({ 0, 0, 0 }, NO_ROT, { 1.9f, 0.06f, 0.60f }, STEEL);
     endSphereReflect();
 
-    // Drip edges around perimeter
-    setMaterialPBRMetallic(Materials::Polished, STEEL);
-    drawCuboid({ 0, 0.06f,  0.275f }, NO_ROT, { 2.6f, 0.008f, 0.012f }, STEEL);
-    drawCuboid({ 0, 0.06f, -0.275f }, NO_ROT, { 2.6f, 0.008f, 0.012f }, STEEL);
-
-    // 3 detailed gas burners (modular)
-    for (int i = 0; i < 3; i++) {
-        float bx = -0.85f + i * 0.85f;
+    // 2 detailed gas burners (modular)
+    for (int i = 0; i < 2; i++) {
+        float bx = -0.55f + i * 1.10f;
         drawGasBurner({ bx, 0, 0 });
     }
 
     // Control knobs on front face with chrome mounting rings
-    for (int i = 0; i < 3; i++) {
-        float kx = -0.85f + i * 0.85f;
+    for (int i = 0; i < 2; i++) {
+        float kx = -0.55f + i * 1.10f;
         // Chrome mounting ring
         setMaterialConductive(CHROME, 90.0f);
         drawTorus({ kx, 0.03f, 0.28f }, { 90, 0, 0 }, ONE, CHROME, 0.004f, 0.042f);
@@ -581,13 +580,9 @@ void drawStoveTop(Vec3 pos, Vec3 rot, Vec3 scale)
                    { 0.008f, 0.008f, 0.004f }, WHITE);
     }
 
-    // Side splash guards
+    // Plain back panel
     setMaterialPBRMetallic(Materials::BrushedMetal, STEEL);
-    drawCuboid({ -1.32f, 0.06f, 0 }, NO_ROT, { 0.04f, 0.18f, 0.55f }, STEEL);
-    drawCuboid({  1.32f, 0.06f, 0 }, NO_ROT, { 0.04f, 0.18f, 0.55f }, STEEL);
-    // Back splash with drip ledge
-    drawCuboid({ 0, 0.06f, -0.28f }, NO_ROT, { 2.6f, 0.18f, 0.03f }, STEEL);
-    drawCuboid({ 0, 0.24f, -0.30f }, NO_ROT, { 2.6f, 0.015f, 0.04f }, STEEL);
+    drawCuboid({ 0, 0.06f, -0.30f }, NO_ROT, { 1.9f, 0.14f, 0.03f }, STEEL);
 
     resetMaterialGloss();
     glPopMatrix();

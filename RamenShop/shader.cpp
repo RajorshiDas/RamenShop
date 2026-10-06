@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-bool usePhongShading = false;
+bool usePhongShading = true;   // per-pixel highlights on wood/metal/ceramic (G toggles)
 
 // ─── Shader handles ────────────────────────────────────────────────────────
 static GLuint phongProgram = 0;

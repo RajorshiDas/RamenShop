@@ -58,8 +58,8 @@ void drawRamenBowl(Vec3 pos, Vec3 rot, Vec3 scale)
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
-    // Ceramic bowl with matte glaze finish
-    setMaterialPBR(Materials::GlazedMatte, BOWL_RED);
+    // Ceramic bowl with a high-gloss glaze
+    setMaterialGloss(0.90f, 0.90f, 0.90f, 110.0f);
     drawBowl({ 0, 0, 0 }, NO_ROT, ONE, BOWL_RED);
 
     // Broth: glossy liquid surface (high specular, lower roughness)

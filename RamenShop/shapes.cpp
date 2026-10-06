@@ -123,45 +123,36 @@ void setMaterialConductive(Color c, float shininess)
 }
 
 // ========== PBR MATERIAL SYSTEM ==========
-// Convert roughness (0=smooth, 1=matte) to OpenGL shininess exponent (1-128)
-// Using inverse relationship: shininess = 2 / (roughness^4 + 0.0001)
+// Convert roughness (0=smooth, 1=matte) to an OpenGL shininess exponent.
+// Smooth surfaces get a tight highlight, rough ones a broad soft one.  The old
+// curve gave ~120 for everything below roughness 0.5, i.e. pin-point glints that
+// per-vertex lighting could not show.
 static float roughnessToShininess(float roughness)
 {
-    constexpr float maxShininess = 128.0f;
-    constexpr float minShininess = 2.0f;
-    float r2 = roughness * roughness;
-    float r4 = r2 * r2;
-    float t = r4 * 0.95f + 0.05f;  // interpolation factor
-    return maxShininess * (1.0f - t) + minShininess * t;
-}
-
-// Calculate specular intensity based on metallic value (energy conservation)
-static float metallicToSpecularIntensity(float metallic)
-{
-    // Metals have 4-5% base reflectivity + metallic tint
-    // Dielectrics have 2-4% base reflectivity (white)
-    return 0.02f + metallic * 0.18f;
+    float k = 1.0f - roughness;
+    return 4.0f + 124.0f * k * k;          // r=0.1 -> 105, 0.3 -> 65, 0.6 -> 24, 0.9 -> 5
 }
 
 // Apply PBR material properties to currently set color
 void setMaterialPBR(const MaterialPBR& mat, const Color& surfaceColor)
 {
-    // Non-metallic dielectric material (ceramic, plastic, fabric, etc.)
+    // Non-metallic dielectric (ceramic, wood, plastic, fabric ...): white specular.
+    // Glossier (low roughness) surfaces reflect noticeably more of the light.
     float shininess = roughnessToShininess(mat.roughness);
-    float specIntensity = metallicToSpecularIntensity(mat.metallic) * (1.0f - mat.roughness * 0.3f);
+    float specIntensity = 0.08f + (1.0f - mat.roughness) * 0.55f + mat.metallic * 0.30f;
+    if (specIntensity > 1.0f) specIntensity = 1.0f;
 
-    // Dielectrics always have white specular (color-independent)
     setMaterialGloss(specIntensity, specIntensity, specIntensity, shininess);
 }
 
 // Apply metallic PBR material with color tinting
 void setMaterialPBRMetallic(const MaterialPBR& mat, const Color& metalColor)
 {
-    // For metals: metallicness > 0.8
+    // Metals reflect strongly and tint the highlight with their own colour
     float shininess = roughnessToShininess(mat.roughness);
-    float specIntensity = metallicToSpecularIntensity(mat.metallic);
+    float specIntensity = 0.45f + (1.0f - mat.roughness) * 0.50f;
+    if (specIntensity > 1.0f) specIntensity = 1.0f;
 
-    // Metals have color-tinted specular highlights
     setMaterialGloss(
         metalColor.r * specIntensity,
         metalColor.g * specIntensity,
@@ -233,6 +224,98 @@ static void rawCircleOutline(float radius, float y, Color c)
     glEnd();
     setLighting(true);
     setColor(c);
+}
+
+// --- Glass reflection pass ---------------------------------------------------
+// Clear glass is drawn at very low alpha (14-28%).  Ordinary Phong highlights are
+// added to the surface colour and then scaled by that alpha, so they all but
+// vanish.  This pass re-draws the same shell ADDITIVELY (alpha = 1) so that
+//   1) light glints : black diffuse + white specular, only the Phong highlight
+//                     of every light (pendants, spot, lanterns, sun/moon) stays
+//   2) environment  : sphere-mapped warm-room reflection, scaled by `env`
+// are added on top of whatever is seen through the glass, the way real glass
+// reflects light.  Call it with blending on and depth writes off, before the
+// caller restores state.  `shell` must only issue geometry (no colour calls).
+template <typename Shell>
+static void glassReflections(float spec, float shininess, float env, Shell shell)
+{
+    if (drawingShadow) return;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glDepthMask(GL_FALSE);
+
+    // 1) Light glints: a tight bright core plus a broad soft sheen
+    glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+    setMaterialGloss(spec, spec, spec, shininess);
+    shell();
+    setMaterialGloss(spec * 0.35f, spec * 0.35f, spec * 0.35f, shininess * 0.18f);
+    shell();
+    resetMaterialGloss();
+
+    // 2) Environment reflection (fixed-function sphere map, unlit, scaled)
+    if (env > 0.0f && getTexID(TEX_ENV_MAP)) {
+        beginSphereReflect();
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        glDisable(GL_LIGHTING);
+        glColor4f(env, env, env, 1.0f);
+        shell();
+        glEnable(GL_LIGHTING);
+        endSphereReflect();          // restores the Phong program
+    }
+
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+}
+
+// Flat glass pane made of a grid of quads (so per-vertex lighting can still
+// show a highlight in the middle of the pane when the Phong shader is off).
+static void glassPane(float x0, float y0, float x1, float y1, float z, float nz,
+                      int nx = 14, int ny = 8)
+{
+    glBegin(GL_QUADS);
+    glNormal3f(0.0f, 0.0f, nz);
+    for (int i = 0; i < nx; i++) {
+        float xa = x0 + (x1 - x0) * i / nx, xb = x0 + (x1 - x0) * (i + 1) / nx;
+        for (int j = 0; j < ny; j++) {
+            float ya = y0 + (y1 - y0) * j / ny, yb = y0 + (y1 - y0) * (j + 1) / ny;
+            if (nz > 0) {
+                glVertex3f(xa, ya, z); glVertex3f(xb, ya, z);
+                glVertex3f(xb, yb, z); glVertex3f(xa, yb, z);
+            } else {
+                glVertex3f(xb, ya, z); glVertex3f(xa, ya, z);
+                glVertex3f(xa, yb, z); glVertex3f(xb, yb, z);
+            }
+        }
+    }
+    glEnd();
+}
+
+// Soft diagonal light streaks across a big pane (window / sneeze guard)
+static void glassStreaks(float halfW, float yBot, float yTop, float z)
+{
+    if (drawingShadow) return;
+    setLighting(false);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glDepthMask(GL_FALSE);
+    float h = yTop - yBot;
+    const float streaks[3][2] = { { -0.55f, 0.14f }, { -0.15f, 0.07f }, { 0.35f, 0.10f } };
+    for (int k = 0; k < 3; k++) {
+        float cx = streaks[k][0] * halfW, w = streaks[k][1] * halfW, slant = 0.30f * h;
+        glBegin(GL_QUAD_STRIP);
+        for (int i = 0; i <= 2; i++) {
+            float t = i * 0.5f;                       // 0, 0.5, 1 up the pane
+            float a = (i == 1) ? 0.16f : 0.0f;        // brightest mid-pane
+            float x = cx + slant * (t - 0.5f);
+            glColor4f(1.0f, 0.98f, 0.92f, a);
+            glVertex3f(x - w, yBot + h * t, z);
+            glVertex3f(x + w, yBot + h * t, z);
+        }
+        glEnd();
+    }
+    glDepthMask(GL_TRUE);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    setLighting(true);
 }
 
 void drawSteam(Vec3 pos, float scale, float timeOffset)
@@ -453,10 +536,13 @@ void drawBottle(Vec3 pos, Vec3 rot, Vec3 scale, Color c, Color capColor)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    setMaterialGloss(0.95f, 0.95f, 0.95f, 120.0f);      // glossy glass bottle
     drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.4f, 0.55f, 0.4f }, c);
     drawCylinderCustom({ 0, 0.55f, 0 }, NO_ROT, ONE, c, 0.2f, 0.07f, 0.15f);
     drawCylinder({ 0, 0.70f, 0 }, NO_ROT, { 0.14f, 0.2f, 0.14f }, c);
+    setMaterialGloss(0.60f, 0.60f, 0.60f, 70.0f);       // plastic/metal cap
     drawCylinder({ 0, 0.90f, 0 }, NO_ROT, { 0.17f, 0.1f, 0.17f }, capColor);
+    resetMaterialGloss();
     glPopMatrix();
 }
 
@@ -475,6 +561,11 @@ void drawGlass(Vec3 pos, Vec3 rot, Vec3 scale, Color c)
     rawTube(0.30f, 0.33f, 1.0f);     // body
     rawDisk(0.30f, 0.0f);            // bottom
     rawCircleOutline(0.33f, 1.0f, c); // rim
+
+    glassReflections(1.0f, 150.0f, 0.30f, [] {
+        rawTube(0.30f, 0.33f, 1.0f);
+        rawDisk(0.30f, 0.0f);
+    });
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
@@ -529,6 +620,9 @@ void drawClearGlassTumbler(Vec3 pos, Vec3 rot, Vec3 scale, bool hasWater, bool h
             glPopMatrix();
         }
 
+        // Bright glint on the water surface
+        glassReflections(1.0f, 120.0f, 0.25f, [] { rawDisk(0.26f, 0.73f); });
+
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
         resetMaterialGloss();
@@ -559,6 +653,19 @@ void drawClearGlassTumbler(Vec3 pos, Vec3 rot, Vec3 scale, bool hasWater, bool h
     glPopMatrix();
 
     rawCircleOutline(0.32f, 0.93f, CLEAR_GLASS);
+
+    // Light glints + reflection on the glass walls, base and polished rim
+    glassReflections(1.0f, 150.0f, 0.40f, [] {
+        rawTube(0.28f, 0.285f, 0.08f, 0.0f);
+        rawDisk(0.28f, 0.0f);
+        rawTube(0.285f, 0.32f, 0.85f, 0.08f);
+        rawTube(0.24f, 0.275f, 0.85f, 0.08f);
+        glPushMatrix();
+        glTranslatef(0, 0.93f, 0);
+        glRotatef(90, 1, 0, 0);
+        glutSolidTorus(0.02, 0.295, 12, SLICES);
+        glPopMatrix();
+    });
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
@@ -617,6 +724,20 @@ void drawClearGlassPitcher(Vec3 pos, Vec3 rot, Vec3 scale)
     glutSolidTorus(0.035, 0.28, 12, SLICES);
     glPopMatrix();
 
+    glassReflections(1.0f, 150.0f, 0.40f, [] {
+        rawDisk(0.35f, 0.0f);
+        rawTube(0.35f, 0.36f, 0.06f, 0.0f);
+        rawTube(0.36f, 0.24f, 0.70f, 0.06f);
+        rawTube(0.24f, 0.20f, 0.35f, 0.76f);
+        rawTube(0.20f, 0.28f, 0.20f, 1.11f);
+        rawDisk(0.22f, 0.70f);                 // water surface
+        glPushMatrix();
+        glTranslatef(0.28f, 0.75f, 0.0f);
+        glRotatef(90.0f, 0, 0, 1);
+        glutSolidTorus(0.035, 0.28, 12, SLICES);
+        glPopMatrix();
+    });
+
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     resetMaterialGloss();
@@ -647,6 +768,11 @@ void drawClearGlassJar(Vec3 pos, Vec3 rot, Vec3 scale, Color contentColor)
     rawDisk(0.22f, 0.0f);
     rawTube(0.22f, 0.22f, 0.50f, 0.0f);
     rawCircleOutline(0.22f, 0.50f, CLEAR_GLASS);
+
+    glassReflections(1.0f, 150.0f, 0.40f, [] {
+        rawDisk(0.22f, 0.0f);
+        rawTube(0.22f, 0.22f, 0.50f, 0.0f);
+    });
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
@@ -747,6 +873,13 @@ void drawClearGlassPartition(Vec3 pos, Vec3 rot, Vec3 scale, float width, float 
     glVertex3f(halfW, height,  glassThick * 0.5f);
     glEnd();
 
+    // Reflections: per-light glints on both faces + soft light streaks
+    glassReflections(0.9f, 140.0f, 0.10f, [&] {
+        glassPane(-halfW, 0.02f, halfW, height,  glassThick * 0.5f,  1.0f, 24, 6);
+        glassPane(-halfW, 0.02f, halfW, height, -glassThick * 0.5f, -1.0f, 24, 6);
+    });
+    glassStreaks(halfW, 0.02f, height, glassThick * 0.5f + 0.002f);
+
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     resetMaterialGloss();
@@ -793,6 +926,12 @@ void drawClearGlassWindow(Vec3 pos, Vec3 rot, Vec3 scale, float width, float hei
     glVertex3f( halfW,  halfH, 0.002f);
     glVertex3f(-halfW,  halfH, 0.002f);
     glEnd();
+
+    glassReflections(0.9f, 140.0f, 0.10f, [&] {
+        glassPane(-halfW, -halfH, halfW, halfH, 0.0f,  1.0f, 16, 12);
+        glassPane(-halfW, -halfH, halfW, halfH, 0.0f, -1.0f, 16, 12);
+    });
+    glassStreaks(halfW, -halfH, halfH, 0.004f);
 
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
@@ -1214,18 +1353,21 @@ void drawTexturedBox(Vec3 pos, Vec3 rot, Vec3 size, GLuint texID, Color tint, fl
     setColor(tint);
 
     glBegin(GL_QUADS);
-    // Top (+Y) — grain / tile runs along X (U direction)
+    // Top (+Y) — grain / tile runs along X (U direction).
+    // Wound counter-clockwise seen from +Y; the old order was clockwise, which made
+    // two-sided fixed-function lighting treat the top as a back face (flipped normal
+    // -> black counter tops at night in Gouraud mode).
     glNormal3f( 0, 1, 0);
-    glTexCoord2f(0,  0 ); glVertex3f(-hx, hy, -hz);
-    glTexCoord2f(uX, 0 ); glVertex3f( hx, hy, -hz);
-    glTexCoord2f(uX, uZ); glVertex3f( hx, hy,  hz);
     glTexCoord2f(0,  uZ); glVertex3f(-hx, hy,  hz);
-    // Bottom (-Y)
+    glTexCoord2f(uX, uZ); glVertex3f( hx, hy,  hz);
+    glTexCoord2f(uX, 0 ); glVertex3f( hx, hy, -hz);
+    glTexCoord2f(0,  0 ); glVertex3f(-hx, hy, -hz);
+    // Bottom (-Y) — counter-clockwise seen from below
     glNormal3f( 0,-1, 0);
-    glTexCoord2f(0,  0 ); glVertex3f(-hx, 0,  hz);
-    glTexCoord2f(uX, 0 ); glVertex3f( hx, 0,  hz);
-    glTexCoord2f(uX, uZ); glVertex3f( hx, 0, -hz);
-    glTexCoord2f(0,  uZ); glVertex3f(-hx, 0, -hz);
+    glTexCoord2f(0,  0 ); glVertex3f(-hx, 0, -hz);
+    glTexCoord2f(uX, 0 ); glVertex3f( hx, 0, -hz);
+    glTexCoord2f(uX, uZ); glVertex3f( hx, 0,  hz);
+    glTexCoord2f(0,  uZ); glVertex3f(-hx, 0,  hz);
     // Front (+Z)
     glNormal3f( 0, 0, 1);
     glTexCoord2f(0,  0 ); glVertex3f(-hx, 0,  hz);

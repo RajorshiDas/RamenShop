@@ -3,6 +3,7 @@
 #include "objects.h"
 #include "shader.h"
 #include "raytracer.h"
+#include "game.h"
 #include <cstdio>
 
 CameraMode currentCamMode = CAM_ORBIT;
@@ -50,18 +51,11 @@ void updateWindowTitle()
         (selectedObj == OBJ_NONE) ? "none" : sceneObjects[selectedObj].name;
 
     sprintf_s(buf, sizeof(buf),
-        "3D Ramen Shop | %s | %s[T] | %s[G] | Cam:%s[C] | Amb:%s[1] Dif:%s[2] Spec:%s[3] | Sky:%s[4] Lamps:%s[5] Kitchen:%s[6] Decor:%s[7] | Preset:%s[P]",
+        "3D Ramen Shop | %s | %s[T] | %s[G] | Cam:%s[C] | Preset:%s[P]",
         getRayTracingStatusString(),
         getDayNightModeName(),
         usePhongShading ? "Phong" : "Gouraud",
         camName,
-        lightAmbient     ? "ON" : "OFF",
-        lightDiffuse     ? "ON" : "OFF",
-        lightSpecular    ? "ON" : "OFF",
-        lightDirectional ? "ON" : "OFF",
-        lightPoint       ? "ON" : "OFF",
-        lightSpot        ? "ON" : "OFF",
-        lightArea        ? "ON" : "OFF",
         getCurrentPresetName());
     glutSetWindowTitle(buf);
 }
@@ -146,20 +140,39 @@ static float getFloorY(float x, float z, float currentY)
 // ─── Continuous FPS movement ───────────────────────────────────────────────
 void updateCameraMovement()
 {
+    // Frame-rate independent movement: real elapsed time since the last call
+    static int lastMoveMs = 0;
+    int nowMs = glutGet(GLUT_ELAPSED_TIME);
+    float dt = (lastMoveMs == 0) ? 0.016f : (nowMs - lastMoveMs) * 0.001f;
+    lastMoveMs = nowMs;
+    if (dt > 0.1f) dt = 0.1f;
+    if (dt <= 0.0f) dt = 0.001f;
+
     if (currentCamMode != CAM_FPS) return;
+
+    // In the game the arrow keys turn the cook (keyboard alternative to mouse drag)
+    if (gameActive) {
+        if (specialKeyStates[GLUT_KEY_LEFT])  fpsYaw   += 140.0f * dt;
+        if (specialKeyStates[GLUT_KEY_RIGHT]) fpsYaw   -= 140.0f * dt;
+        if (specialKeyStates[GLUT_KEY_UP]   && fpsPitch <  60.0f) fpsPitch += 90.0f * dt;
+        if (specialKeyStates[GLUT_KEY_DOWN] && fpsPitch > -60.0f) fpsPitch -= 90.0f * dt;
+    }
 
     float radYaw  = fpsYaw * PI / 180.0f;
     float sinY    = sin(radYaw), cosY = cos(radYaw);
     Vec3 fwd   = { sinY, 0, cosY };
     Vec3 right = { -fwd.z, 0, fwd.x };
-    float spd  = 0.085f;
+    float spd  = 5.3f * dt;     // 5.3 units/s (was 0.085 per frame at 60 fps)
 
     if (keyStates['w'] || keyStates['W']) { fpsPos.x += fwd.x*spd; fpsPos.z += fwd.z*spd; }
     if (keyStates['s'] || keyStates['S']) { fpsPos.x -= fwd.x*spd; fpsPos.z -= fwd.z*spd; }
     if (keyStates['d'] || keyStates['D']) { fpsPos.x += right.x*spd; fpsPos.z += right.z*spd; }
     if (keyStates['a'] || keyStates['A']) { fpsPos.x -= right.x*spd; fpsPos.z -= right.z*spd; }
-    if (keyStates['e'] || keyStates['E']) fpsPos.y += spd * 0.8f;
-    if (keyStates['q'] || keyStates['Q']) fpsPos.y -= spd * 0.8f;
+    if (!gameActive) {   // in the game E / Q are interact / discard, so no flying
+        if (keyStates['e'] || keyStates['E']) fpsPos.y += spd * 0.8f;
+        if (keyStates['q'] || keyStates['Q']) fpsPos.y -= spd * 0.8f;
+    }
+    gameClampPlayer(fpsPos);
 
     // Ground/stair following: keep camera eye above the surface beneath it
     const float eyeH  = 1.65f;
@@ -177,6 +190,9 @@ void updateCameraMovement()
 void handleKeyboardDown(unsigned char key, int, int)
 {
     keyStates[key] = true;
+
+    // Game input first (E interact, 1-6 ingredient, ESC pause ...)
+    if (gameKeyDown(key)) { glutPostRedisplay(); return; }
 
     // ── Camera mode cycle (Orbit → FPS → Focused → Upper → Orbit) ──
     if (key == 'c' || key == 'C') {
@@ -231,17 +247,9 @@ void handleKeyboardDown(unsigned char key, int, int)
     if (key == 'b' || key == 'B') { cycleRayBounces();  updateWindowTitle(); }
     if (key == 'y' || key == 'Y') { toggleRayShadows(); updateWindowTitle(); }
 
-    // ── Light component & source toggles ──
-    if (key == '1') { toggleAmbient();     updateWindowTitle(); }
-    if (key == '2') { toggleDiffuse();     updateWindowTitle(); }
-    if (key == '3') { toggleSpecular();    updateWindowTitle(); }
-    if (key == '4') { toggleDirectional(); updateWindowTitle(); }
-    if (key == '5') { togglePointLights(); updateWindowTitle(); }
-    if (key == '6') { toggleSpotLight();   updateWindowTitle(); }
-    if (key == '7') { toggleAreaLight();   updateWindowTitle(); }
+    if (key == 'g' || key == 'G') { usePhongShading = !usePhongShading; updateWindowTitle(); }
     if (key == 'p' || key == 'P') { cycleLightingPreset(); updateWindowTitle(); }
     if (key == 't' || key == 'T') { toggleDayNight(); updateWindowTitle(); }
-    if (key == 'g' || key == 'G') { usePhongShading = !usePhongShading; updateWindowTitle(); }
 
     glutPostRedisplay();
 }
