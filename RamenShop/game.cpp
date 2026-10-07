@@ -910,10 +910,10 @@ void drawGameHUD(int w, int h)
 
     // ── Order board (top-left) ───────────────────────────────────────────
     if (gs != GS_RESULT) {
-        float x = 18, top = h - 18;
+        float x = 18.0f, top = (float)h - 18.0f;
         int items = 2;
         for (int t = 0; t < T_COUNT; t++) if (order.top[t]) items++;
-        float ph = 112 + items * 22;
+        float ph = 112.0f + (float)items * 22.0f;
         panel(x - 8, top - ph, x + 292, top, 0.07f, 0.05f, 0.04f, 0.80f);
         panelBorder(x - 8, top - ph, x + 292, top, 0.85f, 0.60f, 0.22f, 1.0f);
         char buf[96];
@@ -995,8 +995,8 @@ void drawGameHUD(int w, int h)
     if (toastT > 0 && toastMsg[0]) {
         float a = clamp01(toastT / 0.5f);
         float tw = textW(toastMsg, F_MED);
-        panel(w * 0.5f - tw * 0.5f - 18, h - 120, w * 0.5f + tw * 0.5f + 18, h - 84, 0.05f, 0.05f, 0.08f, 0.8f * a);
-        textC(w * 0.5f, h - 109, toastMsg, F_MED, 1.0f, 1.0f, 1.0f, a);
+        panel((float)w * 0.5f - tw * 0.5f - 18, (float)h - 120.0f, (float)w * 0.5f + tw * 0.5f + 18, (float)h - 84.0f, 0.05f, 0.05f, 0.08f, 0.8f * a);
+        textC((float)w * 0.5f, (float)h - 109.0f, toastMsg, F_MED, 1.0f, 1.0f, 1.0f, a);
     }
 
     // ── Result card ──────────────────────────────────────────────────────

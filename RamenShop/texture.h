@@ -12,8 +12,10 @@ enum TexID {
     TEX_CONCRETE,
     TEX_ENV_MAP,    // procedural interior environment map (sphere-map reflections)
     TEX_ROOF_TILE,  // Japanese kawara clay roof tiles
-    TEX_GRASS,      // gradient grass with blade detail
+    TEX_GRASS,      // realistic procedural lawn (greens, dry patches, blades, clover)
     TEX_WATER,      // wave pattern for lake surface
+    TEX_CLOUD,      // soft cloud puff sprite (RGBA)
+    TEX_GRASS_MACRO,// large-scale mottling (neutral grey ~0.5) that hides the lawn tiling
     TEX_COUNT
 };
 

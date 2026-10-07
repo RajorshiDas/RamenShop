@@ -11,9 +11,11 @@ void drawShopBuilding(Vec3 pos, Vec3 rot, Vec3 scale)
     float UH = 2.0f;   // upper facade height
     float TH = GH + UH; // 5.3 total
 
-    // Floor: gray ceramic tiles
-    drawTexturedBox({ 0, 0, 0 }, NO_ROT, { 10, 0.1f, 8 },
-                    getTexID(TEX_TILE_FLOOR), WHITE, 2.0f);
+    // Floor: gray ceramic tiles (skip in shadow pass so floor doesn't cast a bulk slab)
+    if (!outdoorShadowPass) {
+        drawTexturedBox({ 0, 0, 0 }, NO_ROT, { 10, 0.1f, 8 },
+                        getTexID(TEX_TILE_FLOOR), WHITE, 2.0f);
+    }
 
     // Ground floor walls (open front) — with window openings
 
@@ -94,8 +96,10 @@ void drawRoof(Vec3 pos, Vec3 rot, Vec3 scale)
 
     float TH = 5.3f;
 
-    // Eave overhang slab (underside of roof eave)
-    drawCuboid({ 0, TH, 0 }, NO_ROT, { 11.4f, 0.12f, 9.4f }, DARK_GRAY);
+    // Eave overhang slab (underside of roof eave; skip in shadow pass so gable roof wedge shapes the shadow)
+    if (!outdoorShadowPass) {
+        drawCuboid({ 0, TH, 0 }, NO_ROT, { 11.4f, 0.12f, 9.4f }, DARK_GRAY);
+    }
 
     // Traditional Japanese gable roof (ridge runs E–W, slopes N and S)
     // Textured with corrugated hon-kawara tile pattern (dark brown ridges)
@@ -265,7 +269,7 @@ void drawLamp(Vec3 pos, Vec3 rot, Vec3 scale)
     clearEmission();
 
     // Realistic lamp lighting (visible at night)
-    if (!isDayTime) {
+    if (!isDayTime && !drawingShadow) {
         // Tiny warm halo around the bulb — just a hint of scatter, not a ball
         glPushMatrix();
         glTranslatef(0.7f, 3.12f, 0.0f);
@@ -335,17 +339,301 @@ void drawLamp(Vec3 pos, Vec3 rot, Vec3 scale)
     glPopMatrix();
 }
 
+// ─── Distance detail (LOD) ───────────────────────────────────────────────────
+// Trees and bushes far from the camera use a lighter version of the same design:
+// same main branches, one branch level fewer, fewer but slightly larger flowers /
+// leaves.  updateOutdoorView() is called once per frame (main.cpp).
+static float g_eyeX = 0.0f, g_eyeZ = 0.0f;
+static float g_objDist2 = 0.0f;                  // distance^2 of the object whose bushes are being drawn
+
+static float g_fr[6][4];                         // view frustum planes (world space)
+static bool  g_frOk = false;
+
+void updateOutdoorView()
+{
+    float P[16], M[16], C[16];
+    glGetFloatv(GL_PROJECTION_MATRIX, P);
+    glGetFloatv(GL_MODELVIEW_MATRIX, M);
+    g_eyeX = -(M[0] * M[12] + M[1] * M[13] + M[2] * M[14]);
+    g_eyeZ = -(M[8] * M[12] + M[9] * M[13] + M[10] * M[14]);
+    for (int col = 0; col < 4; col++)                 // clip = P * M (column-major)
+        for (int row = 0; row < 4; row++) {
+            float v = 0.0f;
+            for (int k = 0; k < 4; k++) v += P[k * 4 + row] * M[col * 4 + k];
+            C[col * 4 + row] = v;
+        }
+    for (int i = 0; i < 6; i++) {
+        int axis = i / 2;
+        float sgn = (i % 2 == 0) ? 1.0f : -1.0f;
+        for (int j = 0; j < 4; j++) g_fr[i][j] = C[j * 4 + 3] + sgn * C[j * 4 + axis];
+        float l = sqrtf(g_fr[i][0] * g_fr[i][0] + g_fr[i][1] * g_fr[i][1] + g_fr[i][2] * g_fr[i][2]);
+        if (l > 1e-6f) for (int j = 0; j < 4; j++) g_fr[i][j] /= l;
+    }
+    g_frOk = true;
+}
+
+static float outdoorDist2(float x, float z)
+{
+    float dx = x - g_eyeX, dz = z - g_eyeZ;
+    return dx * dx + dz * dz;
+}
+
+// View culling: true when a world-space sphere is completely outside the view frustum,
+// so the object is simply not drawn.  Changes nothing visually.  In the shadow pass the
+// radius grows by the longest shadow so shadows of off-screen objects still appear.
+static bool outdoorCulled(float x, float y, float z, float r)
+{
+    if (!g_frOk) return false;
+    if (outdoorShadowPass) r += 14.0f;
+    for (int i = 0; i < 6; i++)
+        if (g_fr[i][0] * x + g_fr[i][1] * y + g_fr[i][2] * z + g_fr[i][3] < -r) return true;
+    return false;
+}
+
+static bool cullObj(Vec3 pos, Vec3 scale, float hr)       // hr = object radius at scale 1
+{
+    float sc = fmaxf(scale.x, fmaxf(scale.y, scale.z));
+    return outdoorCulled(pos.x, pos.y + hr * scale.y * 0.5f, pos.z, hr * sc);
+}
+
+static const float TREE_LOD_DIST  = 26.0f;       // trees farther than this use the lighter build
+static const float BAMBOO_LOD_DIST = 30.0f;
+static const float BUSH_LOD_DIST  = 26.0f;
+
+// ─── Ground shadows and dark-grass decals ───────────────────────────────────
+// Soft elliptical decals on the lawn (alpha fades to nothing at the rim).  The
+// sun is the directional light in lighting.cpp (from +x, +y, -z), so shadows fall
+// toward -x, +z.  Shadow directions are given in world space and converted into
+// the object's local frame using its yaw.
+// Solid tree silhouettes for the shadow pass: trunk + a few ellipsoids for the crown
+static void shadowTrunk(float h, float r0, float r1)
+{
+    glPushMatrix();
+    glRotatef(-90.0f, 1, 0, 0);
+    gluCylinder(quad, r0, r1, h, 8, 1);
+    glPopMatrix();
+}
+
+static void shadowEllipsoid(float cx, float cy, float cz, float rx, float ry, float rz)
+{
+    glPushMatrix();
+    glTranslatef(cx, cy, cz);
+    glScalef(rx, ry, rz);
+    gluSphere(quad, 1.0, 12, 8);
+    glPopMatrix();
+}
+
+bool outdoorShadowPass = false;
+bool outdoorShadowDetail = true;                 // true: full-detail casters (sun/moon); false: cheap crown shapes (lamps)                  // true while scene.cpp flattens the outdoor scene into the shadow mask
+static float g_shadowRot = 0.0f;                 // yaw of the object being drawn (set by callers)
+
+static void groundBlob(float cx, float cz, float major, float minor, float ang,
+                       Color col, float alpha, float y)
+{
+    if (drawingShadow || alpha <= 0.0f) return;
+    setLighting(false);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+    float ca = cosf(ang), sa = sinf(ang);
+    const int N = 28;
+    glBegin(GL_TRIANGLE_FAN);                    // solid core
+    glColor4f(col.r, col.g, col.b, alpha);
+    glVertex3f(cx, y, cz);
+    for (int i = 0; i <= N; i++) {
+        float t = i * 6.2832f / N, u = cosf(t) * major * 0.55f, v = sinf(t) * minor * 0.55f;
+        glColor4f(col.r, col.g, col.b, alpha * 0.85f);
+        glVertex3f(cx + u * ca - v * sa, y, cz + u * sa + v * ca);
+    }
+    glEnd();
+    glBegin(GL_TRIANGLE_STRIP);                  // soft falloff rim
+    for (int i = 0; i <= N; i++) {
+        float t = i * 6.2832f / N, cu = cosf(t), cv = sinf(t);
+        float u0 = cu * major * 0.55f, v0 = cv * minor * 0.55f, u1 = cu * major, v1 = cv * minor;
+        glColor4f(col.r, col.g, col.b, alpha * 0.85f);
+        glVertex3f(cx + u0 * ca - v0 * sa, y, cz + u0 * sa + v0 * ca);
+        glColor4f(col.r, col.g, col.b, 0.0f);
+        glVertex3f(cx + u1 * ca - v1 * sa, y, cz + u1 * sa + v1 * ca);
+    }
+    glEnd();
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    setLighting(true);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  REALISTIC GRASS / BUSHES  (display lists, built once)
+//  - domeBush : a round mound covered in thousands of fine blades (clipped-bush look)
+//  - tuft     : arching ornamental-grass clump with tapered curved blades
+// ════════════════════════════════════════════════════════════════════════════
+static float fhash(int i, int k)
+{
+    float v = sinf(i * 127.1f + k * 311.7f) * 43758.5453f;
+    return v - floorf(v);
+}
+
+static void normalize3(float& x, float& y, float& z)
+{
+    float l = sqrtf(x * x + y * y + z * z);
+    if (l < 1e-6f) { x = 0; y = 1; z = 0; return; }
+    x /= l; y /= l; z /= l;
+}
+
+static GLuint g_dome = 0, g_domeLod = 0;
+static void buildDomeImpl(GLuint& list, int N, float widthMul, float lenMul)
+{
+    list = glGenLists(1);
+    glNewList(list, GL_COMPILE);
+    glDisable(GL_CULL_FACE);
+    setColor({ 0.07f, 0.20f, 0.05f });
+    glPushMatrix();
+    glScalef(1.0f, 1.0f, 1.0f);
+    gluSphere(quad, 0.90f, 18, 10);                    // dark core hides gaps between blades
+    glPopMatrix();
+    glBegin(GL_TRIANGLES);
+    for (int i = 0; i < N; i++) {
+        float y = (i + 0.5f) / N;                       // upper hemisphere, even area
+        float r = sqrtf(1.0f - y * y), a = i * 2.39996f;
+        float nx = r * cosf(a), ny = y, nz = r * sinf(a);
+        float h1 = fhash(i, 1), h2 = fhash(i, 2), h3 = fhash(i, 3), h4 = fhash(i, 4);
+        float L = (0.15f + 0.14f * h1) * lenMul;
+        float b = h2 * 6.2832f;
+        float dx = nx + cosf(b) * 0.55f * (h3 - 0.3f), dy = ny + 0.30f, dz = nz + sinf(b) * 0.55f * (h3 - 0.3f);
+        normalize3(dx, dy, dz);
+        float sx = dy * nz - dz * ny, sy = dz * nx - dx * nz, sz = dx * ny - dy * nx;   // dir x n
+        normalize3(sx, sy, sz);
+        float w = (0.016f + 0.012f * h4) * widthMul;
+        float px = nx * 0.93f, py = ny * 0.93f, pz = nz * 0.93f;
+        float tint = 0.80f + 0.40f * h3;
+        glNormal3f(nx, ny, nz);
+        glColor3f(0.10f * tint, 0.30f * tint, 0.07f * tint);
+        glVertex3f(px - sx * w, py - sy * w, pz - sz * w);
+        glVertex3f(px + sx * w, py + sy * w, pz + sz * w);
+        float tr = 0.30f + 0.10f * h4, tg = 0.60f + 0.14f * h1, tb = 0.16f;
+        glColor3f(tr * tint, tg * tint, tb * tint);
+        glVertex3f(px + dx * L, py + dy * L, pz + dz * L);
+    }
+    glEnd();
+    glEndList();
+}
+
+static void buildDome()    { buildDomeImpl(g_dome, 750, 1.2f, 1.08f); }   // a little simpler: fewer, slightly broader blades
+static void buildDomeLod() { buildDomeImpl(g_domeLod, 220, 1.9f, 1.2f); }   // far bushes: fewer, broader blades
+
+// Cheap upper hemisphere used only as the bush silhouette in the shadow pass
+static GLuint g_domeShadow = 0;
+static void buildDomeShadow()
+{
+    g_domeShadow = glGenLists(1);
+    glNewList(g_domeShadow, GL_COMPILE);
+    const int R = 5, S = 12;
+    for (int i = 0; i < R; i++) {
+        float y0 = sinf(i * 1.5708f / R), y1 = sinf((i + 1) * 1.5708f / R);
+        float r0 = cosf(i * 1.5708f / R), r1 = cosf((i + 1) * 1.5708f / R);
+        glBegin(GL_TRIANGLE_STRIP);
+        for (int j = 0; j <= S; j++) {
+            float a = j * 6.2832f / S;
+            glVertex3f(cosf(a) * r0, y0, sinf(a) * r0);
+            glVertex3f(cosf(a) * r1, y1, sinf(a) * r1);
+        }
+        glEnd();
+    }
+    glEndList();
+}
+
+// Fuzzy round bush (hemisphere radius 1 scaled to rx x ry x rx), gently swaying
+static void domeBush(float x, float y, float z, float rx, float ry, float phase)
+{
+    if (outdoorShadowPass) {                          // silhouette only
+        if (!g_domeShadow) buildDomeShadow();
+        glPushMatrix();
+        glTranslatef(x, y, z);
+        glScalef(rx, ry, rx);
+        glCallList(g_domeShadow);
+        glPopMatrix();
+        return;
+    }
+    bool farBush = g_objDist2 > BUSH_LOD_DIST * BUSH_LOD_DIST;
+    if (farBush) { if (!g_domeLod) buildDomeLod(); } else if (!g_dome) buildDome();
+    if (y < 0.3f) {                                   // bush standing on the lawn (not in a pot)
+        groundBlob(x, z, rx * 1.9f, rx * 1.9f, 0.0f, { 0.02f, 0.09f, 0.02f }, 0.70f, 0.010f);   // darker grass around the base
+    }
+    float sw = 1.6f * sinf(animTime * 1.3f + phase) + 0.8f * sinf(animTime * 2.7f + phase * 1.9f);
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glRotatef(sw, 0, 0, 1);
+    glRotatef(sw * 0.6f, 1, 0, 0);
+    glScalef(rx, ry, rx);
+    glCallList(farBush ? g_domeLod : g_dome);
+    glPopMatrix();
+}
+
+// Arching ornamental-grass clump (3 variants)
+static GLuint g_tuft[3] = { 0, 0, 0 };
+static void buildTuft(int v)
+{
+    g_tuft[v] = glGenLists(1);
+    glNewList(g_tuft[v], GL_COMPILE);
+    glDisable(GL_CULL_FACE);
+    glBegin(GL_TRIANGLES);
+    const int N = 30, SEG = 4;
+    for (int i = 0; i < N; i++) {
+        float h1 = fhash(i + v * 53, 11), h2 = fhash(i + v * 53, 12), h3 = fhash(i + v * 53, 13), h4 = fhash(i + v * 53, 14);
+        float a = i * 2.39996f + v;
+        float rr = 0.10f + 0.55f * sqrtf((i + 0.5f) / N) * (0.7f + 0.3f * h1);
+        float bx = cosf(a) * rr * 0.55f, bz = sinf(a) * rr * 0.55f;
+        float ox = cosf(a + (h2 - 0.5f) * 0.8f), oz = sinf(a + (h2 - 0.5f) * 0.8f);    // arch direction
+        float H = 0.55f + 0.55f * h3 * (1.2f - rr);
+        float k = 0.30f + 0.45f * h4;
+        float tx = -oz, tz = ox;                                                       // blade width direction
+        float tint = 0.75f + 0.50f * h2;
+        float px[SEG + 1], py[SEG + 1], pz[SEG + 1], pw[SEG + 1];
+        for (int sgi = 0; sgi <= SEG; sgi++) {
+            float t = sgi / (float)SEG;
+            px[sgi] = bx + ox * k * t * t * H;
+            py[sgi] = H * t * (1.0f - 0.30f * t);
+            pz[sgi] = bz + oz * k * t * t * H;
+            pw[sgi] = 0.030f * powf(1.0f - t, 0.8f) + 0.0015f;
+        }
+        float nx = ox * 0.6f, ny = 0.8f, nz = oz * 0.6f;
+        normalize3(nx, ny, nz);
+        glNormal3f(nx, ny, nz);
+        for (int sgi = 0; sgi < SEG; sgi++) {
+            float t0 = sgi / (float)SEG, t1 = (sgi + 1) / (float)SEG;
+            float c0r = (0.10f + 0.34f * t0) * tint, c0g = (0.28f + 0.34f * t0) * tint, c0b = (0.06f + 0.10f * t0) * tint;
+            float c1r = (0.10f + 0.34f * t1) * tint, c1g = (0.28f + 0.34f * t1) * tint, c1b = (0.06f + 0.10f * t1) * tint;
+            glColor3f(c0r, c0g, c0b);
+            glVertex3f(px[sgi] - tx * pw[sgi], py[sgi], pz[sgi] - tz * pw[sgi]);
+            glVertex3f(px[sgi] + tx * pw[sgi], py[sgi], pz[sgi] + tz * pw[sgi]);
+            glColor3f(c1r, c1g, c1b);
+            glVertex3f(px[sgi + 1] + tx * pw[sgi + 1], py[sgi + 1], pz[sgi + 1] + tz * pw[sgi + 1]);
+            glColor3f(c0r, c0g, c0b);
+            glVertex3f(px[sgi] - tx * pw[sgi], py[sgi], pz[sgi] - tz * pw[sgi]);
+            glColor3f(c1r, c1g, c1b);
+            glVertex3f(px[sgi + 1] + tx * pw[sgi + 1], py[sgi + 1], pz[sgi + 1] + tz * pw[sgi + 1]);
+            glVertex3f(px[sgi + 1] - tx * pw[sgi + 1], py[sgi + 1], pz[sgi + 1] - tz * pw[sgi + 1]);
+        }
+    }
+    glEnd();
+    glEndList();
+}
+
 void drawPlant(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    g_objDist2 = outdoorDist2(pos.x, pos.z);
     drawCylinderCustom({ 0, 0, 0 }, NO_ROT, ONE, CLAY_POT, 0.2f, 0.28f, 0.4f);
     drawCylinder({ 0, 0.40f, 0 }, NO_ROT, { 0.5f, 0.02f, 0.5f }, SOIL);
-    drawCylinder({ 0, 0.42f, 0 }, NO_ROT, { 0.05f, 0.4f, 0.05f }, DARK_WOOD);
-    drawSphere({  0.00f, 0.90f,  0.00f }, NO_ROT, { 0.55f, 0.50f, 0.55f }, LEAF);
-    drawSphere({  0.18f, 1.08f,  0.05f }, NO_ROT, { 0.40f, 0.40f, 0.40f }, LEAF_LIGHT);
-    drawSphere({ -0.15f, 1.05f, -0.08f }, NO_ROT, { 0.40f, 0.40f, 0.40f }, LEAF_LIGHT);
-    drawSphere({  0.00f, 1.20f,  0.00f }, NO_ROT, { 0.30f, 0.30f, 0.30f }, LEAF);
+    // fuzzy mound of fine blades with a tuft of tall grass on top
+    domeBush(0.0f, 0.38f, 0.0f, 0.34f, 0.46f, pos.x * 0.7f + pos.z);
+    if (!g_tuft[0]) buildTuft(0);
+    glPushMatrix();
+    glTranslatef(0.0f, 0.62f, 0.0f);
+    glScalef(0.55f, 0.55f, 0.55f);
+    glCallList(g_tuft[0]);
+    glPopMatrix();
     glPopMatrix();
 }
 
@@ -417,55 +705,745 @@ void drawVendingMachine(Vec3 pos, Vec3 rot, Vec3 scale)
     glPopMatrix();
 }
 
-void drawTree(Vec3 pos, Vec3 rot, Vec3 scale)
+static float clamp01f(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  BLOSSOM / AUTUMN TREES
+//  - branching trunk -> main branches -> sub-branches -> twigs, built once into
+//    display lists (one list per main-branch group so each group can sway)
+//  - dense puffy clusters of small blossoms at the twig tips
+//  - a gusting breeze rotates every group about its base, out of step
+//  - falling petals / leaves (time driven, no state) and a carpet of fallen petals
+// ════════════════════════════════════════════════════════════════════════════
+static float blossomHash(int i, int k)           // deterministic pseudo-random 0..1
 {
+    float v = sinf(i * 127.1f + k * 311.7f) * 43758.5453f;
+    return v - floorf(v);
+}
+
+// Gentle gusting breeze (about -1.7 .. 1.7); `phase` keeps trees/branches out of step
+static float breeze(float phase)
+{
+    float t = animTime;
+    return sinf(t * 1.1f + phase) + 0.45f * sinf(t * 2.3f + phase * 1.7f) + 0.25f * sinf(t * 0.37f + phase * 0.5f);
+}
+
+static Vec3 vAdd(Vec3 a, Vec3 b)  { return { a.x + b.x, a.y + b.y, a.z + b.z }; }
+static Vec3 vMul(Vec3 a, float k) { return { a.x * k, a.y * k, a.z * k }; }
+static Vec3 vCross(Vec3 a, Vec3 b) { return { a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x }; }
+static Vec3 vNorm(Vec3 a)
+{
+    float l = sqrtf(a.x * a.x + a.y * a.y + a.z * a.z);
+    if (l < 1e-6f) return { 0.0f, 1.0f, 0.0f };
+    return { a.x / l, a.y / l, a.z / l };
+}
+
+static int g_rndSeed = 0, g_rndCtr = 0;
+static float rnd() { return blossomHash(g_rndSeed, g_rndCtr++); }
+
+// Tapered tube from a to b (+ a ball at b so bends stay smooth)
+static bool g_lod = false;                       // building the lighter distance version of a tree
+static void branchTube(Vec3 a, Vec3 b, float r0, float r1, Color c)
+{
+    float dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+    float len = sqrtf(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-4f) return;
+    setColor(c);
     glPushMatrix();
-    applyTransform(pos, rot, scale);
-    drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.15f, 1.8f, 0.15f }, TRUNK);
-    drawSphere({  0.0f, 2.2f,  0.0f }, NO_ROT, { 1.4f, 1.2f, 1.4f }, LEAF);
-    drawSphere({  0.4f, 2.6f,  0.2f }, NO_ROT, { 1.0f, 0.9f, 1.0f }, LEAF_LIGHT);
-    drawSphere({ -0.3f, 2.5f, -0.2f }, NO_ROT, { 1.0f, 0.8f, 1.0f }, LEAF);
-    drawSphere({  0.0f, 3.0f,  0.0f }, NO_ROT, { 0.8f, 0.7f, 0.8f }, LEAF_LIGHT);
+    glTranslatef(a.x, a.y, a.z);
+    float ax = -dy, ay = dx;                         // z-axis x direction
+    if (fabsf(ax) + fabsf(ay) > 1e-5f) glRotatef(acosf(dz / len) * 180.0f / PI, ax, ay, 0.0f);
+    else if (dz < 0.0f) glRotatef(180.0f, 1, 0, 0);
+    gluCylinder(quad, r0, r1, len, g_lod ? 5 : 7, 1);
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(b.x, b.y, b.z);
+    gluSphere(quad, r1, g_lod ? 4 : 6, g_lod ? 3 : 4);
     glPopMatrix();
 }
 
+// One five-petal cherry blossom in the XY plane facing +Z: notched petals that are
+// deep pink at the base and pale at the tips, cupped slightly toward the viewer,
+// with a yellow centre.
+static void drawFlowerShape(int style)
+{
+    static const float PV[6][3] = {                 // petal outline (x, y, z), length ~0.93
+        { 0.00f, 0.06f, 0.00f }, { -0.34f, 0.42f, 0.08f }, { -0.23f, 0.93f, 0.20f },
+        { 0.00f, 0.80f, 0.13f }, {  0.23f, 0.93f, 0.20f }, {  0.34f, 0.42f, 0.08f } };
+    static const Color TIP[4]  = { { 1.00f, 0.88f, 0.93f }, { 1.00f, 0.80f, 0.88f },
+                                   { 0.98f, 0.72f, 0.82f }, { 1.00f, 0.95f, 0.97f } };
+    static const Color BASE[4] = { { 0.95f, 0.50f, 0.66f }, { 0.93f, 0.42f, 0.60f },
+                                   { 0.90f, 0.36f, 0.55f }, { 0.98f, 0.62f, 0.74f } };
+    const Color tip = TIP[style & 3], base = BASE[style & 3];
+    const float vt[6] = { 0.0f, 0.55f, 1.0f, 0.8f, 1.0f, 0.55f };   // 0 = base colour, 1 = tip colour
+
+    glBegin(GL_TRIANGLES);
+    for (int p = 0; p < 5; p++) {
+        float ang = p * 72.0f * PI / 180.0f, ca = cosf(ang), sa = sinf(ang);
+        float vx[6], vy[6], vz[6];
+        for (int i = 0; i < 6; i++) {
+            vx[i] = PV[i][0] * ca - PV[i][1] * sa;
+            vy[i] = PV[i][0] * sa + PV[i][1] * ca;
+            vz[i] = PV[i][2];
+        }
+        float nx = (0.0f * ca - (-0.28f) * sa), ny = (0.0f * sa + (-0.28f) * ca), nz = 1.0f;   // cupped normal
+        float nl = sqrtf(nx * nx + ny * ny + nz * nz);
+        glNormal3f(nx / nl, ny / nl, nz / nl);
+        static const int T[4][3] = { { 0, 1, 2 }, { 0, 2, 3 }, { 0, 3, 4 }, { 0, 4, 5 } };
+        for (int t = 0; t < 4; t++)
+            for (int k = 0; k < 3; k++) {
+                int i = T[t][k];
+                glColor3f(base.r + (tip.r - base.r) * vt[i], base.g + (tip.g - base.g) * vt[i],
+                          base.b + (tip.b - base.b) * vt[i]);
+                glVertex3f(vx[i], vy[i], vz[i]);
+            }
+    }
+    glEnd();
+
+    // yellow centre
+    glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0, 0, 1);
+    glColor3f(1.00f, 0.86f, 0.42f);
+    glVertex3f(0, 0, 0.16f);
+    glColor3f(0.96f, 0.62f, 0.40f);
+    for (int i = 0; i <= 7; i++) {
+        float a = i * 2.0f * PI / 7.0f;
+        glVertex3f(cosf(a) * 0.11f, sinf(a) * 0.11f, 0.12f);
+    }
+    glEnd();
+}
+
+static void flowerAt(Vec3 p, Vec3 n, float r, float roll, int style)
+{
+    glPushMatrix();
+    glTranslatef(p.x, p.y, p.z);
+    float ax = -n.y, ay = n.x;                       // z-axis x n
+    if (fabsf(ax) + fabsf(ay) > 1e-5f) glRotatef(acosf(n.z) * 180.0f / PI, ax, ay, 0.0f);
+    else if (n.z < 0.0f) glRotatef(180.0f, 1, 0, 0);
+    glRotatef(roll, 0, 0, 1);
+    glScalef(r, r, r);
+    drawFlowerShape(style);
+    glPopMatrix();
+}
+
+// A bunch of individual blossoms facing outward, with a few buds and green leaves
+static void blossomCluster(Vec3 c, float size)
+{
+    setEmission(0.14f, 0.07f, 0.10f);                // faint pink glow so they stay visible at night
+    int n = (g_lod ? 3 : 6) + (int)(rnd() * (g_lod ? 2.0f : 3.0f));
+    for (int i = 0; i < n; i++) {
+        float a = rnd() * 6.2832f;
+        float e = rnd() * 1.7f - 0.45f;              // biased upward
+        float d = size * (0.35f + 0.65f * rnd());
+        Vec3 off = { cosf(a) * d, e * d * 0.7f, sinf(a) * d };
+        Vec3 nrm = vNorm({ off.x, off.y * 0.6f + 0.35f, off.z });         // outward and a little up
+        float r = (0.17f + 0.08f * rnd()) * (g_lod ? 1.55f : 1.0f);
+        flowerAt(vAdd(c, off), nrm, r, rnd() * 360.0f, (int)(rnd() * 4.0f) % 4);
+    }
+    // a couple of deeper-pink buds
+    int nb = 1 + (int)(rnd() * 2.0f);
+    for (int i = 0; i < nb; i++) {
+        float a = rnd() * 6.2832f, d = size * (0.5f + 0.5f * rnd());
+        setColor({ 0.92f, 0.36f, 0.56f });
+        glPushMatrix();
+        glTranslatef(c.x + cosf(a) * d, c.y + 0.1f * rnd(), c.z + sinf(a) * d);
+        glScalef(0.8f, 1.2f, 0.8f);
+        gluSphere(quad, 0.055f, 6, 4);
+        glPopMatrix();
+    }
+    clearEmission();
+    // small green leaves peeking out between the flowers
+    int nl = 1 + (int)(rnd() * 2.0f);
+    for (int i = 0; i < nl; i++) {
+        float a = rnd() * 6.2832f, d = size * (0.55f + 0.5f * rnd());
+        setColor({ 0.50f + 0.12f * rnd(), 0.74f + 0.08f * rnd(), 0.30f });
+        glPushMatrix();
+        glTranslatef(c.x + cosf(a) * d, c.y + 0.12f * rnd(), c.z + sinf(a) * d);
+        glRotatef(-a * 180.0f / PI, 0, 1, 0);
+        glRotatef(-25.0f - 25.0f * rnd(), 0, 0, 1);
+        glBegin(GL_QUADS);
+        glNormal3f(0, 1, 0.3f);
+        glVertex3f(0, 0, 0); glVertex3f(0.09f, 0.03f, 0.06f); glVertex3f(0.22f, 0.0f, 0.0f); glVertex3f(0.09f, 0.03f, -0.06f);
+        glEnd();
+        glPopMatrix();
+    }
+}
+
+// One maple leaf (five pointed lobes, tips curled up a little) in the XY plane, facing +Z
+static void drawMapleLeafShape(float s)
+{
+    static const float R[5] = { 1.00f, 0.92f, 0.68f, 0.68f, 0.92f };     // tip radius per lobe
+    float px[10], py[10], pz[10];
+    for (int k = 0; k < 5; k++) {
+        float a = (90.0f + 72.0f * k) * PI / 180.0f;
+        px[2 * k] = cosf(a) * R[k];  py[2 * k] = sinf(a) * R[k];  pz[2 * k] = 0.14f;
+        float b = a + 36.0f * PI / 180.0f;
+        px[2 * k + 1] = cosf(b) * 0.42f;  py[2 * k + 1] = sinf(b) * 0.42f;  pz[2 * k + 1] = 0.0f;
+    }
+    glBegin(GL_TRIANGLES);
+    glNormal3f(0.0f, 0.0f, 1.0f);
+    for (int i = 0; i < 10; i++) {
+        int j = (i + 1) % 10;
+        glVertex3f(0.0f, 0.0f, 0.0f);
+        glVertex3f(px[i] * s, py[i] * s, pz[i] * s);
+        glVertex3f(px[j] * s, py[j] * s, pz[j] * s);
+    }
+    glEnd();
+}
+
+// Rotate so that +Z points along n (n must be normalised)
+static void alignZ(Vec3 n)
+{
+    float ax = -n.y, ay = n.x;
+    if (fabsf(ax) + fabsf(ay) > 1e-5f) glRotatef(acosf(n.z) * 180.0f / PI, ax, ay, 0.0f);
+    else if (n.z < 0.0f) glRotatef(180.0f, 1, 0, 0);
+}
+
+// A loose bunch of small red / orange maple leaves at a twig tip
+static void mapleLeafCluster(Vec3 c, float size)
+{
+    static const Color COL[6] = {
+        { 0.88f, 0.20f, 0.10f }, { 0.95f, 0.34f, 0.12f }, { 0.93f, 0.50f, 0.14f },
+        { 0.72f, 0.11f, 0.08f }, { 0.90f, 0.26f, 0.11f }, { 0.97f, 0.60f, 0.18f } };
+    setEmission(0.10f, 0.03f, 0.01f);                // keeps the red readable at night
+    int n = (g_lod ? 4 : 7) + (int)(rnd() * (g_lod ? 2.0f : 3.0f));
+    for (int i = 0; i < n; i++) {
+        float a = rnd() * 6.2832f;
+        float e = rnd() * 1.7f - 0.5f;
+        float d = size * (0.30f + 0.70f * rnd());
+        Vec3 off = { cosf(a) * d, e * d * 0.7f, sinf(a) * d };
+        Vec3 nrm = vNorm({ off.x, off.y * 0.6f + 0.45f, off.z });
+        float r = (0.12f + 0.07f * rnd()) * (g_lod ? 1.5f : 1.0f);
+        setColor(COL[(int)(rnd() * rnd() * 6.0f) % 6]);      // mostly the reds and oranges
+        glPushMatrix();
+        glTranslatef(c.x + off.x, c.y + off.y, c.z + off.z);
+        alignZ(nrm);
+        glRotatef(rnd() * 360.0f, 0, 0, 1);
+        glScalef(r, r, r);
+        drawMapleLeafShape(1.0f);
+        glPopMatrix();
+    }
+    clearEmission();
+}
+
+// One broad green leaf (ovate, tip curled up), base at the origin, pointing along +Y,
+// facing +Z; darker at the base, lighter toward the tip
+static void drawLeafShape(Color c, float s)
+{
+    static const float LV[8][3] = {
+        { 0.00f, 0.00f, 0.00f }, { -0.26f, 0.25f, 0.02f }, { -0.30f, 0.55f, 0.07f }, { -0.14f, 0.86f, 0.12f },
+        { 0.00f, 1.00f, 0.14f }, {  0.14f, 0.86f, 0.12f }, {  0.30f, 0.55f, 0.07f }, {  0.26f, 0.25f, 0.02f } };
+    const float dk = 0.62f;
+    glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0.0f, -0.15f, 1.0f);
+    glColor3f(c.r * dk, c.g * dk, c.b * dk);
+    glVertex3f(0.0f, 0.0f, 0.0f);
+    for (int i = 1; i < 8; i++) {
+        float k = dk + (1.0f - dk) * LV[i][1];
+        glColor3f(c.r * k, c.g * k, c.b * k);
+        glVertex3f(LV[i][0] * s, LV[i][1] * s, LV[i][2] * s);
+    }
+    glEnd();
+}
+
+// A pad of broad leaves lying roughly horizontal, giving the layered look of a broadleaf crown
+static void greenLeafCluster(Vec3 c, float size, int count)
+{
+    static const Color COL[6] = {
+        { 0.14f, 0.38f, 0.09f }, { 0.21f, 0.49f, 0.11f }, { 0.29f, 0.58f, 0.15f },
+        { 0.39f, 0.67f, 0.19f }, { 0.52f, 0.76f, 0.25f }, { 0.11f, 0.31f, 0.08f } };
+    int n = (g_lod ? (count * 2) / 5 : count) + (int)(rnd() * 4.0f);
+    for (int i = 0; i < n; i++) {
+        float a = rnd() * 6.2832f;
+        float e = (rnd() - 0.5f) * 1.6f;                       // fuller vertically
+        float d = size * (0.25f + 0.75f * rnd());
+        Vec3 nrm = vNorm({ cosf(a) * d * 0.35f + (rnd() - 0.5f) * 0.5f, 0.85f, sinf(a) * d * 0.35f + (rnd() - 0.5f) * 0.5f });
+        float sz = (0.24f + 0.12f * rnd()) * (g_lod ? 1.6f : 1.18f);   // fewer, slightly larger leaves
+        glPushMatrix();
+        glTranslatef(c.x + cosf(a) * d, c.y + e * d * 0.5f, c.z + sinf(a) * d);
+        alignZ(nrm);
+        glRotatef(rnd() * 360.0f, 0, 0, 1);
+        drawLeafShape(COL[(int)(rnd() * 6.0f) % 6], sz);
+        glPopMatrix();
+    }
+}
+
+// One branch with its sub-branches (level 1 = main, 2 = sub, 3 = twig)
+// Cluster centres recorded while a branch group is built; they become that group's
+// shadow list (one small low-poly sphere per leaf/blossom cluster), so the cast
+// shadow follows the real crown shape and sways with its branch group.
+struct ClusterRec { float x, y, z, r; };
+static ClusterRec g_rec[800];
+static int  g_recN = 0;
+static bool g_recOn = false;
+static void recordCluster(Vec3 c, float r)
+{
+    if (g_recOn && g_recN < 800) g_rec[g_recN++] = { c.x, c.y, c.z, r };
+}
+static void emitShadowList(GLuint list)
+{
+    glNewList(list, GL_COMPILE);
+    for (int i = 0; i < g_recN; i++) {
+        glPushMatrix();
+        glTranslatef(g_rec[i].x, g_rec[i].y, g_rec[i].z);
+        gluSphere(quad, g_rec[i].r, 6, 3);
+        glPopMatrix();
+    }
+    glEndList();
+}
+
+static bool g_mapleStyle = false;                // maple: finer branching, leaf clusters
+static bool g_greenStyle = false;                // broadleaf: leaf pads on every branch tip
+static int  g_maxLevel   = 3;                    // cherry 3 levels, maple 4
+
+static void growBranch(Vec3 base, Vec3 dir, float len, float r, int level)
+{
+    static const Color BARK = { 0.40f, 0.28f, 0.20f }, BARK_DARK = { 0.30f, 0.21f, 0.15f };
+    static const Color M_BARK = { 0.40f, 0.34f, 0.30f }, M_BARK_DARK = { 0.31f, 0.26f, 0.23f };
+    static const Color G_BARK = { 0.36f, 0.29f, 0.22f }, G_BARK_DARK = { 0.28f, 0.22f, 0.17f };
+    Color col = g_greenStyle ? ((level == 1) ? G_BARK_DARK : G_BARK)
+              : g_mapleStyle ? ((level == 1) ? M_BARK_DARK : M_BARK) : ((level == 1) ? BARK_DARK : BARK);
+
+    Vec3 p1 = vAdd(base, vMul(dir, len * 0.55f));
+    Vec3 dir2 = vNorm({ dir.x + (rnd() - 0.5f) * 0.35f, dir.y + 0.22f, dir.z + (rnd() - 0.5f) * 0.35f });
+    Vec3 p2 = vAdd(p1, vMul(dir2, len * 0.45f));
+    branchTube(base, p1, r, r * 0.72f, col);
+    branchTube(p1, p2, r * 0.72f, r * 0.48f, col);
+
+    if (level < g_maxLevel) {
+        int kids = (level == 1) ? 3 : 2;
+        for (int k = 0; k < kids; k++) {
+            float t = 0.45f + 0.50f * (k + rnd() * 0.5f) / kids;
+            Vec3 start = vAdd(base, vMul(vAdd(p2, vMul(base, -1.0f)), t));
+            Vec3 u = vNorm(vCross(dir, (fabsf(dir.y) > 0.95f) ? Vec3{ 1, 0, 0 } : Vec3{ 0, 1, 0 }));
+            Vec3 w = vCross(dir, u);
+            float th = 0.45f + 0.45f * rnd(), ph = rnd() * 6.2832f;
+            Vec3 d = vNorm(vAdd(vAdd(vMul(dir, cosf(th)),
+                                     vMul(vAdd(vMul(u, cosf(ph)), vMul(w, sinf(ph))), sinf(th))), { 0, 0.2f, 0 }));
+            growBranch(start, d, len * (0.60f + 0.08f * rnd()), r * 0.55f, level + 1);
+        }
+        growBranch(p2, dir2, len * 0.55f, r * 0.45f, level + 1);   // the branch keeps going
+    }
+    if (g_greenStyle) {
+        greenLeafCluster(p2, level == 1 ? 0.70f : (level == 2 ? 0.62f : 0.55f), 14);
+        recordCluster(p2, (level == 1 ? 0.70f : (level == 2 ? 0.62f : 0.55f)) + 0.30f);
+        if (level >= 2) { greenLeafCluster(p1, 0.48f, 8); recordCluster(p1, 0.48f + 0.30f); }   // extra pad part-way along the branch
+    } else if (g_mapleStyle) {
+        if (level >= g_maxLevel - 1) { mapleLeafCluster(p2, level == g_maxLevel ? 0.27f : 0.31f); recordCluster(p2, (level == g_maxLevel ? 0.27f : 0.31f) + 0.16f); }
+    } else {
+        blossomCluster(p2, level == 1 ? 0.40f : (level == 2 ? 0.34f : 0.29f));
+        recordCluster(p2, (level == 1 ? 0.40f : (level == 2 ? 0.34f : 0.29f)) + 0.26f);
+    }
+}
+
+// ---- cached geometry: trunk + 7 swaying groups, 3 variants ----
+struct BlossomLists { bool built; GLuint base; Vec3 pivot[7]; };
+static BlossomLists g_cherry[6] = {};                  // [0..2] full, [3..5] distance version
+
+static void buildCherryVariant(int v)
+{
+    const bool lod = v >= 3;
+    const int sv = lod ? v - 3 : v;
+    BlossomLists& L = g_cherry[v];
+    L.base = glGenLists(16);
+    g_lod = lod; g_maxLevel = lod ? 2 : 3;
+
+    // trunk + root flare
+    g_rndSeed = 500 + sv * 17; g_rndCtr = 0;
+    glNewList(L.base, GL_COMPILE);
+    {
+        static const Color BARK = { 0.36f, 0.25f, 0.17f }, BARK_D = { 0.27f, 0.19f, 0.13f };
+        Vec3 a = { 0, 0, 0 }, b = { 0.05f, 0.9f, 0.03f }, c = { -0.04f, 1.55f, 0.0f }, d = { 0.0f, 2.05f, 0.0f };
+        branchTube(a, b, 0.27f, 0.21f, BARK_D);
+        branchTube(b, c, 0.21f, 0.16f, BARK);
+        branchTube(c, d, 0.16f, 0.12f, BARK);
+        for (int i = 0; i < 5; i++) {
+            float ang = (i * 72.0f + rnd() * 25.0f) * PI / 180.0f;
+            branchTube({ 0, 0.38f, 0 }, { cosf(ang) * 0.58f, 0.0f, sinf(ang) * 0.58f }, 0.13f, 0.035f, BARK_D);
+        }
+    }
+    glEndList();
+
+    for (int g = 0; g < 7; g++) {
+        g_rndSeed = 900 + sv * 71 + g * 13; g_rndCtr = 0;
+        float az, pitch, y0, len;
+        if (g < 6) {
+            az = (g * 60.0f + (rnd() - 0.5f) * 30.0f) * PI / 180.0f;
+            pitch = (36.0f + 30.0f * rnd()) * PI / 180.0f;        // from vertical
+            y0 = 1.30f + 0.65f * rnd();
+            len = 1.25f + 0.25f * rnd();
+        } else {                                                  // top leader
+            az = rnd() * 6.2832f; pitch = 0.14f; y0 = 1.95f; len = 1.05f;
+        }
+        Vec3 dir = { sinf(pitch) * cosf(az), cosf(pitch), sinf(pitch) * sinf(az) };
+        Vec3 base = { 0.0f, y0, 0.0f };
+        L.pivot[g] = base;
+        g_recN = 0; g_recOn = true;
+        glNewList(L.base + 1 + g, GL_COMPILE);
+        growBranch(base, dir, len, 0.085f, 1);
+        glEndList();
+        g_recOn = false;
+        emitShadowList(L.base + 8 + g);
+    }
+    L.built = true;
+    g_lod = false; g_maxLevel = 3;
+}
+
+static BlossomLists g_maple[6] = {};                   // [0..2] full, [3..5] distance version
+
+// Slender maple: tall trunk with spiky roots, fine spreading branches (4 levels),
+// red / orange leaf clusters at the twigs
+static void buildMapleVariant(int v)
+{
+    const bool lod = v >= 3;
+    const int sv = lod ? v - 3 : v;
+    BlossomLists& L = g_maple[v];
+    L.base = glGenLists(16);
+    g_lod = lod;
+    g_mapleStyle = true; g_maxLevel = lod ? 3 : 4;
+
+    g_rndSeed = 1500 + sv * 23; g_rndCtr = 0;
+    glNewList(L.base, GL_COMPILE);
+    {
+        static const Color BARK = { 0.40f, 0.34f, 0.30f }, BARK_D = { 0.30f, 0.25f, 0.22f };
+        Vec3 a = { 0, 0, 0 }, b = { 0.10f, 1.0f, 0.05f }, c = { -0.06f, 1.9f, 0.0f }, d = { 0.0f, 2.5f, 0.0f };
+        branchTube(a, b, 0.24f, 0.17f, BARK_D);
+        branchTube(b, c, 0.17f, 0.13f, BARK);
+        branchTube(c, d, 0.13f, 0.09f, BARK);
+        for (int i = 0; i < 6; i++) {                              // long spiky roots
+            float ang = (i * 60.0f + rnd() * 30.0f) * PI / 180.0f;
+            branchTube({ 0, 0.38f, 0 }, { cosf(ang) * 0.90f, 0.0f, sinf(ang) * 0.90f }, 0.11f, 0.012f, BARK_D);
+        }
+    }
+    glEndList();
+
+    for (int g = 0; g < 7; g++) {
+        g_rndSeed = 2100 + sv * 61 + g * 11; g_rndCtr = 0;
+        float az, pitch, y0, len;
+        if (g < 6) {
+            az = (g * 60.0f + (rnd() - 0.5f) * 30.0f) * PI / 180.0f;
+            pitch = (26.0f + 26.0f * rnd()) * PI / 180.0f;        // upright, spreading
+            y0 = 1.55f + 0.85f * rnd();
+            len = 1.55f + 0.35f * rnd();
+        } else {
+            az = rnd() * 6.2832f; pitch = 0.12f; y0 = 2.35f; len = 1.30f;
+        }
+        Vec3 dir = { sinf(pitch) * cosf(az), cosf(pitch), sinf(pitch) * sinf(az) };
+        Vec3 base = { 0.0f, y0, 0.0f };
+        L.pivot[g] = base;
+        g_recN = 0; g_recOn = true;
+        glNewList(L.base + 1 + g, GL_COMPILE);
+        growBranch(base, dir, len, 0.062f, 1);
+        glEndList();
+        g_recOn = false;
+        emitShadowList(L.base + 8 + g);
+    }
+    L.built = true;
+    g_lod = false;
+    g_mapleStyle = false; g_maxLevel = 3;
+}
+
+static BlossomLists g_green[7] = {};                   // [0..2] full, [3] jungle light, [4..6] distance version
+
+// Broadleaf tree: short flared trunk, wide spreading branches, layered pads of leaves
+static void buildGreenVariant(int v)
+{
+    const bool lod = v >= 4;
+    const int sv = lod ? v - 4 : v;
+    BlossomLists& L = g_green[v];
+    L.base = glGenLists(16);
+    g_lod = lod;
+    g_greenStyle = true; g_maxLevel = (v == 3 || lod) ? 2 : 3;      // v == 3: jungle light variant; lod: distance version
+
+    g_rndSeed = 3500 + sv * 29; g_rndCtr = 0;
+    glNewList(L.base, GL_COMPILE);
+    {
+        static const Color BARK = { 0.36f, 0.29f, 0.22f }, BARK_D = { 0.28f, 0.22f, 0.17f };
+        Vec3 a = { 0, 0, 0 }, b = { 0.03f, 1.3f, 0.02f }, c = { -0.03f, 2.3f, 0.0f }, d = { 0.0f, 3.1f, 0.0f };
+        branchTube(a, b, 0.34f, 0.22f, BARK_D);                    // flared base
+        branchTube(b, c, 0.22f, 0.17f, BARK);
+        branchTube(c, d, 0.17f, 0.12f, BARK);
+        for (int i = 0; i < 5; i++) {
+            float ang = (i * 72.0f + rnd() * 25.0f) * PI / 180.0f;
+            branchTube({ 0, 0.5f, 0 }, { cosf(ang) * 0.72f, 0.0f, sinf(ang) * 0.72f }, 0.17f, 0.04f, BARK_D);
+        }
+    }
+    glEndList();
+
+    for (int g = 0; g < 7; g++) {
+        g_rndSeed = 3900 + sv * 53 + g * 17; g_rndCtr = 0;
+        float az, pitch, y0, len;
+        if (g < 6) {
+            az = (g * 60.0f + (rnd() - 0.5f) * 30.0f) * PI / 180.0f;
+            pitch = (14.0f + 24.0f * rnd()) * PI / 180.0f;        // steep: crown grows up, not out
+            y0 = 1.9f + 1.3f * rnd();
+            len = 1.9f + 0.6f * rnd();
+        } else {
+            az = rnd() * 6.2832f; pitch = 0.08f; y0 = 3.0f; len = 1.9f;
+        }
+        Vec3 dir = { sinf(pitch) * cosf(az), cosf(pitch), sinf(pitch) * sinf(az) };
+        Vec3 base = { 0.0f, y0, 0.0f };
+        L.pivot[g] = base;
+        g_recN = 0; g_recOn = true;
+        glNewList(L.base + 1 + g, GL_COMPILE);
+        growBranch(base, dir, len, 0.085f, 1);
+        glEndList();
+        g_recOn = false;
+        emitShadowList(L.base + 8 + g);
+    }
+    L.built = true;
+    g_greenStyle = false;
+    g_lod = false; g_maxLevel = 3;
+}
+
+
+// ─── Broadleaf tree ────────────────────────────────────────────────────────
+void drawTree(Vec3 pos, Vec3 rot, Vec3 scale)
+{
+    if (cullObj(pos, scale, 6.0f)) return;
+    int v = ((int)floorf(fabsf(pos.x) * 3.0f + fabsf(pos.z) * 5.0f)) % 3;
+    if (!outdoorShadowPass && outdoorDist2(pos.x, pos.z) > TREE_LOD_DIST * TREE_LOD_DIST) v += 4;   // distance version
+    BlossomLists& L = g_green[v];
+    if (!L.built) buildGreenVariant(v);
+
+    glPushMatrix();
+    applyTransform(pos, rot, scale);
+    glScalef(0.85f, 0.85f, 0.85f);
+
+    float treePhase = pos.x * 0.29f + pos.z * 0.21f;
+    glCallList(L.base);
+    for (int g = 0; g < 7; g++) {
+        float amp = (g < 6) ? 1.8f : 0.8f;
+        float a = amp * breeze(treePhase + g * 0.6f);
+        glPushMatrix();
+        glTranslatef(L.pivot[g].x, L.pivot[g].y, L.pivot[g].z);
+        glRotatef(a, 0, 0, 1);
+        glRotatef(a * 0.45f, 1, 0, 0);
+        glTranslatef(-L.pivot[g].x, -L.pivot[g].y, -L.pivot[g].z);
+        glCallList(L.base + ((outdoorShadowPass && !outdoorShadowDetail) ? 8 : 1) + g);
+        glPopMatrix();
+    }
+    glPopMatrix();
+}
+
+// Light broadleaf tree for the jungle patches (many of them, so far fewer triangles)
+static void drawGreenTreeLOD(Vec3 p, float s, int idx)
+{
+    glPushMatrix();
+    glTranslatef(p.x, p.y, p.z);
+    glRotatef(idx * 97.0f, 0, 1, 0);
+    glScalef(s, s, s);
+    BlossomLists& L = g_green[3];
+    if (!L.built) buildGreenVariant(3);
+    float treePhase = p.x * 0.29f + p.z * 0.21f + idx * 1.3f;
+    glCallList(L.base);
+    for (int g = 0; g < 7; g++) {
+        float a = ((g < 6) ? 1.8f : 0.8f) * breeze(treePhase + g * 0.6f);
+        glPushMatrix();
+        glTranslatef(L.pivot[g].x, L.pivot[g].y, L.pivot[g].z);
+        glRotatef(a, 0, 0, 1);
+        glRotatef(a * 0.45f, 1, 0, 0);
+        glTranslatef(-L.pivot[g].x, -L.pivot[g].y, -L.pivot[g].z);
+        glCallList(L.base + ((outdoorShadowPass && !outdoorShadowDetail) ? 8 : 1) + g);
+        glPopMatrix();
+    }
+    glPopMatrix();
+}
+
+// ---- conifer: tall tapering trunk + stacked tiers of jagged needle skirts ----
+static GLuint g_pine[3] = { 0, 0, 0 };
+
+// One jagged skirt (triangle fan): light centre, darker drooping jagged rim
+static void pineSkirt(float y, float R, float drop, Color c, int seed)
+{
+    const int N = 18;
+    glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0.0f, 1.0f, 0.0f);
+    glColor3f(c.r * 1.25f, c.g * 1.25f, c.b * 1.2f);
+    glVertex3f(0.0f, y + 0.22f, 0.0f);
+    for (int i = 0; i <= N; i++) {
+        int k = i % N;                                         // closing vertex equals the first one
+        float a = k * 6.2832f / N + seed * 0.37f;
+        float rr = R * ((k % 2 == 0) ? 1.0f : 0.70f) * (0.92f + 0.16f * blossomHash(seed * 31 + k, 7));
+        float yy = y - drop - 0.10f * blossomHash(seed * 31 + k, 8);
+        float nx = cosf(a) * 0.55f, nz = sinf(a) * 0.55f, nl = sqrtf(nx * nx + 0.64f + nz * nz);
+        glNormal3f(nx / nl, 0.8f / nl, nz / nl);
+        glColor3f(c.r * 0.72f, c.g * 0.72f, c.b * 0.72f);
+        glVertex3f(cosf(a) * rr, yy, sinf(a) * rr);
+    }
+    glEnd();
+}
+
+static void buildPineVariant(int v)
+{
+    GLuint base = glGenLists(2);
+    g_pine[v] = base;
+    g_rndSeed = 4500 + v * 31; g_rndCtr = 0;
+
+    glNewList(base, GL_COMPILE);                               // trunk
+    {
+        static const Color T = { 0.30f, 0.21f, 0.13f }, TD = { 0.23f, 0.16f, 0.10f };
+        branchTube({ 0, 0, 0 }, { 0.03f, 1.4f, 0.0f }, 0.17f, 0.12f, TD);
+        branchTube({ 0.03f, 1.4f, 0.0f }, { -0.02f, 3.3f, 0.0f }, 0.12f, 0.04f, T);
+        for (int i = 0; i < 4; i++) {
+            float ang = (i * 90.0f + rnd() * 30.0f) * PI / 180.0f;
+            branchTube({ 0, 0.3f, 0 }, { cosf(ang) * 0.45f, 0.0f, sinf(ang) * 0.45f }, 0.09f, 0.03f, TD);
+        }
+    }
+    glEndList();
+
+    glNewList(base + 1, GL_COMPILE);                           // crown
+    {
+        const int tiers = 9;
+        for (int t = 0; t < tiers; t++) {
+            float u = t / (tiers - 1.0f);
+            float y = 0.85f + u * 2.55f;
+            float R = 1.15f * (1.0f - 0.84f * u) + 0.12f;
+            float drop = 0.50f * (1.0f - 0.45f * u);
+            float vary = 0.04f * (rnd() - 0.5f);
+            Color c = { 0.06f + 0.08f * u + vary, 0.26f + 0.16f * u + vary, 0.11f + 0.06f * u };
+            pineSkirt(y, R, drop, c, v * 17 + t);                                        // outer skirt
+            pineSkirt(y + 0.14f, R * 0.70f, drop * 0.8f, { c.r * 1.15f, c.g * 1.15f, c.b * 1.1f }, v * 17 + t + 50);
+        }
+        // spire
+        glBegin(GL_TRIANGLE_FAN);
+        glNormal3f(0, 1, 0);
+        glColor3f(0.18f, 0.46f, 0.20f);
+        glVertex3f(0.0f, 3.75f, 0.0f);
+        glColor3f(0.10f, 0.32f, 0.14f);
+        for (int i = 0; i <= 8; i++) glVertex3f(cosf(i * 6.2832f / 8) * 0.14f, 3.25f, sinf(i * 6.2832f / 8) * 0.14f);
+        glEnd();
+    }
+    glEndList();
+}
+
+// ---- falling petals / leaves and the carpet below the tree ----
+static Color petalColor(bool leaf, int i)
+{
+    static const Color CHERRY[3] = { { 1.00f, 0.78f, 0.86f }, { 0.98f, 0.62f, 0.76f }, { 1.00f, 0.90f, 0.94f } };
+    static const Color LEAF[3]   = { { 0.85f, 0.15f, 0.08f }, { 0.92f, 0.45f, 0.10f }, { 0.95f, 0.70f, 0.15f } };
+    return leaf ? LEAF[i % 3] : CHERRY[i % 3];
+}
+
+static void petalQuad(float w, float h)          // flat kite shape in the XZ plane
+{
+    glBegin(GL_QUADS);
+    glNormal3f(0, 1, 0);
+    glVertex3f(0, 0, -h); glVertex3f(w, 0, 0); glVertex3f(0, 0, h); glVertex3f(-w, 0, 0);
+    glEnd();
+}
+
+// Flat maple leaf in the XZ plane (for falling / fallen leaves)
+static void mapleLeafFlat(float s)
+{
+    glPushMatrix();
+    glRotatef(-90.0f, 1, 0, 0);
+    drawMapleLeafShape(s);
+    glPopMatrix();
+}
+
+// Flat notched cherry petal (same outline as the blossom petals) in the XZ plane
+static void notchedPetal(float s)
+{
+    static const float PV[6][3] = {
+        { 0.00f, 0.06f, 0.00f }, { -0.34f, 0.42f, 0.08f }, { -0.23f, 0.93f, 0.20f },
+        { 0.00f, 0.80f, 0.13f }, {  0.23f, 0.93f, 0.20f }, {  0.34f, 0.42f, 0.08f } };
+    static const int T[4][3] = { { 0, 1, 2 }, { 0, 2, 3 }, { 0, 3, 4 }, { 0, 4, 5 } };
+    glBegin(GL_TRIANGLES);
+    glNormal3f(0, 1, 0);
+    for (int t = 0; t < 4; t++)
+        for (int k = 0; k < 3; k++) {
+            int i = T[t][k];
+            glVertex3f(PV[i][0] * s, PV[i][2] * s * 0.4f, (PV[i][1] - 0.45f) * s);
+        }
+    glEnd();
+}
+
+// Petals drift down from the canopy, tumble, get blown along the wind and
+// shrink away once they have landed.  Purely a function of time.
+static void drawFallingPetals(float radius, float top, int n, bool leaf, int seed)
+{
+    if (outdoorShadowPass) return;
+    float w = leaf ? 0.075f : 0.045f, h = leaf ? 0.105f : 0.070f;
+    for (int i = 0; i < n; i++) {
+        float speed = 0.09f + 0.10f * blossomHash(seed + i, 1);          // cycles per second
+        float u = fmodf(animTime * speed + blossomHash(seed + i, 2), 1.0f);
+        float y = top * (1.0f - u * 1.04f);
+        float scale = 1.0f;
+        if (y < 0.03f) { y = 0.03f; scale = clamp01f((1.0f - u) / 0.04f); }   // landed: shrink out
+        float a0 = blossomHash(seed + i, 3) * 6.2832f, rad = radius * sqrtf(blossomHash(seed + i, 4));
+        float wind = 1.0f + 0.4f * breeze(seed * 0.1f + i * 0.3f);
+        float drift = u * 1.4f * wind;
+        float x = cosf(a0) * rad + drift + 0.25f * sinf(animTime * 1.3f + i);
+        float z = sinf(a0) * rad + 0.45f * drift + 0.25f * cosf(animTime * 1.1f + i * 1.7f);
+        setColor(petalColor(leaf, i));
+        glPushMatrix();
+        glTranslatef(x, y, z);
+        glRotatef(animTime * (70.0f + 110.0f * blossomHash(seed + i, 5)) + blossomHash(seed + i, 6) * 360.0f, 0, 1, 0);
+        if (y > 0.04f) glRotatef(38.0f * sinf(animTime * 3.1f + i * 2.1f) + 25.0f, 1, 0, 0);   // flutter
+        glScalef(scale, scale, scale);
+        if (leaf) mapleLeafFlat(0.085f); else notchedPetal(0.12f);
+        glPopMatrix();
+    }
+}
+
+// Carpet of fallen petals / leaves (static, cached)
+static GLuint g_carpet[2] = { 0, 0 };
+static void drawPetalCarpet(bool leaf, float radius, int n)
+{
+    if (outdoorShadowPass) return;
+    int idx = leaf ? 1 : 0;
+    if (!g_carpet[idx]) {
+        g_carpet[idx] = glGenLists(1);
+        glNewList(g_carpet[idx], GL_COMPILE);
+        float w = leaf ? 0.075f : 0.045f, h = leaf ? 0.105f : 0.070f;
+        for (int i = 0; i < n; i++) {
+            float a = blossomHash(i, 41 + idx) * 6.2832f, r = radius * sqrtf(blossomHash(i, 43 + idx));
+            setColor(petalColor(leaf, i));
+            glPushMatrix();
+            glTranslatef(cosf(a) * r, 0.02f + 0.0004f * (i % 7), sinf(a) * r);
+            glRotatef(blossomHash(i, 47 + idx) * 360.0f, 0, 1, 0);
+            glScalef(1.3f, 1.0f, 1.3f);
+            if (leaf) mapleLeafFlat(0.085f); else notchedPetal(0.12f);
+            glPopMatrix();
+        }
+        glEndList();
+    }
+    glCallList(g_carpet[idx]);
+}
+
 // ────── Cherry Blossom Tree ──────
-// Elegant cherry blossom tree with pink flowering blossoms and graceful branches
 void drawCherryBlossomTree(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (cullObj(pos, scale, 5.5f)) return;
+    int v = ((int)floorf(fabsf(pos.x) * 3.0f + fabsf(pos.z) * 5.0f)) % 3;   // neighbours differ
+    if (!outdoorShadowPass && outdoorDist2(pos.x, pos.z) > TREE_LOD_DIST * TREE_LOD_DIST) v += 3;   // distance version
+    BlossomLists& L = g_cherry[v];
+    if (!L.built) buildCherryVariant(v);
+
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
-    // Brown trunk with slight taper
-    setMaterialPBR(Materials::WoodMatte, TRUNK);
-    drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.2f, 2.1f, 0.2f }, TRUNK);
-
-    // Cherry blossom pink colors - soft and graceful
-    Color cherryPink = { 0.95f, 0.70f, 0.75f };  // Soft pink for blossoms
-    Color cherryPinkLight = { 1.0f, 0.85f, 0.90f };  // Lighter pink highlights
-
-    // Set emissive glow for cherry blossoms - they catch light beautifully
-    setEmission(0.15f, 0.08f, 0.10f);  // Subtle pink glow
-    setMaterialPBR(Materials::GlazedMatte, cherryPink);
-
-    // Central large canopy sphere
-    drawSphere({ 0.0f, 2.4f, 0.0f }, NO_ROT, { 1.8f, 1.6f, 1.8f }, cherryPink);
-
-    // Left side flowering cluster
-    drawSphere({ -0.8f, 2.6f, -0.3f }, NO_ROT, { 1.2f, 1.4f, 1.2f }, cherryPinkLight);
-
-    // Right side flowering cluster
-    drawSphere({ 0.7f, 2.7f, 0.4f }, NO_ROT, { 1.3f, 1.5f, 1.3f }, cherryPinkLight);
-
-    // Top crown bloom
-    drawSphere({ 0.0f, 3.5f, 0.0f }, NO_ROT, { 1.0f, 0.9f, 1.0f }, cherryPink);
-
-    // Lower blooms
-    drawSphere({ -0.5f, 1.8f, 0.3f }, NO_ROT, { 0.9f, 0.8f, 0.9f }, cherryPinkLight);
-    drawSphere({ 0.6f, 1.9f, -0.2f }, NO_ROT, { 0.85f, 0.75f, 0.85f }, cherryPink);
-
-    clearEmission();
+    float treePhase = pos.x * 0.37f + pos.z * 0.23f;                        // each tree out of step
+    setMaterialGloss(0.20f, 0.20f, 0.20f, 25.0f);
+    glCallList(L.base);                                                     // trunk
+    for (int g = 0; g < 7; g++) {                                           // swaying branch groups
+        float amp = (g < 6) ? 2.8f : 1.2f;
+        float a = amp * breeze(treePhase + g * 0.55f);
+        glPushMatrix();
+        glTranslatef(L.pivot[g].x, L.pivot[g].y, L.pivot[g].z);
+        glRotatef(a, 0, 0, 1);
+        glRotatef(a * 0.45f, 1, 0, 0);
+        glTranslatef(-L.pivot[g].x, -L.pivot[g].y, -L.pivot[g].z);
+        glCallList(L.base + ((outdoorShadowPass && !outdoorShadowDetail) ? 8 : 1) + g);
+        glPopMatrix();
+    }
     resetMaterialGloss();
+
+    int seed = (int)(pos.x * 7.0f + pos.z * 13.0f);
+    drawFallingPetals(2.1f, 3.7f, 30, false, seed);
+    drawPetalCarpet(false, 2.8f, 110);
+
     glPopMatrix();
 }
 
@@ -865,101 +1843,222 @@ void drawShojiWindow(Vec3 pos, Vec3 rot, Vec3 scale, float width, float height)
 // Layered conical tiers of dark green foliage on a gnarled brown trunk
 void drawJapanesePineTree(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (cullObj(pos, scale, 5.0f)) return;
+    int v = ((int)floorf(fabsf(pos.x) * 3.0f + fabsf(pos.z) * 5.0f)) % 3;
+    if (!g_pine[v]) buildPineVariant(v);
+
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
-    // Trunk — slightly bent / gnarled
-    const Color PINE_TRUNK = { 0.28f, 0.18f, 0.10f };
-    drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.12f, 2.0f, 0.12f }, PINE_TRUNK);
-    drawCylinder({ 0.05f, 2.0f, 0 }, { 0, 0, 5 }, { 0.10f, 0.8f, 0.10f }, PINE_TRUNK);
-
-    // Foliage tiers — dark pine green cones stacked
-    const Color PINE_DARK  = { 0.08f, 0.30f, 0.12f };
-    const Color PINE_LIGHT = { 0.12f, 0.38f, 0.15f };
-
-    drawCone({ 0, 1.2f, 0 }, NO_ROT, { 1.8f, 1.0f, 1.8f }, PINE_DARK);
-    drawCone({ 0, 1.8f, 0 }, NO_ROT, { 1.5f, 0.9f, 1.5f }, PINE_LIGHT);
-    drawCone({ 0, 2.3f, 0 }, NO_ROT, { 1.2f, 0.8f, 1.2f }, PINE_DARK);
-    drawCone({ 0, 2.7f, 0 }, NO_ROT, { 0.8f, 0.7f, 0.8f }, PINE_LIGHT);
+    glCallList(g_pine[v]);                                     // trunk
+    float a = 1.3f * breeze(pos.x * 0.33f + pos.z * 0.19f);    // the whole crown sways gently
+    glPushMatrix();
+    glRotatef(a, 0, 0, 1);
+    glRotatef(a * 0.5f, 1, 0, 0);
+    glCallList(g_pine[v] + 1);
+    glPopMatrix();
 
     glPopMatrix();
 }
 
 // ─── Bamboo Grove ───────────────────────────────────────────────────────────
 // Cluster of tall bamboo stalks with small leaf tufts at the top
+// ─── Bamboo ─────────────────────────────────────────────────────────────────
+// Each culm: slightly bent, tapering stalk made of internodes with swollen pale
+// node bands, thin side branches near the top carrying drooping clusters of long
+// narrow leaves.  Culms are cached in display lists (3 grove variants x 9 culms)
+// and sway individually in the breeze.
+static void bambooTube(Vec3 a, Vec3 b, float r0, float r1, int slices)
+{
+    float dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+    float len = sqrtf(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-5f) return;
+    glPushMatrix();
+    glTranslatef(a.x, a.y, a.z);
+    float ax = -dy, ay = dx;
+    if (fabsf(ax) + fabsf(ay) > 1e-5f) glRotatef(acosf(dz / len) * 180.0f / PI, ax, ay, 0.0f);
+    else if (dz < 0.0f) glRotatef(180.0f, 1, 0, 0);
+    gluCylinder(quad, r0, r1, len, slices, 1);
+    glPopMatrix();
+}
+
+// One long narrow drooping leaf from `base` heading along unit `dir`
+static void bambooLeaf(Vec3 base, Vec3 dir, float len, float w, float droop, float tone)
+{
+    float sx = dir.z, sy = 0.0f, sz = -dir.x;                     // dir x up
+    float sl = sqrtf(sx * sx + sz * sz);
+    if (sl < 0.05f) { sx = 1.0f; sz = 0.0f; sl = 1.0f; }
+    sx /= sl; sz /= sl;
+    float nx = -(dir.y * sz), ny = dir.z * sx - dir.x * sz, nz = dir.y * sx;   // side x dir
+    if (ny < 0.0f) { nx = -nx; ny = -ny; nz = -nz; }
+    normalize3(nx, ny, nz);
+    const int SEG = 4;
+    Vec3 pt[SEG + 1];
+    float ww[SEG + 1];
+    for (int i = 0; i <= SEG; i++) {
+        float t = i / (float)SEG;
+        pt[i] = { base.x + dir.x * len * t, base.y + dir.y * len * t - droop * len * t * t, base.z + dir.z * len * t };
+        ww[i] = w * powf(sinf(3.14159f * (0.10f + 0.90f * t)), 0.8f);
+    }
+    glNormal3f(nx, ny, nz);
+    glBegin(GL_TRIANGLES);
+    for (int i = 0; i < SEG; i++) {
+        float k0 = 0.60f + 0.55f * (i / (float)SEG), k1 = 0.60f + 0.55f * ((i + 1) / (float)SEG);
+        glColor3f(0.10f * tone * k0, 0.34f * tone * k0, 0.08f * tone * k0);
+        glVertex3f(pt[i].x - sx * ww[i], pt[i].y, pt[i].z - sz * ww[i]);
+        glVertex3f(pt[i].x + sx * ww[i], pt[i].y, pt[i].z + sz * ww[i]);
+        glColor3f(0.10f * tone * k1, 0.34f * tone * k1, 0.08f * tone * k1);
+        glVertex3f(pt[i + 1].x + sx * ww[i + 1], pt[i + 1].y, pt[i + 1].z + sz * ww[i + 1]);
+        glColor3f(0.10f * tone * k0, 0.34f * tone * k0, 0.08f * tone * k0);
+        glVertex3f(pt[i].x - sx * ww[i], pt[i].y, pt[i].z - sz * ww[i]);
+        glColor3f(0.10f * tone * k1, 0.34f * tone * k1, 0.08f * tone * k1);
+        glVertex3f(pt[i + 1].x + sx * ww[i + 1], pt[i + 1].y, pt[i + 1].z + sz * ww[i + 1]);
+        glVertex3f(pt[i + 1].x - sx * ww[i + 1], pt[i + 1].y, pt[i + 1].z - sz * ww[i + 1]);
+    }
+    glEnd();
+}
+
+// Fan of leaves at the end of a twig
+static void bambooLeafCluster(Vec3 c, float yawBase, float size)
+{
+    int n = 4 + (int)(rnd() * 3.0f);
+    for (int i = 0; i < n; i++) {
+        float yaw = yawBase + (i - (n - 1) * 0.5f) * 0.55f + (rnd() - 0.5f) * 0.3f;
+        float up = 0.25f + 0.35f * rnd();
+        Vec3 d = vNorm({ cosf(yaw), up, sinf(yaw) });
+        bambooLeaf(c, d, size * (0.8f + 0.5f * rnd()), 0.05f + 0.025f * rnd(), 0.55f + 0.35f * rnd(), 0.8f + 0.5f * rnd());
+    }
+}
+
+static GLuint g_bamboo[3] = { 0, 0, 0 };
+static const int BAMBOO_CULMS = 9;
+struct BambooPos { float x, z; };
+static BambooPos g_bambooPos[3][BAMBOO_CULMS];
+
+static void buildBambooVariant(int v)
+{
+    g_bamboo[v] = glGenLists(BAMBOO_CULMS);
+    for (int c = 0; c < BAMBOO_CULMS; c++) {
+        g_rndSeed = 7000 + v * 101 + c * 13; g_rndCtr = 0;
+        float ang = c * 2.39996f + v, rad = 0.12f + 0.62f * sqrtf((c + 0.5f) / BAMBOO_CULMS);
+        g_bambooPos[v][c] = { cosf(ang) * rad, sinf(ang) * rad };
+
+        float H = 4.6f + 2.0f * rnd();
+        float r0 = 0.055f + 0.025f * rnd();
+        float lx = (rnd() - 0.5f) * 0.9f, lz = (rnd() - 0.5f) * 0.9f;        // lean
+        float yellow = rnd();                                                  // older culms are yellower
+        Color body = { 0.34f + 0.26f * yellow, 0.56f + 0.06f * yellow, 0.18f };
+        int nodes = 9 + (int)(rnd() * 3.0f);
+
+        glNewList(g_bamboo[v] + c, GL_COMPILE);
+        glDisable(GL_CULL_FACE);
+        // points at each node
+        Vec3 np[16];
+        float nr[16];
+        for (int i = 0; i <= nodes; i++) {
+            float t = i / (float)nodes;
+            float tt = powf(t, 1.0f + 0.35f * (1.0f - t));                     // internodes get longer toward the top
+            float y = H * (0.02f + 0.98f * tt);
+            np[i] = { lx * t * t, y, lz * t * t };
+            nr[i] = r0 * (1.0f - 0.52f * t);
+        }
+        for (int i = 0; i < nodes; i++) {
+            float mid = 0.5f * (nr[i] + nr[i + 1]);
+            float k = 0.92f + 0.10f * rnd();
+            setColor({ body.r * k, body.g * k, body.b * k });
+            bambooTube(np[i], np[i + 1], nr[i] * 0.97f, nr[i + 1] * 0.97f, 8);
+            (void)mid;
+            // swollen pale node band + thin dark ring below it
+            Vec3 n0 = np[i + 1], n1 = { np[i + 1].x, np[i + 1].y + 0.045f, np[i + 1].z };
+            setColor({ 0.66f, 0.68f, 0.34f });
+            bambooTube(n0, n1, nr[i + 1] * 1.22f, nr[i + 1] * 1.12f, 8);
+            Vec3 d0 = { np[i + 1].x, np[i + 1].y - 0.012f, np[i + 1].z };
+            setColor({ 0.26f, 0.30f, 0.12f });
+            bambooTube(d0, n0, nr[i + 1] * 1.15f, nr[i + 1] * 1.18f, 8);
+        }
+        // side branches + leaves on the upper nodes
+        for (int i = nodes / 2; i <= nodes; i++) {
+            int nb = (i == nodes) ? 1 : 2;
+            for (int q = 0; q < nb; q++) {
+                float yaw = (rnd() * 6.2832f);
+                float out = 0.35f + 0.45f * rnd();
+                Vec3 st = np[i];
+                Vec3 en = { st.x + cosf(yaw) * out, st.y + 0.12f + 0.18f * rnd(), st.z + sinf(yaw) * out };
+                if (i == nodes) en = { st.x, st.y + 0.12f, st.z };
+                setColor({ 0.28f, 0.42f, 0.16f });
+                bambooTube(st, en, 0.014f, 0.007f, 5);
+                bambooLeafCluster(en, yaw, (i == nodes) ? 0.55f : 0.45f);
+            }
+        }
+        glEndList();
+    }
+}
+
 void drawBambooGrove(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (cullObj(pos, scale, 8.0f)) return;
+    int v = ((int)floorf(fabsf(pos.x) * 3.0f + fabsf(pos.z) * 5.0f)) % 3;
+    if (!g_bamboo[v]) buildBambooVariant(v);
+
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    glScalef(1.0f, 1.0f, 1.0f);
 
-    const Color BAMBOO_GREEN = { 0.35f, 0.55f, 0.25f };
-    const Color BAMBOO_LIGHT = { 0.45f, 0.65f, 0.30f };
-    const Color BAMBOO_LEAF  = { 0.25f, 0.50f, 0.18f };
-
-    // 8 bamboo stalks at slightly random positions
-    const float stalks[][3] = {
-        { 0.0f, 0, 0.0f }, { 0.3f, 0, -0.2f }, { -0.25f, 0, 0.15f },
-        { 0.15f, 0, 0.3f }, { -0.35f, 0, -0.1f }, { 0.4f, 0, 0.15f },
-        { -0.1f, 0, -0.35f }, { 0.2f, 0, -0.4f }
-    };
-    const float heights[] = { 4.0f, 3.5f, 4.2f, 3.8f, 4.5f, 3.3f, 3.7f, 4.1f };
-
-    for (int i = 0; i < 8; i++) {
-        float h = heights[i];
-        Color col = (i % 2 == 0) ? BAMBOO_GREEN : BAMBOO_LIGHT;
-
-        // Main stalk
-        drawCylinder({ stalks[i][0], 0, stalks[i][2] }, NO_ROT,
-                     { 0.04f, h, 0.04f }, col);
-
-        // Nodes (bamboo joints) every 0.6 units
-        for (float y = 0.4f; y < h; y += 0.6f) {
-            drawTorus({ stalks[i][0], y, stalks[i][2] }, { 90, 0, 0 },
-                      ONE, col, 0.008f, 0.045f);
-        }
-
-        // Leaf tufts at top
-        float sway = sinf(animTime * 1.5f + i * 0.8f) * 3.0f;
+    // grass fronds around the foot of the grove
+    if (!outdoorShadowPass) {
+        if (!g_tuft[1]) buildTuft(1);
         glPushMatrix();
-        glTranslatef(stalks[i][0], h, stalks[i][2]);
-        glRotatef(sway, 0, 0, 1);
-        for (int j = 0; j < 3; j++) {
-            float angle = j * 120.0f + i * 30.0f;
-            glPushMatrix();
-            glRotatef(angle, 0, 1, 0);
-            glRotatef(-35, 1, 0, 0);
-            drawCube({ 0, 0, 0.15f }, NO_ROT, { 0.02f, 0.005f, 0.25f }, BAMBOO_LEAF);
-            glPopMatrix();
-        }
+        glScalef(1.1f, 0.9f, 1.1f);
+        glCallList(g_tuft[1]);
         glPopMatrix();
     }
 
+    float phase = pos.x * 0.3f + pos.z * 0.2f;
+    int nCulms = (!outdoorShadowPass && outdoorDist2(pos.x, pos.z) > BAMBOO_LOD_DIST * BAMBOO_LOD_DIST) ? 6 : BAMBOO_CULMS;
+    for (int c = 0; c < nCulms; c++) {
+        float a = 1.6f * breeze(phase + c * 0.9f);                  // each culm sways on its own
+        glPushMatrix();
+        glTranslatef(g_bambooPos[v][c].x, 0.0f, g_bambooPos[v][c].z);
+        glRotatef(a, 0, 0, 1);
+        glRotatef(a * 0.6f, 1, 0, 0);
+        glCallList(g_bamboo[v] + c);
+        glPopMatrix();
+    }
     glPopMatrix();
 }
 
 // ─── Maple Tree (Momiji) ────────────────────────────────────────────────────
-// Autumn-red maple tree with spreading canopy
+// Slender maple with a fine branching crown of small red / orange leaves that
+// sways in the breeze and drops leaves (same machinery as the cherry trees)
 void drawMapleTree(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (cullObj(pos, scale, 6.0f)) return;
+    int v = ((int)floorf(fabsf(pos.x) * 3.0f + fabsf(pos.z) * 5.0f)) % 3;
+    if (!outdoorShadowPass && outdoorDist2(pos.x, pos.z) > TREE_LOD_DIST * TREE_LOD_DIST) v += 3;   // distance version
+    BlossomLists& L = g_maple[v];
+    if (!L.built) buildMapleVariant(v);
+
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    glScalef(0.9f, 0.9f, 0.9f);
 
-    // Trunk with slight lean
-    drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.15f, 1.6f, 0.15f }, TRUNK);
-    // Major branch split
-    drawCylinder({ 0.1f, 1.6f, 0 }, { 0, 0, 15 }, { 0.08f, 0.8f, 0.08f }, TRUNK);
-    drawCylinder({ -0.1f, 1.6f, 0.05f }, { 0, 0, -12 }, { 0.07f, 0.7f, 0.07f }, TRUNK);
+    float treePhase = pos.x * 0.31f + pos.z * 0.27f;
+    glCallList(L.base);                                                     // trunk + roots
+    for (int g = 0; g < 7; g++) {
+        float amp = (g < 6) ? 2.2f : 1.0f;
+        float a = amp * breeze(treePhase + g * 0.6f);
+        glPushMatrix();
+        glTranslatef(L.pivot[g].x, L.pivot[g].y, L.pivot[g].z);
+        glRotatef(a, 0, 0, 1);
+        glRotatef(a * 0.45f, 1, 0, 0);
+        glTranslatef(-L.pivot[g].x, -L.pivot[g].y, -L.pivot[g].z);
+        glCallList(L.base + ((outdoorShadowPass && !outdoorShadowDetail) ? 8 : 1) + g);
+        glPopMatrix();
+    }
 
-    // Autumn foliage — red/orange/gold maple leaves
-    const Color MAPLE_RED    = { 0.85f, 0.15f, 0.08f };
-    const Color MAPLE_ORANGE = { 0.92f, 0.45f, 0.10f };
-    const Color MAPLE_GOLD   = { 0.95f, 0.70f, 0.15f };
-
-    drawSphere({ 0.0f, 2.3f, 0.0f }, NO_ROT, { 1.6f, 1.3f, 1.6f }, MAPLE_RED);
-    drawSphere({ 0.6f, 2.5f, 0.3f }, NO_ROT, { 1.2f, 1.0f, 1.2f }, MAPLE_ORANGE);
-    drawSphere({ -0.5f, 2.4f, -0.2f }, NO_ROT, { 1.1f, 0.9f, 1.1f }, MAPLE_GOLD);
-    drawSphere({ 0.2f, 2.8f, -0.1f }, NO_ROT, { 0.9f, 0.8f, 0.9f }, MAPLE_RED);
-    drawSphere({ -0.3f, 2.0f, 0.4f }, NO_ROT, { 0.8f, 0.7f, 0.8f }, MAPLE_ORANGE);
+    int seed = (int)(pos.x * 5.0f + pos.z * 11.0f) + 400;
+    drawFallingPetals(2.3f, 4.4f, 26, true, seed);
+    drawPetalCarpet(true, 2.6f, 80);
 
     glPopMatrix();
 }
@@ -968,6 +2067,7 @@ void drawMapleTree(Vec3 pos, Vec3 rot, Vec3 scale)
 // Traditional Japanese house with exposed rafters, veranda, red lanterns, foundation stones
 void drawJapaneseHouse(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (cullObj(pos, scale, 6.5f)) return;
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
@@ -1117,6 +2217,7 @@ void drawJapaneseHouse(Vec3 pos, Vec3 rot, Vec3 scale)
 // Wider, lower house with large sliding doors, side porch, raised floor
 void drawJapaneseHouse2(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (cullObj(pos, scale, 6.5f)) return;
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
@@ -1257,6 +2358,7 @@ void drawJapaneseHouse2(Vec3 pos, Vec3 rot, Vec3 scale)
 // Traditional Japanese garden stone lantern
 void drawStoneLantern(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (cullObj(pos, scale, 2.0f)) return;
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
@@ -1412,6 +2514,7 @@ void drawBridge(Vec3 pos, Vec3 rot, Vec3 scale)
 // Reflective water surface with shore rocks and subtle wave animation
 void drawLake(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (outdoorShadowPass) return;
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
@@ -1535,36 +2638,16 @@ void drawLake(Vec3 pos, Vec3 rot, Vec3 scale)
 // Cluster of grass blade quads rising from the ground
 void drawGrassPatch(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (cullObj(pos, scale, 1.8f)) return;
+    if (outdoorShadowPass) return;
+    int v = ((int)floorf(fabsf(pos.x) * 3.0f + fabsf(pos.z) * 5.0f)) % 3;
+    if (!g_tuft[v]) buildTuft(v);
     glPushMatrix();
     applyTransform(pos, rot, scale);
-
-    const Color GRASS_D = { 0.16f, 0.38f, 0.10f };   // blade root
-    const Color GRASS_L = { 0.45f, 0.70f, 0.22f };   // blade tip
-
-    // Tuft of tapered blades spread evenly (sunflower spiral) over a ~1 unit
-    // radius disc; all blades go in one glBegin for speed.
-    const int   N = 36;
-    const float GOLDEN = 2.39996f;
-    glBegin(GL_TRIANGLES);
-    glNormal3f(0, 1, 0);
-    for (int i = 0; i < N; i++) {
-        float r   = sqrtf((i + 0.5f) / N);
-        float bx  = r * cosf(i * GOLDEN);
-        float bz  = r * sinf(i * GOLDEN);
-        float bh  = 0.35f + 0.25f * (0.5f + 0.5f * sinf(i * 1.7f));
-        float yaw = i * 1.1f;
-        float dx  = cosf(yaw) * 0.07f, dz = sinf(yaw) * 0.07f;
-        float sway = sinf(animTime * 1.8f + i * 0.7f + bx * 2.0f) * 0.06f;
-        float lean = 0.08f * sinf(i * 2.3f);
-
-        setColor(GRASS_D);
-        glVertex3f(bx - dx, 0.0f, bz - dz);
-        glVertex3f(bx + dx, 0.0f, bz + dz);
-        setColor(GRASS_L);
-        glVertex3f(bx + sway + lean, bh, bz + sway * 0.5f);
-    }
-    glEnd();
-
+    float a = 2.5f * sinf(animTime * 1.5f + pos.x * 0.6f + pos.z * 0.4f) + 1.2f * sinf(animTime * 3.1f + pos.x);
+    glRotatef(a, 0, 0, 1);
+    glRotatef(a * 0.5f, 1, 0, 0);
+    glCallList(g_tuft[v]);
     glPopMatrix();
 }
 
@@ -1572,8 +2655,11 @@ void drawGrassPatch(Vec3 pos, Vec3 rot, Vec3 scale)
 // Thick cluster of tropical-looking plants, ferns, and small trees
 void drawJungle(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (cullObj(pos, scale, 6.0f)) return;
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    g_objDist2 = outdoorDist2(pos.x, pos.z);
+    g_shadowRot = rot.y;
 
     const Color JUNGLE_DARK  = { 0.10f, 0.35f, 0.12f };
     const Color JUNGLE_MID   = { 0.15f, 0.45f, 0.15f };
@@ -1581,25 +2667,20 @@ void drawJungle(Vec3 pos, Vec3 rot, Vec3 scale)
     const Color FERN         = { 0.18f, 0.48f, 0.18f };
 
     // Dense undergrowth spheres (ground cover)
-    drawSphere({ 0.0f, 0.3f, 0.0f }, NO_ROT, { 2.5f, 0.6f, 2.5f }, JUNGLE_DARK);
-    drawSphere({ 1.2f, 0.35f, 0.8f }, NO_ROT, { 2.0f, 0.5f, 2.0f }, JUNGLE_MID);
-    drawSphere({ -1.0f, 0.3f, -0.6f }, NO_ROT, { 1.8f, 0.55f, 1.8f }, JUNGLE_LIGHT);
+    domeBush( 0.0f, 0.0f,  0.0f, 1.25f, 0.70f, pos.x);
+    domeBush( 1.2f, 0.0f,  0.8f, 1.00f, 0.65f, pos.x + 1.0f);
+    domeBush(-1.0f, 0.0f, -0.6f, 0.90f, 0.65f, pos.z + 2.0f);
 
     // Mid-level bushes
-    drawSphere({ 0.5f, 0.8f, 0.3f }, NO_ROT, { 1.5f, 1.2f, 1.5f }, JUNGLE_MID);
-    drawSphere({ -0.8f, 0.7f, 0.5f }, NO_ROT, { 1.3f, 1.0f, 1.3f }, JUNGLE_DARK);
-    drawSphere({ 0.3f, 0.9f, -0.8f }, NO_ROT, { 1.4f, 1.1f, 1.4f }, JUNGLE_LIGHT);
+    domeBush( 0.5f, 0.15f,  0.3f, 0.75f, 1.00f, pos.x + 3.0f);
+    domeBush(-0.8f, 0.15f,  0.5f, 0.65f, 0.90f, pos.z + 4.0f);
+    domeBush( 0.3f, 0.15f, -0.8f, 0.70f, 0.95f, pos.x + pos.z);
 
     // Tall jungle trees rising above the canopy
-    for (int i = 0; i < 4; i++) {
-        float tx = sinf(i * 1.8f) * 1.5f;
-        float tz = cosf(i * 2.3f) * 1.5f;
-        float th = 3.0f + i * 0.5f;
-        drawCylinder({ tx, 0, tz }, NO_ROT, { 0.08f, th, 0.08f }, TRUNK);
-        drawSphere({ tx, th + 0.5f, tz }, NO_ROT,
-                   { 1.2f, 1.0f, 1.2f }, (i % 2) ? JUNGLE_MID : JUNGLE_DARK);
-        drawSphere({ tx + 0.3f, th + 0.8f, tz - 0.2f }, NO_ROT,
-                   { 0.8f, 0.7f, 0.8f }, JUNGLE_LIGHT);
+    for (int i = 0; i < 2; i++) {
+        float tx = sinf(i * 1.8f + 0.6f) * 1.6f;
+        float tz = cosf(i * 2.3f + 0.4f) * 1.6f;
+        drawGreenTreeLOD({ tx, 0, tz }, 0.78f + 0.12f * i, i);        // real broadleaf trees
     }
 
     // Fern fronds (flat leaf-like quads fanning out from ground)
@@ -1621,6 +2702,7 @@ void drawJungle(Vec3 pos, Vec3 rot, Vec3 scale)
         glPopMatrix();
     }
 
+    g_shadowRot = 0.0f;
     glPopMatrix();
 }
 
@@ -1628,6 +2710,7 @@ void drawJungle(Vec3 pos, Vec3 rot, Vec3 scale)
 // Animated glowing particles that drift and dim/brighten — visible at night only
 void drawFireflies(Vec3 pos, float radius, int count)
 {
+    if (outdoorShadowPass) return;
     if (isDayTime) return;   // only at night
 
     glPushMatrix();
@@ -1691,6 +2774,7 @@ void drawFireflies(Vec3 pos, float radius, int count)
 // Animated duck that swims in a circle on the lake surface
 void drawDuck(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (outdoorShadowPass) return;
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
@@ -1765,6 +2849,8 @@ void drawDuck(Vec3 pos, Vec3 rot, Vec3 scale)
 // Patch of colorful Japanese flowers: chrysanthemums, cosmos, and lotuses
 void drawFlowerGarden(Vec3 pos, Vec3 rot, Vec3 scale)
 {
+    if (cullObj(pos, scale, 4.0f)) return;
+    if (outdoorShadowPass) return;
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
@@ -1955,6 +3041,105 @@ void drawFallingPetals(Vec3 pos, float radius, int count)
 
 // ─── Mountain Range (Mt. Fuji-style background) ───────────────────────
 // Snow-capped volcanic peak with green foothills — placed far behind the scene
+// ─── Low-poly faceted mountains ─────────────────────────────────────────────
+// Each peak is a radial heightfield: smooth cone profile + ridged noise + radial
+// spurs, drawn with flat-shaded triangles.  Colour by height and slope: forest
+// green at the foot, grey-brown / violet rock, white snow on high gentle facets.
+static float mnoise(float x, float y)
+{
+    int x0 = (int)floorf(x), y0 = (int)floorf(y);
+    float fx = x - x0, fy = y - y0;
+    float sx = fx * fx * (3.0f - 2.0f * fx), sy = fy * fy * (3.0f - 2.0f * fy);
+    float a = fhash(x0, y0), b = fhash(x0 + 1, y0), c = fhash(x0, y0 + 1), d = fhash(x0 + 1, y0 + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+}
+
+static float mridged(float x, float y)
+{
+    float sum = 0.0f, amp = 0.5f, f = 1.0f;
+    for (int i = 0; i < 4; i++) {
+        float n = mnoise(x * f, y * f);
+        sum += amp * (1.0f - fabsf(2.0f * n - 1.0f));
+        amp *= 0.5f; f *= 2.1f;
+    }
+    return sum / 0.9375f;                           // ~0..1
+}
+
+static GLuint g_mountains = 0;
+
+static void emitPeak(float cx, float cz, float R, float H, int seed)
+{
+    const int NR = 18, NS = 34;
+    static float V[NR + 1][NS][3];
+    for (int i = 0; i <= NR; i++) {
+        float r = i / (float)NR;
+        for (int j = 0; j < NS; j++) {
+            float a = (j + 0.45f * (fhash(i * 7 + j, seed) - 0.5f)) * 6.2832f / NS;
+            float rr = r * R * (i == 0 ? 0.0f : (0.92f + 0.16f * fhash(i + j * 13, seed + 5)));
+            float x = cx + cosf(a) * rr, z = cz + sinf(a) * rr;
+            float prof = powf(1.0f - r, 1.22f);
+            float rid  = mridged(x * 0.075f + seed * 3.1f, z * 0.075f + seed * 1.7f);
+            float spur = 0.5f + 0.5f * sinf(a * 5.0f + seed * 2.3f + 2.2f * mnoise(r * 3.0f + seed, (float)seed));
+            float h = H * prof * (0.70f + 0.60f * rid) + H * 0.14f * prof * spur;
+            if (i == NR) h = 0.0f;
+            V[i][j][0] = x; V[i][j][1] = h; V[i][j][2] = z;
+        }
+    }
+    glBegin(GL_TRIANGLES);
+    for (int i = 0; i < NR; i++)
+        for (int j = 0; j < NS; j++) {
+            int j2 = (j + 1) % NS;
+            const float* q[4] = { V[i][j], V[i][j2], V[i + 1][j2], V[i + 1][j] };
+            static const int T[2][3] = { { 0, 1, 2 }, { 0, 2, 3 } };
+            for (int t = 0; t < 2; t++) {
+                const float *A = q[T[t][0]], *B = q[T[t][1]], *C = q[T[t][2]];
+                float ux = B[0] - A[0], uy = B[1] - A[1], uz = B[2] - A[2];
+                float vx = C[0] - A[0], vy = C[1] - A[1], vz = C[2] - A[2];
+                float nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+                if (ny < 0.0f) { nx = -nx; ny = -ny; nz = -nz; }
+                normalize3(nx, ny, nz);
+                float hy = (A[1] + B[1] + C[1]) / (3.0f * H);
+                float cxm = (A[0] + B[0] + C[0]) / 3.0f, czm = (A[2] + B[2] + C[2]) / 3.0f;
+                float facet = fhash(i * 31 + j * 2 + t, seed + 9);
+                float nz2 = mnoise(cxm * 0.12f + seed, czm * 0.12f);
+                float snowScore = hy * 1.25f + (ny - 0.45f) * 0.55f + (nz2 - 0.5f) * 0.45f;
+                float cr, cg, cb;
+                if (snowScore > 0.80f) {                              // snow, slightly blue in the shade
+                    float k = 0.80f + 0.20f * facet;
+                    cr = 0.90f * k; cg = 0.93f * k; cb = 1.00f * k;
+                } else {
+                    float m = facet;                                  // warm brown-grey .. cool violet-grey
+                    cr = 0.52f + (0.30f - 0.52f) * m; cg = 0.44f + (0.29f - 0.44f) * m; cb = 0.40f + (0.36f - 0.40f) * m;
+                    float shade = 0.70f + 0.45f * ny;                 // steep faces darker
+                    cr *= shade; cg *= shade; cb *= shade;
+                    if (hy < 0.20f) {                                 // forested foothills
+                        float g = 1.0f - hy / 0.20f; g = g * g * (3.0f - 2.0f * g);
+                        cr += (0.17f - cr) * g; cg += (0.30f - cg) * g; cb += (0.14f - cb) * g;
+                    }
+                }
+                glNormal3f(nx, ny, nz);
+                glColor3f(cr, cg, cb);
+                glVertex3fv(A); glVertex3fv(B); glVertex3fv(C);
+            }
+        }
+    glEnd();
+}
+
+static void buildMountains()
+{
+    g_mountains = glGenLists(1);
+    glNewList(g_mountains, GL_COMPILE);
+    glDisable(GL_CULL_FACE);
+    emitPeak(-62.0f,  10.0f, 24.0f, 15.0f, 41);
+    emitPeak( 60.0f,  12.0f, 22.0f, 14.0f, 52);
+    emitPeak(-38.0f,   5.0f, 26.0f, 24.0f, 17);
+    emitPeak( 34.0f,   8.0f, 24.0f, 20.0f, 29);
+    emitPeak( 14.0f, -10.0f, 24.0f, 30.0f, 63);
+    emitPeak(-14.0f, -12.0f, 22.0f, 27.0f, 74);
+    emitPeak(  0.0f,   0.0f, 36.0f, 38.0f,  7);
+    glEndList();
+}
+
 void drawMountainRange(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
@@ -1967,25 +3152,10 @@ void drawMountainRange(Vec3 pos, Vec3 rot, Vec3 scale)
     const Color HILL_GREEN = { 0.18f, 0.38f, 0.14f };  // dark forest green
     const Color HILL_LIGHT = { 0.24f, 0.45f, 0.18f };  // lighter foothill green
 
-    // ── Main peak (Mt. Fuji style — tall symmetrical cone) ──
-    // Large base cone — mountain body
-    drawCone({ 0, 0, 0 }, NO_ROT, { 28.0f, 32.0f, 28.0f }, MTN_BASE);
-    // Mid-slope layer for colour transition
-    drawCone({ 0, 8.0f, 0 }, NO_ROT, { 20.0f, 24.0f, 20.0f }, MTN_MID);
-    // Snow cap — upper portion
-    drawCone({ 0, 20.0f, 0 }, NO_ROT, { 10.0f, 14.0f, 10.0f }, MTN_SNOW);
-    // Snow tip — bright white peak
-    drawCone({ 0, 28.0f, 0 }, NO_ROT, { 4.0f, 6.0f, 4.0f }, WHITE);
-
-    // ── Secondary peak (smaller companion mountain to the left) ──
-    drawCone({ -35.0f, 0, 5.0f }, NO_ROT, { 18.0f, 20.0f, 18.0f }, MTN_BASE);
-    drawCone({ -35.0f, 10.0f, 5.0f }, NO_ROT, { 11.0f, 12.0f, 11.0f }, MTN_MID);
-    drawCone({ -35.0f, 16.0f, 5.0f }, NO_ROT, { 5.0f, 6.0f, 5.0f }, MTN_SNOW);
-
-    // ── Tertiary peak (smaller, to the right) ──
-    drawCone({ 30.0f, 0, 8.0f }, NO_ROT, { 15.0f, 16.0f, 15.0f }, MTN_BASE);
-    drawCone({ 30.0f, 8.0f, 8.0f }, NO_ROT, { 9.0f, 10.0f, 9.0f }, MTN_MID);
-    drawCone({ 30.0f, 13.0f, 8.0f }, NO_ROT, { 4.0f, 5.0f, 4.0f }, MTN_SNOW);
+    // ── Faceted low-poly peaks (see emitPeak) ──
+    if (!g_mountains) buildMountains();
+    resetMaterialGloss();
+    glCallList(g_mountains);
 
     // ── Green foothills (overlapping spheres in front of mountains) ──
     // Front row — closest to viewer

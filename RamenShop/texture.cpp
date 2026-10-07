@@ -1,6 +1,7 @@
 #include "texture.h"
 #include <cmath>
 #include <cstring>
+#include <vector>
 
 static GLuint texIDs[TEX_COUNT];
 
@@ -236,38 +237,153 @@ static void genEnvMap(unsigned char* px, int W, int H)
     }
 }
 
-// Grass texture — smooth blurred gradient from dark green to light green
+// ─── Realistic lawn ─────────────────────────────────────────────────────────
+// Tileable value noise (wraps with the given lattice period)
+static float vnoise(float x, float y, int per)
+{
+    int x0 = (int)floorf(x), y0 = (int)floorf(y);
+    float fx = x - x0, fy = y - y0;
+    auto h = [&](int ix, int iy) {
+        ix = ((ix % per) + per) % per;
+        iy = ((iy % per) + per) % per;
+        return hashf(ix * 7 + 3, iy * 13 + 5);
+    };
+    float a = h(x0, y0), b = h(x0 + 1, y0), cc = h(x0, y0 + 1), d = h(x0 + 1, y0 + 1);
+    float sx = fx * fx * (3.0f - 2.0f * fx), sy = fy * fy * (3.0f - 2.0f * fy);
+    return a + (b - a) * sx + (cc - a) * sy + (a - b - cc + d) * sx * sy;
+}
+
+// Fractal noise in [0,1], tileable over u,v in [0,1)
+static float fbmTile(float u, float v, int baseFreq, int octaves)
+{
+    float sum = 0.0f, amp = 0.5f, norm = 0.0f;
+    int f = baseFreq;
+    for (int i = 0; i < octaves; i++) {
+        sum += amp * vnoise(u * f, v * f, f);
+        norm += amp; amp *= 0.5f; f *= 2;
+    }
+    return sum / norm;
+}
+
+static float sstep(float e0, float e1, float x)
+{
+    float t = (x - e0) / (e1 - e0);
+    t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+static unsigned int g_grassRng = 12345u;
+static float rnd01()
+{
+    g_grassRng = g_grassRng * 1664525u + 1013904223u;
+    return ((g_grassRng >> 8) & 0xFFFFu) / 65535.0f;
+}
+
+struct Rgb { float r, g, b; };
+static Rgb mixRgb(Rgb a, Rgb b, float t) { return { a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t }; }
+
+// Realistic grass: several greens, soft dry/brown patches, thousands of fine blade
+// strokes, clover / leaf specks and a few tiny pale flowers.  Wraps at the edges.
 static void genGrass(unsigned char* px, int W, int H)
 {
+    std::vector<float> f((size_t)W * H * 3);
+    const Rgb G0 = { 0.12f, 0.24f, 0.08f }, G1 = { 0.22f, 0.36f, 0.11f }, G2 = { 0.33f, 0.46f, 0.15f },
+              G3 = { 0.45f, 0.53f, 0.21f }, BR = { 0.36f, 0.29f, 0.14f };
+
+    // 1. base colour field: big soft patches of different greens + dry brown areas
     for (int y = 0; y < H; y++) {
         for (int x = 0; x < W; x++) {
-            // Radial gradient: dark at edges, light in center
-            float u = (float)x / W - 0.5f;
-            float v = (float)y / H - 0.5f;
-            float dist = sqrtf(u * u + v * v) * 2.0f;  // 0 center, ~1.4 corners
-            if (dist > 1.0f) dist = 1.0f;
-            // Smooth ease (cubic) for soft blur transition
-            float t = 1.0f - dist;
-            t = t * t * (3.0f - 2.0f * t);  // smoothstep
-
-            // Dark edge → bright center
-            float darkR = 0.14f, darkG = 0.26f, darkB = 0.09f;
-            float litR  = 0.44f, litG  = 0.66f, litB  = 0.32f;
-            float r = darkR + (litR - darkR) * t;
-            float g = darkG + (litG - darkG) * t;
-            float b = darkB + (litB - darkB) * t;
-
-            // Very subtle low-frequency variation (soft patches, no sharp detail)
-            float soft = (hashf(x / 16, y / 16) - 0.5f) * 0.03f;
-            r += soft * 0.5f;
-            g += soft;
-            b += soft * 0.4f;
-
-            px[(y * W + x) * 3 + 0] = clampByte(r * 255);
-            px[(y * W + x) * 3 + 1] = clampByte(g * 255);
-            px[(y * W + x) * 3 + 2] = clampByte(b * 255);
+            float u = (float)x / W, v = (float)y / H;
+            float n1 = fbmTile(u, v, 3, 5);
+            float n2 = fbmTile(u + 0.31f, v + 0.77f, 7, 4);
+            float n3 = fbmTile(u + 0.12f, v + 0.45f, 22, 3);
+            float dry = fbmTile(u + 0.55f, v + 0.20f, 4, 4);
+            Rgb c = mixRgb(G0, G1, sstep(0.30f, 0.70f, n2));
+            c = mixRgb(c, G2, sstep(0.45f, 0.75f, n1) * 0.85f);
+            c = mixRgb(c, G3, sstep(0.60f, 0.85f, n3) * 0.45f);
+            c = mixRgb(c, BR, sstep(0.52f, 0.68f, dry) * 0.85f);                    // dry patches
+            float shade = 0.80f + 0.40f * fbmTile(u + 0.9f, v + 0.1f, 40, 2);       // fine mottling
+            float* o = &f[((size_t)y * W + x) * 3];
+            o[0] = c.r * shade; o[1] = c.g * shade; o[2] = c.b * shade;
         }
     }
+
+    auto plot = [&](int x, int y, Rgb col, float a) {
+        x = ((x % W) + W) % W; y = ((y % H) + H) % H;
+        float* o = &f[((size_t)y * W + x) * 3];
+        o[0] += (col.r - o[0]) * a; o[1] += (col.g - o[1]) * a; o[2] += (col.b - o[2]) * a;
+    };
+
+    // 2. fine blades: thousands of short strokes in many directions
+    g_grassRng = 987654u;
+    const int blades = W * H / 11;
+    for (int i = 0; i < blades; i++) {
+        float x0 = rnd01() * W, y0 = rnd01() * H;
+        float ang = (rnd01() < 0.80f) ? (1.5708f + (rnd01() - 0.5f) * 1.2f) : (rnd01() * 6.2832f);
+        float len = 3.5f + rnd01() * 6.5f;
+        float dx = cosf(ang), dy = sinf(ang);
+        float k = rnd01();
+        Rgb col;
+        if (k < 0.45f)      col = mixRgb(G0, G1, rnd01());
+        else if (k < 0.75f) col = mixRgb(G1, G2, rnd01());
+        else if (k < 0.88f) col = mixRgb(G2, G3, rnd01());
+        else if (k < 0.95f) col = mixRgb(G3, { 0.62f, 0.64f, 0.28f }, rnd01());      // sun-bleached
+        else                col = mixRgb(BR, { 0.28f, 0.22f, 0.11f }, rnd01());      // dead blade
+        for (float t = 0.0f; t < len; t += 0.7f) {
+            float taper = 1.0f - 0.5f * (t / len);                                  // tip fades
+            int ix = (int)(x0 + dx * t), iy = (int)(y0 + dy * t);
+            plot(ix, iy, col, 0.50f * taper);
+            plot(ix + 1, iy, col, 0.16f * taper);
+        }
+    }
+
+    // 3. clover / leaf specks (small clumps of three tiny round leaves)
+    const int clumps = W * H / 2600;
+    for (int i = 0; i < clumps; i++) {
+        float cx = rnd01() * W, cy = rnd01() * H;
+        Rgb col = { 0.40f + 0.18f * rnd01(), 0.58f + 0.14f * rnd01(), 0.16f + 0.10f * rnd01() };
+        for (int l = 0; l < 3; l++) {
+            float ox = cx + (rnd01() - 0.5f) * 5.0f, oy = cy + (rnd01() - 0.5f) * 5.0f;
+            float r = 0.7f + rnd01() * 0.8f;
+            for (int yy = (int)(-r - 1); yy <= (int)(r + 1); yy++)
+                for (int xx = (int)(-r - 1); xx <= (int)(r + 1); xx++) {
+                    float d = sqrtf((float)(xx * xx + yy * yy));
+                    if (d < r) plot((int)ox + xx, (int)oy + yy, col, 0.60f * (1.0f - 0.4f * d / r));
+                }
+        }
+    }
+    // a few tiny pale flowers
+    const int flowers = W * H / 9000;
+    for (int i = 0; i < flowers; i++) {
+        int fx = (int)(rnd01() * W), fy = (int)(rnd01() * H);
+        Rgb col = (rnd01() < 0.5f) ? Rgb{ 0.92f, 0.90f, 0.55f } : Rgb{ 0.95f, 0.95f, 0.92f };
+        plot(fx, fy, col, 0.9f); plot(fx + 1, fy, col, 0.5f); plot(fx, fy + 1, col, 0.5f);
+    }
+
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            float n = 0.92f + 0.16f * hashf(x * 3 + 11, y * 5 + 7);            // +-8% grain
+            for (int ch = 0; ch < 3; ch++) {
+                size_t i = ((size_t)y * W + x) * 3 + ch;
+                px[i] = clampByte(f[i] * n * 255.0f);
+            }
+        }
+}
+
+// Large-scale mottling, neutral at 0.5: used with blend (dst*src*2) to break up tiling
+static void genGrassMacro(unsigned char* px, int W, int H)
+{
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            float u = (float)x / W, v = (float)y / H;
+            float a = fbmTile(u, v, 3, 4);
+            float b = fbmTile(u + 0.4f, v + 0.2f, 5, 3);
+            float val = 0.5f + (a - 0.5f) * 0.55f;                    // brightness 0.36 .. 0.64
+            float warm = (b - 0.5f) * 0.12f;                           // slight warm / cool shift
+            px[(y * W + x) * 3 + 0] = clampByte((val + warm) * 255.0f);
+            px[(y * W + x) * 3 + 1] = clampByte(val * 255.0f);
+            px[(y * W + x) * 3 + 2] = clampByte((val - warm) * 255.0f);
+        }
 }
 
 // Water texture — smooth blurred gradient from deep blue center to light edges
@@ -308,6 +424,42 @@ static void genWater(unsigned char* px, int W, int H)
     }
 }
 
+// Soft cloud puff sprite: round, fluffy edge broken up with noise, brighter on top and
+// slightly grey underneath.  RGBA so clouds can be blended as billboards.
+static GLuint makeCloudTexture()
+{
+    const int W = 128, H = 128;
+    std::vector<unsigned char> px((size_t)W * H * 4);
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            float u = (x + 0.5f) / W, v = (y + 0.5f) / H;
+            float dx = (u - 0.5f) * 2.0f, dy = (v - 0.5f) * 2.0f;
+            float r = sqrtf(dx * dx + dy * dy);
+            float fall = 1.0f - r;
+            fall = fall < 0.0f ? 0.0f : fall;
+            fall = fall * fall * (3.0f - 2.0f * fall);                       // smooth round falloff
+            float n = fbmTile(u, v, 4, 4);                                   // 0..1 fluffy breakup
+            float a = fall * (0.35f + 1.25f * n);
+            a = a > 1.0f ? 1.0f : a;
+            float top = 1.0f - v;                                            // y up in the texture = lighter
+            float shade = 0.80f + 0.20f * top;
+            size_t i = ((size_t)y * W + x) * 4;
+            px[i + 0] = clampByte(255.0f * shade);
+            px[i + 1] = clampByte(255.0f * (shade + 0.01f));
+            px[i + 2] = clampByte(255.0f * (shade + 0.04f));
+            px[i + 3] = clampByte(255.0f * a);
+        }
+    GLuint id;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, W, H, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+    return id;
+}
+
 static GLuint makeGLTex(unsigned char* px, int W, int H)
 {
     GLuint id;
@@ -317,6 +469,11 @@ static GLuint makeGLTex(unsigned char* px, int W, int H)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,     GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    if (GLEW_EXT_texture_filter_anisotropic) {
+        GLfloat mx = 1.0f;
+        glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &mx);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, mx > 8.0f ? 8.0f : mx);
+    }
     gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB, W, H, GL_RGB, GL_UNSIGNED_BYTE, px);
     return id;
 }
@@ -335,8 +492,15 @@ void initTextures()
     genConcrete(px, W, H);                      texIDs[TEX_CONCRETE]   = makeGLTex(px, W, H);
     genEnvMap(px, W, H);                        texIDs[TEX_ENV_MAP]    = makeGLTex(px, W, H);
     genRoofTile(px, W, H);                      texIDs[TEX_ROOF_TILE]  = makeGLTex(px, W, H);
-    genGrass(px, W, H);                         texIDs[TEX_GRASS]      = makeGLTex(px, W, H);
+    {   // lawn is generated at 512x512 for fine detail, plus a small macro-variation map
+        std::vector<unsigned char> big(512 * 512 * 3);
+        genGrass(big.data(), 512, 512);
+        texIDs[TEX_GRASS] = makeGLTex(big.data(), 512, 512);
+        genGrassMacro(px, W, H);
+        texIDs[TEX_GRASS_MACRO] = makeGLTex(px, W, H);
+    }
     genWater(px, W, H);                         texIDs[TEX_WATER]      = makeGLTex(px, W, H);
+    texIDs[TEX_CLOUD] = makeCloudTexture();
 }
 
 GLuint getTexID(TexID id)

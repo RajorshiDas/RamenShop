@@ -40,76 +40,88 @@ void drawSky()
     mv[12] = mv[13] = mv[14] = 0.0f;
     glLoadMatrixf(mv);
 
-    // ── Celestial body position on the sky sphere ──────────────────────
+    // ── Sky gradient dome ───────────────────────────────────────────────
+    // Day: deep blue overhead fading to a pale hazy horizon (the horizon colour equals
+    // the fog colour, so distant ground melts into it).  Night: dark navy overhead.
+    {
+        const float hz[3] = { isDayTime ? 0.64f : 0.10f, isDayTime ? 0.79f : 0.10f, isDayTime ? 0.93f : 0.16f };
+        const float zn[3] = { isDayTime ? 0.17f : 0.015f, isDayTime ? 0.40f : 0.02f, isDayTime ? 0.80f : 0.07f };
+        const int SL = 36, ST = 14;
+        const float R = 150.0f;
+        for (int st = 0; st < ST; st++) {
+            glBegin(GL_TRIANGLE_STRIP);                                                   // one strip per ring
+            float e0 = -0.17f + 1.74f * st / ST, e1 = -0.17f + 1.74f * (st + 1) / ST;     // radians, -10..90 deg
+            float t0 = e0 <= 0.0f ? 0.0f : powf(e0 / 1.5708f, 0.55f), t1 = e1 <= 0.0f ? 0.0f : powf(e1 / 1.5708f, 0.55f);
+            for (int j = 0; j <= SL; j++) {
+                float a = j * 6.2832f / SL;
+                for (int k = 0; k < 2; k++) {
+                    float e = k ? e1 : e0, t = k ? t1 : t0;
+                    glColor3f(hz[0] + (zn[0] - hz[0]) * t, hz[1] + (zn[1] - hz[1]) * t, hz[2] + (zn[2] - hz[2]) * t);
+                    glVertex3f(R * cosf(e) * sinf(a), R * sinf(e), -R * cosf(e) * cosf(a));
+                }
+            }
+            glEnd();
+        }
+    }
+
+    // ── Sun / moon: bright core with soft glowing halos ────────────────
     // Fixed position: upper-right of the sky, visible above the roofline
     // from the default orbit camera.
-    float skyR = 90.0f;
-    float cx   =  skyR * 0.5f;       // to the right
-    float cy   =  7.0f;              // just above roofline (~4° elevation)
-    float cz   = -skyR * 0.7f;       // behind the shop (visible from front camera)
+    {
+        float px = 45.0f, py = 7.0f, pz = -63.0f;
+        float l = sqrtf(px * px + py * py + pz * pz);
+        float dx = px / l, dy = py / l, dz = pz / l;
+        float rx = dz, ry = 0.0f, rz = -dx;                        // right = up x dir (horizontal)
+        float rl = sqrtf(rx * rx + rz * rz); rx /= rl; rz /= rl;
+        float ux = dy * rz - dz * ry, uy = dz * rx - dx * rz, uz = dx * ry - dy * rx;   // up = dir x right
 
-    if (isDayTime) {
-        // ── Sun ────────────────────────────────────────────────────────
-        // Glow halo (additive blend)
+        // glowing disc (fan) in the plane facing the camera
+        auto disc = [&](float rad, float r, float g, float b, float aCentre, float aEdge, float push) {
+            glBegin(GL_TRIANGLE_FAN);
+            glColor4f(r, g, b, aCentre);
+            glVertex3f(px + dx * push, py + dy * push, pz + dz * push);
+            glColor4f(r, g, b, aEdge);
+            for (int i = 0; i <= 40; i++) {
+                float t = i * 6.2832f / 40.0f, cx_ = cosf(t) * rad, cy_ = sinf(t) * rad;
+                glVertex3f(px + dx * push + rx * cx_ + ux * cy_, py + dy * push + ry * cx_ + uy * cy_, pz + dz * push + rz * cx_ + uz * cy_);
+            }
+            glEnd();
+        };
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-        glColor4f(1.0f, 0.95f, 0.5f, 0.18f);
-        glPushMatrix();
-        glTranslatef(cx, cy, cz);
-        gluSphere(quad, 8.0f, 16, 16);
-        glPopMatrix();
+        if (isDayTime) {
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE);                       // additive glow
+            disc(26.0f, 1.00f, 0.92f, 0.65f, 0.12f, 0.0f, 0.0f);     // wide warm atmosphere glow
+            disc(13.0f, 1.00f, 0.95f, 0.72f, 0.22f, 0.0f, 0.1f);
+            disc(7.0f,  1.00f, 0.97f, 0.80f, 0.35f, 0.0f, 0.2f);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            disc(3.0f, 1.00f, 0.99f, 0.90f, 1.0f, 1.0f, 0.3f);       // bright core
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            disc(4.0f, 1.00f, 1.00f, 0.95f, 0.30f, 0.0f, 0.4f);      // soft bloom over the edge
+        } else {
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            disc(24.0f, 0.55f, 0.65f, 0.95f, 0.08f, 0.0f, 0.0f);     // cool wide glow
+            disc(11.0f, 0.70f, 0.78f, 1.00f, 0.16f, 0.0f, 0.1f);
+            disc(6.0f,  0.85f, 0.90f, 1.00f, 0.26f, 0.0f, 0.2f);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            disc(2.8f, 0.90f, 0.92f, 0.96f, 1.0f, 1.0f, 0.3f);       // moon disc
+            // maria / craters: slightly darker patches on the disc
+            const float cr[6][3] = { { -1.1f, 1.0f, 0.95f }, { 1.0f, 0.6f, 0.65f }, { 0.2f, -0.9f, 0.85f },
+                                     { -0.6f, -0.2f, 0.45f }, { 1.2f, -0.8f, 0.4f }, { 0.4f, 1.6f, 0.4f } };
+            for (int i = 0; i < 6; i++) {
+                glBegin(GL_TRIANGLE_FAN);
+                glColor4f(0.62f, 0.66f, 0.74f, 0.55f);
+                float cx_ = cr[i][0] * 0.74f, cy_ = cr[i][1] * 0.74f, rr = cr[i][2] * 0.74f;
+                glVertex3f(px + dx * 0.4f + rx * cx_ + ux * cy_, py + dy * 0.4f + ry * cx_ + uy * cy_, pz + dz * 0.4f + rz * cx_ + uz * cy_);
+                glColor4f(0.62f, 0.66f, 0.74f, 0.0f);
+                for (int j = 0; j <= 16; j++) {
+                    float t = j * 6.2832f / 16.0f;
+                    float ox = cx_ + cosf(t) * rr, oy = cy_ + sinf(t) * rr;
+                    glVertex3f(px + dx * 0.4f + rx * ox + ux * oy, py + dy * 0.4f + ry * ox + uy * oy, pz + dz * 0.4f + rz * ox + uz * oy);
+                }
+                glEnd();
+            }
+        }
         glDisable(GL_BLEND);
-
-        // Sun body (bright golden-white)
-        glColor3f(1.0f, 0.95f, 0.6f);
-        glPushMatrix();
-        glTranslatef(cx, cy, cz);
-        gluSphere(quad, 4.5f, 24, 24);
-        glPopMatrix();
-
-        // Hot core
-        glColor3f(1.0f, 1.0f, 0.92f);
-        glPushMatrix();
-        glTranslatef(cx, cy, cz);
-        gluSphere(quad, 2.8f, 16, 16);
-        glPopMatrix();
-    } else {
-        // ── Moon ───────────────────────────────────────────────────────
-        // Glow halo
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-        glColor4f(0.7f, 0.75f, 0.9f, 0.12f);
-        glPushMatrix();
-        glTranslatef(cx, cy, cz);
-        gluSphere(quad, 6.0f, 16, 16);
-        glPopMatrix();
-        glDisable(GL_BLEND);
-
-        // Moon surface (pale silver)
-        glColor3f(0.85f, 0.88f, 0.92f);
-        glPushMatrix();
-        glTranslatef(cx, cy, cz);
-        gluSphere(quad, 3.5f, 24, 24);
-        glPopMatrix();
-
-        // Craters
-        glColor3f(0.70f, 0.72f, 0.76f);
-        glPushMatrix();
-        glTranslatef(cx + 0.6f, cy + 0.9f, cz + 2.8f);
-        gluSphere(quad, 0.7f, 10, 10);
-        glPopMatrix();
-
-        glColor3f(0.72f, 0.74f, 0.78f);
-        glPushMatrix();
-        glTranslatef(cx - 0.9f, cy - 0.5f, cz + 3.0f);
-        gluSphere(quad, 0.55f, 10, 10);
-        glPopMatrix();
-
-        glColor3f(0.68f, 0.70f, 0.74f);
-        glPushMatrix();
-        glTranslatef(cx + 0.2f, cy - 1.1f, cz + 2.9f);
-        gluSphere(quad, 0.45f, 10, 10);
-        glPopMatrix();
     }
 
     // ── Stars (night only) ─────────────────────────────────────────────
@@ -198,42 +210,69 @@ void drawSky()
         glPointSize(1.0f);
     }
 
-    // ── Clouds (day only) ──────────────────────────────────────────────
-    if (isDayTime) {
+    // ── Clouds: soft puffy billboards, flat at the base and domed on top ──
+    {
+        const float R = 118.0f;
+        struct CloudDef { float az, el, w, h, speed; int seed; };
+        const CloudDef defs[] = {
+            {  20, 14, 17, 6.5f, 0.55f, 11 }, {  75, 24, 22, 7.5f, 0.40f, 23 }, { 130, 11, 15, 5.5f, 0.65f, 37 },
+            { 185, 20, 20, 7.0f, 0.45f, 41 }, { 240, 27, 24, 8.0f, 0.35f, 53 }, { 300, 13, 16, 6.0f, 0.60f, 67 },
+            { 340, 22, 19, 7.0f, 0.50f, 71 }, {  50, 38, 18, 6.0f, 0.30f, 83 }, { 160, 36, 21, 7.0f, 0.28f, 97 },
+            { 270, 40, 17, 6.0f, 0.32f, 101 }, { 105, 8, 13, 4.5f, 0.70f, 113 }, { 215, 9, 14, 5.0f, 0.68f, 127 },
+        };
+        unsigned tex = getTexID(TEX_CLOUD);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        float drift = animTime * 0.3f;
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
-        struct Cloud { float x, y, z, sx, sy, sz; };
-        Cloud clouds[] = {
-            {  50 + drift,       6, -40, 12, 2.0f, 6 },
-            { -45 + drift*0.7f,  8,  55, 14, 2.5f, 7 },
-            {  30 + drift*0.5f,  5, -65, 10, 1.8f, 5 },
-            { -60 + drift*0.8f,  7,  30, 11, 2.2f, 6 },
-            {  70 + drift*0.6f,  9, -20, 15, 2.8f, 8 },
-            { -30 + drift*0.9f,  5,  70, 10, 1.6f, 5 },
-            {  15 + drift*0.4f, 10, -50, 13, 2.4f, 7 },
-            { -75 + drift*0.5f,  6,  15,  9, 1.5f, 5 },
-            {  40 + drift*0.3f,  7,  45, 11, 2.0f, 6 },
-            { -20 + drift*0.8f,  8, -75, 16, 3.0f, 8 },
-            {  80 + drift*0.4f,  5,  10,  8, 1.4f, 4 },
-            { -55 + drift*0.6f, 11, -35, 12, 2.2f, 6 },
-        };
-        for (auto& c : clouds) {
-            float wx = fmodf(c.x + 90, 180) - 90;
-            glColor4f(1.0f, 1.0f, 1.0f, 0.50f);
-            glPushMatrix();
-            glTranslatef(wx, c.y, c.z);
-            glScalef(c.sx, c.sy, c.sz);
-            gluSphere(quad, 1.0f, 12, 12);
-            glPopMatrix();
-            glColor4f(1.0f, 1.0f, 1.0f, 0.40f);
-            glPushMatrix();
-            glTranslatef(wx + c.sx*0.35f, c.y + c.sy*0.3f, c.z);
-            glScalef(c.sx*0.7f, c.sy*0.8f, c.sz*0.7f);
-            gluSphere(quad, 1.0f, 10, 10);
-            glPopMatrix();
+        auto hsh = [](int i, int k) { float v = sinf(i * 127.1f + k * 311.7f) * 43758.5453f; return v - floorf(v); };
+        for (const auto& cd : defs) {
+            float az = (cd.az + animTime * cd.speed) * 0.0174533f, el = cd.el * 0.0174533f;
+            float cxd = sinf(az) * cosf(el), cyd = sinf(el), czd = -cosf(az) * cosf(el);
+            float rx = czd, rz = -cxd, rl = sqrtf(rx * rx + rz * rz);           // horizontal right at the cloud centre
+            if (rl < 1e-4f) continue;
+            rx /= rl; rz /= rl;
+            float ux = cyd * rz, uy = czd * rx - cxd * rz, uz = -cyd * rx;      // up (dir x right)
+            const int NP = 22;
+            struct Puff { float u, v, s; } pf[NP];
+            for (int i = 0; i < NP; i++) {
+                float u = (hsh(cd.seed + i, 1) * 2.0f - 1.0f) * cd.w * 1.35f;
+                float edge = fabsf(u) / (cd.w * 1.35f);
+                float dome = powf(fmaxf(0.0f, 1.0f - edge * edge), 0.7f);
+                float v = cd.h * (0.12f + 0.88f * hsh(cd.seed + i, 2)) * dome;      // flat-ish base, domed top
+                float s = cd.h * 1.3f * (0.55f + 0.75f * hsh(cd.seed + i, 3)) * (1.0f - 0.45f * edge) + 1.0f;
+                pf[i] = { u, v, s };
+            }
+            for (int i = 1; i < NP; i++)                                         // paint low puffs first, tops last
+                for (int j = i; j > 0 && pf[j].v < pf[j - 1].v; j--) { Puff t = pf[j]; pf[j] = pf[j - 1]; pf[j - 1] = t; }
+            for (int i = 0; i < NP; i++) {
+                float px = cxd * R + rx * pf[i].u + ux * pf[i].v;
+                float py = cyd * R + 0.0f * pf[i].u + uy * pf[i].v;
+                float pz = czd * R + rz * pf[i].u + uz * pf[i].v;
+                if (py < 1.0f) continue;                                             // never below the horizon
+                float l = sqrtf(px * px + py * py + pz * pz);
+                float dx = px / l, dy = py / l, dz = pz / l;
+                float brx = dz, brz = -dx, brl = sqrtf(brx * brx + brz * brz);        // billboard facing the origin
+                if (brl < 1e-4f) continue;
+                brx /= brl; brz /= brl;
+                float bux = dy * brz, buy = dz * brx - dx * brz, buz = -dy * brx;
+                float t = pf[i].v / cd.h;                                            // 0 base .. 1 top
+                float cr, cg, cb, ca;
+                if (isDayTime) { cr = 0.76f + 0.24f * t; cg = 0.81f + 0.19f * t; cb = 0.90f + 0.10f * t; ca = 0.80f; }
+                else           { cr = 0.15f + 0.07f * t; cg = 0.17f + 0.08f * t; cb = 0.27f + 0.10f * t; ca = 0.55f; }
+                glColor4f(cr, cg, cb, ca);
+                float sz = pf[i].s;
+                glBegin(GL_QUADS);
+                glTexCoord2f(0, 0); glVertex3f(px - brx * sz - bux * sz, py - buy * sz, pz - brz * sz - buz * sz);
+                glTexCoord2f(1, 0); glVertex3f(px + brx * sz - bux * sz, py - buy * sz, pz + brz * sz - buz * sz);
+                glTexCoord2f(1, 1); glVertex3f(px + brx * sz + bux * sz, py + buy * sz, pz + brz * sz + buz * sz);
+                glTexCoord2f(0, 1); glVertex3f(px - brx * sz + bux * sz, py + buy * sz, pz - brz * sz + buz * sz);
+                glEnd();
+            }
         }
+        glDisable(GL_TEXTURE_2D);
         glDisable(GL_BLEND);
     }
 
@@ -384,26 +423,43 @@ static void drawShadows()
 // ─── Ground ─────────────────────────────────────────────────────────────────
 void drawGround()
 {
-    // ── Large unlit base ground so the world never shows black void ────
+    // ── Lawn: realistic procedural grass texture (unlit; see texture.cpp) ───
+    // Unlit so a big plane has no per-vertex lighting gradient; a night tint keeps
+    // it dark but still textured.  A second, large-scale layer breaks up tiling.
     setLighting(false);
     {
-        Color dayGrass   = { 0.32f, 0.52f, 0.22f };
-        Color nightGrass = { 0.06f, 0.10f, 0.05f };
-        Color baseCol = isDayTime ? dayGrass : nightGrass;
-        setColor(baseCol);
-        glBegin(GL_QUADS);
-        glNormal3f(0, 1, 0);
-        float ext = 120.0f;
-        glVertex3f(-ext, -0.02f, -ext);
-        glVertex3f( ext, -0.02f, -ext);
-        glVertex3f( ext, -0.02f,  ext);
-        glVertex3f(-ext, -0.02f,  ext);
-        glEnd();
+        const float ext = 120.0f, tile = 5.0f, macro = 55.0f, gy = -0.005f;
+        Color tint = isDayTime ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.17f, 0.22f, 0.17f };
+        auto lawnQuad = [&](float scale) {
+            glBegin(GL_QUADS);
+            glNormal3f(0, 1, 0);
+            glTexCoord2f(-ext / scale, -ext / scale); glVertex3f(-ext, gy, -ext);
+            glTexCoord2f( ext / scale, -ext / scale); glVertex3f( ext, gy, -ext);
+            glTexCoord2f( ext / scale,  ext / scale); glVertex3f( ext, gy,  ext);
+            glTexCoord2f(-ext / scale,  ext / scale); glVertex3f(-ext, gy,  ext);
+            glEnd();
+        };
+        glEnable(GL_TEXTURE_2D);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        shaderSetTexture(true);
+
+        glBindTexture(GL_TEXTURE_2D, getTexID(TEX_GRASS));
+        setColor(tint);
+        lawnQuad(tile);
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_DST_COLOR, GL_SRC_COLOR);          // dst * src * 2: 0.5 is neutral
+        glDepthFunc(GL_LEQUAL);
+        glBindTexture(GL_TEXTURE_2D, getTexID(TEX_GRASS_MACRO));
+        setColor({ 1.0f, 1.0f, 1.0f });
+        lawnQuad(macro);
+        glDepthFunc(GL_LESS);
+        glDisable(GL_BLEND);
+
+        shaderSetTexture(false);
+        glDisable(GL_TEXTURE_2D);
     }
     setLighting(true);
-
-    // Lit grass layer on top (benefits from nearby lights)
-    drawSubdividedPlane({ 0, 0, 0 }, NO_ROT, { 80, 1, 80 }, GRASS, 32, 32);
 
     // Draw floor platform and write stencil = 1 for every floor pixel
     // (used by drawFloorReflection to mask the reflection to the floor area)
@@ -426,199 +482,120 @@ void drawGround()
     drawShadows();
 }
 
-// ─── Exterior Shadows (planar shadow-matrix projection) ────────────────────
-// Projects simplified silhouettes of major exterior objects onto the ground
-// plane from the directional sun/moon and point-light lamps/lanterns.
-//
-// Pass 1 — directional (sun or moon): stencil-masked to exterior ground
-//          (stencil == 0; the interior floor platform is ≥ 1 from drawGround)
-// Pass 2 — point lights (night only): lamps & lanterns near the shop entrance
-static void drawExteriorShadows()
+// ─── Exterior Shadows: real projected shadows ───────────────────────────────
+// The whole outdoor scene (drawExteriorBody) is drawn a second time, flattened onto
+// the ground along the sun direction, into the STENCIL buffer only.  One soft dark
+// layer is then blended over the marked pixels, so every shadow has exactly the
+// silhouette of its object (tree crowns, trunks, roofs ...) and overlaps do not
+// double-darken.  Exterior ground only: the interior floor platform has stencil != 0.
+static void drawExteriorBody();
+
+// Projection onto the plane y = h.  mode 0: directional light given by the vector
+// (lx, ly, lz) pointing TOWARD the light; mode 1: point light at (lx, ly, lz).
+static void multShadowMatrix(int mode, float lx, float ly, float lz, float h)
 {
-    disablePhongShader();
-    drawingShadow = true;
+    glTranslatef(0.0f, h, 0.0f);
+    if (mode == 0) {
+        GLfloat m[16] = { ly, 0, 0, 0,   -lx, 0, -lz, 0,   0, 0, ly, 0,   0, 0, 0, ly };
+        glMultMatrixf(m);
+    } else {
+        float py = ly - h;
+        GLfloat m[16] = { py, 0, 0, 0,   -lx, 0, -lz, -1,   0, 0, py, 0,   0, 0, 0, py };
+        glTranslatef(0.0f, 0.0f, 0.0f);
+        glMultMatrixf(m);
+    }
+    glTranslatef(0.0f, -h, 0.0f);
+}
 
-    // ── Common shadow render state ─────────────────────────────────────
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+static void shadowRegion(bool sidewalk, float h)
+{
+    glBegin(GL_QUADS);
+    glNormal3f(0, 1, 0);
+    if (!sidewalk) {
+        glVertex3f(-130.0f, h, -130.0f); glVertex3f(130.0f, h, -130.0f);
+        glVertex3f( 130.0f, h,  130.0f); glVertex3f(-130.0f, h,  130.0f);
+    } else {                                              // the two sidewalk strips (z = 5.5..8.5 and 15.5..18.5)
+        const float z0[2] = { 5.5f, 15.5f }, z1[2] = { 8.5f, 18.5f };
+        for (int i = 0; i < 2; i++) {
+            glVertex3f(-30.0f, h, z0[i]); glVertex3f(30.0f, h, z0[i]);
+            glVertex3f( 30.0f, h, z1[i]); glVertex3f(-30.0f, h, z1[i]);
+        }
+    }
+    glEnd();
+}
+
+// One shadow layer: flatten the outdoor scene onto plane y = h into the stencil
+// buffer, then blend one soft dark layer over the marked pixels (and clear them).
+//   lamp != 0 : restrict casters to a box around the point light (keeps it cheap)
+static void shadowLayer(int mode, float lx, float ly, float lz, float h, bool sidewalk, float alpha, bool lamp)
+{
+    glEnable(GL_STENCIL_TEST);
+    glStencilMask(0xFF);
+    glStencilFunc(GL_EQUAL, 0, 0xFF);               // exterior ground only
+    glStencilOp(GL_KEEP, GL_KEEP, GL_INVERT);       // first fragment flips 0 -> 0xFF, later ones fail
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
     glDepthMask(GL_FALSE);
+    drawingShadow = true;
+    outdoorShadowPass = true;
+    outdoorShadowDetail = false;                     // simplified shadows: cheap crown shapes (keeps movement smooth)
 
-    glDisable(GL_COLOR_MATERIAL);
-    GLfloat sSpec[] = { 0, 0, 0, 0 };
-    GLfloat sEmis[] = { 0, 0, 0, 1 };
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, sSpec);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, sEmis);
-
-    // ════════════════════════════════════════════════════════════════════
-    //  PASS 1 — Directional shadow (Sun / Moon)
-    // ════════════════════════════════════════════════════════════════════
-    {
-        // Shadow direction — roughly matches LIGHT0
-        // Day: higher sun angle → shorter, natural shadows
-        // Night: lower moon angle → longer, atmospheric shadows
-        float lx, ly, lz;
-        if (isDayTime) { lx = 0.4f;  ly = 0.65f; lz = -0.5f; }
-        else           { lx = 0.5f;  ly = 0.35f; lz = -0.7f; }
-
-        // Directional shadow matrix onto y = 0 (w = 0 → parallel rays)
-        GLfloat mat[16] = {
-             ly,    0.0f,  0.0f,  0.0f,     // col 0
-            -lx,    0.0f, -lz,   0.0f,     // col 1
-             0.0f,  0.0f,  ly,   0.0f,     // col 2
-             0.0f,  0.0f,  0.0f,  ly       // col 3
-        };
-
-        float alpha = isDayTime ? 0.25f : 0.10f;
-        GLfloat sAmb[] = { 0, 0, 0, alpha };
-        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, sAmb);
-        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, sAmb);
-
-        // Stencil: exterior ground == 0; interior floor ≥ 1
-        glEnable(GL_STENCIL_TEST);
-        glStencilFunc(GL_EQUAL, 0, 0xFF);
-        glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
-        glDisable(GL_DEPTH_TEST);
-
-        glPushMatrix();
-        glTranslatef(0.0f, 0.005f, 0.0f);   // nudge above ground to avoid z-fight
-        glMultMatrixf(mat);
-
-        // ── Shadow-casting geometry (simplified shapes) ─────────────
-
-        // Shop building body + roof
-        drawCuboid({ 0, 0, 0 }, NO_ROT, { 10, 5.3f, 8 }, BLACK);
-        drawCuboid({ 0, 5.3f, 0.5f }, NO_ROT, { 12, 1.5f, 10 }, BLACK);
-
-        // Near-side houses (same side as shop)
-        float nearHX[] = { -15.0f, -23.0f, 15.0f, 23.0f };
-        for (int i = 0; i < 4; i++)
-            drawCuboid({ nearHX[i], 0, 2.15f }, NO_ROT, { 4, 3.5f, 3.5f }, BLACK);
-
-        // Far-side houses (across the street)
-        float farHX[] = { -8.0f, -16.0f, -24.0f, 8.0f, 16.0f, 24.0f };
-        for (int i = 0; i < 6; i++)
-            drawCuboid({ farHX[i], 0, 20.75f }, NO_ROT, { 4, 3.5f, 3.5f }, BLACK);
-
-        // Trees near the shop (simplified: trunk cylinder + canopy sphere)
-        float treePosX[] = { -7.0f, 7.0f, -6.5f, 7.5f };
-        float treePosZ[] = { 2.0f, 3.0f, -2.0f, -1.5f };
-        float treeH[]    = { 3.0f, 3.5f, 2.5f, 2.8f };
-        float treeCR[]   = { 1.5f, 1.8f, 1.3f, 1.4f };
-        for (int i = 0; i < 4; i++) {
-            drawCylinder({ treePosX[i], 0, treePosZ[i] }, NO_ROT,
-                         { 0.15f, treeH[i], 0.15f }, BLACK);
-            drawSphere({ treePosX[i], treeH[i] * 0.7f, treePosZ[i] }, NO_ROT,
-                       { treeCR[i], treeCR[i] * 0.8f, treeCR[i] }, BLACK);
-        }
-
-        // Cherry blossom tree (prominent, near entrance)
-        drawCylinder({ -5.5f, 0, 6.2f }, NO_ROT, { 0.12f, 2.5f, 0.12f }, BLACK);
-        drawSphere({ -5.5f, 3.0f, 6.2f }, NO_ROT, { 2.2f, 1.8f, 2.2f }, BLACK);
-
-        // Accent maple trees flanking the shop
-        drawCylinder({ -10.5f, 0, 4.5f }, NO_ROT, { 0.10f, 2.5f, 0.10f }, BLACK);
-        drawSphere({ -10.5f, 2.8f, 4.5f }, NO_ROT, { 1.8f, 1.5f, 1.8f }, BLACK);
-        drawCylinder({ 10.5f, 0, 4.5f }, NO_ROT, { 0.10f, 2.8f, 0.10f }, BLACK);
-        drawSphere({ 10.5f, 3.0f, 4.5f }, NO_ROT, { 2.0f, 1.6f, 2.0f }, BLACK);
-
-        // Lamp post poles — near-side sidewalk (z ≈ 7)
-        float nearLampX[] = { -7.0f, 7.0f, -15.0f, 15.0f, -23.0f, 23.0f };
-        for (int i = 0; i < 6; i++)
-            drawCylinder({ nearLampX[i], 0, 7.0f }, NO_ROT,
-                         { 0.12f, 3.5f, 0.12f }, BLACK);
-        // Lamp post poles — far-side sidewalk (z ≈ 17)
-        float farLampX[] = { -8.0f, 8.0f, -16.0f, 16.0f, -24.0f, 24.0f };
-        for (int i = 0; i < 6; i++)
-            drawCylinder({ farLampX[i], 0, 17.0f }, NO_ROT,
-                         { 0.12f, 3.5f, 0.12f }, BLACK);
-
-        // Fences in front of shop
-        drawCuboid({ 0, 0.3f, 5.8f }, NO_ROT, { 5.5f, 0.7f, 0.08f }, BLACK);
-
-        // Vending machine
-        drawCuboid({ 8.5f, 0, 3.5f }, NO_ROT, { 0.9f, 1.85f, 0.56f }, BLACK);
-
-        // Plants near entrance
-        drawSphere({ -4.5f, 0.6f, 4.8f }, NO_ROT, { 0.55f, 0.50f, 0.55f }, BLACK);
-        drawSphere({ 4.5f, 0.6f, 4.8f }, NO_ROT, { 0.55f, 0.50f, 0.55f }, BLACK);
-
-        glPopMatrix();
-        glDisable(GL_STENCIL_TEST);
+    if (lamp) {                                      // world-space clip box (camera matrix is current)
+        const GLdouble pl[5][4] = {
+            {  1, 0, 0, -(lx - 9.0) }, { -1, 0, 0, lx + 9.0 },
+            {  0, 0, 1, 2.0 },         {  0, 0, -1, 14.0 },
+            {  0, -1, 0, ly - 0.05 } };
+        for (int i = 0; i < 5; i++) { glClipPlane(GL_CLIP_PLANE0 + i, pl[i]); glEnable(GL_CLIP_PLANE0 + i); }
     }
-
-    // ════════════════════════════════════════════════════════════════════
-    //  PASS 2 (night only) — Point-light shadows from lamps & lanterns
-    //  Depth test keeps shadows on the ground surface.
-    //  Low alpha (8%) so overlap darkening is barely noticeable.
-    // ════════════════════════════════════════════════════════════════════
-    if (!isDayTime) {
-        GLfloat lampAmb[] = { 0, 0, 0, 0.08f };
-        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, lampAmb);
-        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, lampAmb);
-        glEnable(GL_DEPTH_TEST);
-
-        // Light source positions:
-        //   Left / right entrance lanterns (-3.8, 2.5, 4.5) and (3.8, 2.5, 4.5)
-        //   Left / right nearest lamp bulbs (-7, 3.12, 6.3) and (7, 3.12, 6.3)
-        //     (bulb offset (0.7, 3.12, 0) rotated −90° around Y → (0, 3.12, −0.7))
-        struct PtLight { float x, y, z; };
-        PtLight lights[] = {
-            { -3.8f, 2.50f, 4.5f },   // left lantern
-            {  3.8f, 2.50f, 4.5f },   // right lantern
-            { -7.0f, 3.12f, 6.3f },   // left lamp post bulb
-            {  7.0f, 3.12f, 6.3f },   // right lamp post bulb
-        };
-
-        for (int li = 0; li < 4; li++) {
-            float px = lights[li].x, py = lights[li].y, pz = lights[li].z;
-
-            // Point-light shadow matrix onto y = 0 (w = 1)
-            GLfloat pmat[16] = {
-                 py,    0.0f,  0.0f,  0.0f,     // col 0
-                -px,    0.0f, -pz,  -1.0f,     // col 1
-                 0.0f,  0.0f,  py,   0.0f,     // col 2
-                 0.0f,  0.0f,  0.0f,  py       // col 3
-            };
-
-            glPushMatrix();
-            glTranslatef(0.0f, 0.006f + li * 0.001f, 0.0f);
-            glMultMatrixf(pmat);
-
-            // Shadow-cast objects near entrance
-            drawCuboid({ 0, 0.3f, 5.8f }, NO_ROT, { 5.5f, 0.7f, 0.08f }, BLACK);
-            drawSphere({ -4.5f, 0.6f, 4.8f }, NO_ROT, { 0.55f, 0.50f, 0.55f }, BLACK);
-            drawSphere({ 4.5f, 0.6f, 4.8f }, NO_ROT, { 0.55f, 0.50f, 0.55f }, BLACK);
-            drawSphere({ -2.5f, 0.5f, 5.4f }, NO_ROT, { 0.30f, 0.30f, 0.30f }, BLACK);
-            drawSphere({ 2.5f, 0.5f, 5.4f }, NO_ROT, { 0.30f, 0.30f, 0.30f }, BLACK);
-            // Other lamp post poles cast shadows from neighboring lamps
-            drawCylinder({ -7.0f, 0, 7.0f }, NO_ROT, { 0.12f, 3.5f, 0.12f }, BLACK);
-            drawCylinder({ 7.0f, 0, 7.0f }, NO_ROT, { 0.12f, 3.5f, 0.12f }, BLACK);
-
-            glPopMatrix();
-        }
-    }
+    glPushMatrix();
+    multShadowMatrix(mode, lx, ly, lz, h);
+    drawExteriorBody();
+    glPopMatrix();
+    if (lamp) for (int i = 0; i < 5; i++) glDisable(GL_CLIP_PLANE0 + i);
 
     drawingShadow = false;
+    outdoorShadowPass = false;
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
-    // ── Restore render state ───────────────────────────────────────────
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    GLfloat noSpec[] = { 0, 0, 0, 1 };
-    GLfloat noEm[]   = { 0, 0, 0, 1 };
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, noSpec);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, noEm);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
+    glStencilFunc(GL_EQUAL, 0xFF, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO);          // blend once, then clear the mask
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.02f, 0.05f, 0.02f, alpha);
+    shadowRegion(sidewalk, h);
     glDisable(GL_BLEND);
+}
+
+static void drawExteriorShadows()
+{
+    if (!isDayTime) return;                            // no ground shadows at night (they only showed as blotches)
+
+    const float HG = 0.03f, HW = 0.135f;             // lawn / street, and sidewalk-top planes
+    // Sun / moon direction (vector toward the light): shadows fall toward -x, +z
+    const float sx = isDayTime ? 0.62f : 0.80f, sy = 1.0f, sz = isDayTime ? -0.77f : -1.10f;
+    const float sunA = isDayTime ? 0.42f : 0.20f;
+
+    disablePhongShader();
+    shadowLayer(0, sx, sy, sz, HG, false, sunA, false);
+    shadowLayer(0, sx, sy, sz, HW, true,  sunA, false);
+
+    glDepthMask(GL_TRUE);
+    glDisable(GL_STENCIL_TEST);
+    glEnable(GL_LIGHTING);
     enablePhongShader();
 }
 
 // ─── Exterior ───────────────────────────────────────────────────────────────
 void drawExterior()
 {
-    // Project shadows onto the ground before drawing actual objects
+    // Real shadows first (ground only), then the actual objects on top
     drawExteriorShadows();
+    drawExteriorBody();
+}
 
+static void drawExteriorBody()
+{
     drawShopBuilding({ 0, 0, 0 });
     if (showRoof) drawRoof({ 0, 0, 0 });
 
@@ -806,18 +783,14 @@ void drawExterior()
     // Tall pine trees (primary canopy)
     drawJapanesePineTree({ -16.0f, 0, -10.0f }, NO_ROT, { 1.2f, 1.5f, 1.2f });
     drawJapanesePineTree({ -19.0f, 0, -12.0f }, NO_ROT, { 1.1f, 1.8f, 1.1f });
-    drawJapanesePineTree({ -22.0f, 0, -10.0f }, NO_ROT, { 1.0f, 1.6f, 1.0f });
     drawJapanesePineTree({ -25.0f, 0, -13.0f }, NO_ROT, { 1.3f, 1.7f, 1.3f });
     drawJapanesePineTree({ -28.0f, 0, -11.0f }, NO_ROT, { 0.9f, 1.4f, 0.9f });
     drawJapanesePineTree({ -17.0f, 0, -16.0f }, NO_ROT, { 1.0f, 1.9f, 1.0f });
     drawJapanesePineTree({ -21.0f, 0, -18.0f }, NO_ROT, { 1.2f, 1.6f, 1.2f });
-    drawJapanesePineTree({ -26.0f, 0, -17.0f }, NO_ROT, { 1.1f, 1.5f, 1.1f });
     drawJapanesePineTree({ -30.0f, 0, -14.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
     drawJapanesePineTree({ -15.0f, 0, -22.0f }, NO_ROT, { 1.3f, 1.8f, 1.3f });
-    drawJapanesePineTree({ -24.0f, 0, -22.0f }, NO_ROT, { 1.2f, 1.7f, 1.2f });
     drawJapanesePineTree({ -29.0f, 0, -20.0f }, NO_ROT, { 0.9f, 1.4f, 0.9f });
     drawJapanesePineTree({ -18.0f, 0, -28.0f }, NO_ROT, { 1.1f, 1.6f, 1.1f });
-    drawJapanesePineTree({ -23.0f, 0, -30.0f }, NO_ROT, { 1.0f, 1.5f, 1.0f });
     drawJapanesePineTree({ -27.0f, 0, -27.0f }, NO_ROT, { 1.2f, 1.8f, 1.2f });
     drawJapanesePineTree({ -32.0f, 0, -25.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
 
@@ -832,7 +805,6 @@ void drawExterior()
     // Regular broad-leaf trees filling gaps
     drawTree({ -18.0f, 0, -11.0f }, NO_ROT, { 1.0f, 1.4f, 1.0f });
     drawTree({ -23.0f, 0, -15.0f }, NO_ROT, { 1.2f, 1.6f, 1.2f });
-    drawTree({ -15.0f, 0, -19.0f }, NO_ROT, { 0.9f, 1.3f, 0.9f });
     drawTree({ -27.0f, 0, -19.0f }, NO_ROT, { 1.1f, 1.5f, 1.1f });
     drawTree({ -21.0f, 0, -26.0f }, NO_ROT, { 1.0f, 1.4f, 1.0f });
     drawTree({ -30.0f, 0, -22.0f }, NO_ROT, { 1.2f, 1.6f, 1.2f });
@@ -843,11 +815,9 @@ void drawExterior()
 
     // Dense jungle undergrowth throughout the forest floor
     drawJungle({ -20.0f, 0, -12.0f }, NO_ROT, { 1.5f, 0.8f, 1.5f });
-    drawJungle({ -25.0f, 0, -16.0f }, { 0, 30, 0 }, { 1.3f, 0.7f, 1.3f });
     drawJungle({ -18.0f, 0, -20.0f }, { 0, 60, 0 }, { 1.6f, 0.9f, 1.6f });
     drawJungle({ -28.0f, 0, -22.0f }, { 0, 45, 0 }, { 1.4f, 0.8f, 1.4f });
     drawJungle({ -22.0f, 0, -28.0f }, { 0, 15, 0 }, { 1.5f, 0.7f, 1.5f });
-    drawJungle({ -16.0f, 0, -25.0f }, { 0, 75, 0 }, { 1.2f, 0.8f, 1.2f });
     drawJungle({ -32.0f, 0, -16.0f }, { 0, -20, 0 }, { 1.3f, 0.7f, 1.3f });
 
     // ══════════════════════════════════════════════════════════════════════
@@ -857,22 +827,8 @@ void drawExterior()
     // ══════════════════════════════════════════════════════════════════════
 
     // Dense bamboo clusters forming a continuous forest
-    drawBambooGrove({ 16.0f, 0, -12.0f }, NO_ROT, { 1.2f, 1.3f, 1.2f });
-    drawBambooGrove({ 19.0f, 0, -10.0f }, { 0, 25, 0 }, { 1.0f, 1.4f, 1.0f });
-    drawBambooGrove({ 22.0f, 0, -13.0f }, { 0, 50, 0 }, { 1.1f, 1.5f, 1.1f });
-    drawBambooGrove({ 25.0f, 0, -11.0f }, { 0, -15, 0 }, { 1.3f, 1.2f, 1.3f });
-    drawBambooGrove({ 28.0f, 0, -14.0f }, { 0, 35, 0 }, { 1.0f, 1.6f, 1.0f });
-    drawBambooGrove({ 15.0f, 0, -17.0f }, { 0, 70, 0 }, { 1.2f, 1.4f, 1.2f });
-    drawBambooGrove({ 18.0f, 0, -19.0f }, { 0, -30, 0 }, { 1.1f, 1.3f, 1.1f });
-    drawBambooGrove({ 21.0f, 0, -16.0f }, { 0, 10, 0 }, { 1.3f, 1.5f, 1.3f });
-    drawBambooGrove({ 24.0f, 0, -20.0f }, { 0, 55, 0 }, { 1.0f, 1.4f, 1.0f });
-    drawBambooGrove({ 27.0f, 0, -18.0f }, { 0, -40, 0 }, { 1.2f, 1.6f, 1.2f });
-    drawBambooGrove({ 30.0f, 0, -16.0f }, { 0, 20, 0 }, { 1.0f, 1.3f, 1.0f });
     drawBambooGrove({ 17.0f, 0, -24.0f }, { 0, 45, 0 }, { 1.3f, 1.5f, 1.3f });
-    drawBambooGrove({ 20.0f, 0, -22.0f }, { 0, -25, 0 }, { 1.1f, 1.4f, 1.1f });
     drawBambooGrove({ 23.0f, 0, -26.0f }, { 0, 60, 0 }, { 1.2f, 1.3f, 1.2f });
-    drawBambooGrove({ 26.0f, 0, -24.0f }, { 0, -10, 0 }, { 1.0f, 1.5f, 1.0f });
-    drawBambooGrove({ 29.0f, 0, -22.0f }, { 0, 30, 0 }, { 1.1f, 1.6f, 1.1f });
     drawBambooGrove({ 16.0f, 0, -29.0f }, { 0, 75, 0 }, { 1.2f, 1.4f, 1.2f });
     drawBambooGrove({ 22.0f, 0, -30.0f }, { 0, -50, 0 }, { 1.3f, 1.5f, 1.3f });
     drawBambooGrove({ 28.0f, 0, -28.0f }, { 0, 15, 0 }, { 1.0f, 1.3f, 1.0f });
@@ -896,13 +852,6 @@ void drawExterior()
     drawStoneLantern({ 16.0f, 0, -21.0f });
     drawStoneLantern({ 20.0f, 0, -26.0f });
     drawStoneLantern({ 25.0f, 0, -23.0f });
-
-    // Mossy ground patches under the bamboo canopy
-    drawMossGround({ 18.0f, 0, -15.0f }, NO_ROT, { 3.0f, 1.0f, 3.0f });
-    drawMossGround({ 24.0f, 0, -18.0f }, { 0, 30, 0 }, { 2.5f, 1.0f, 2.5f });
-    drawMossGround({ 20.0f, 0, -23.0f }, { 0, 60, 0 }, { 3.5f, 1.0f, 3.5f });
-    drawMossGround({ 26.0f, 0, -26.0f }, { 0, 15, 0 }, { 2.0f, 1.0f, 2.0f });
-    drawMossGround({ 16.0f, 0, -26.0f }, { 0, 45, 0 }, { 2.5f, 1.0f, 2.5f });
 
     // Falling cherry blossom petals drifting through the bamboo canopy
     drawFallingPetals({ 22.0f, 5.0f, -18.0f }, 12.0f, 30);
@@ -1024,7 +973,8 @@ void drawExterior()
 
     // ── Mountain Range — distant background behind far-side forest ────
     // Mt. Fuji-style snow-capped peak with foothills, placed far back
-    drawMountainRange({ 0, 0, -85.0f });
+    // (mountains removed)
+    // drawMountainRange({ 0, 0, -85.0f });
 
     // ── Fireflies — near gardens, lake, forest and bamboo (night only) ──
     drawFireflies({ -9.0f, 1.2f, 5.0f }, 4.0f, 10);       // flower garden left

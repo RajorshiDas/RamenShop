@@ -12,7 +12,7 @@ DayNightMode dayNightMode = NIGHT;
 bool isDayTime = false;
 
 // Sky colors
-static const Color SKY_DAY   = { 0.45f, 0.65f, 0.90f };
+static const Color SKY_DAY   = { 0.64f, 0.79f, 0.93f };   // pale horizon haze (also the fog colour)
 static const Color SKY_NIGHT = { 0.10f, 0.10f, 0.16f };
 
 // ─── Fog state ─────────────────────────────────────────────────────────────
@@ -173,8 +173,13 @@ void placeLightsInWorldSpace()
     // ── OUTDOOR ──────────────────────────────────────────────────────────
 
     // LIGHT0: Directional sky light (w=0 → infinitely far, direction only)
-    //   Moon at night comes from upper-right-behind; sun from similar angle
-    GLfloat pos0[] = { 0.5f, 0.35f, -0.7f, 0.0f };
+    //   Sun in daytime comes from elevated angle; moon at night from lower atmospheric angle
+    GLfloat pos0[4];
+    if (isDayTime) {
+        pos0[0] = 0.45f; pos0[1] = 0.70f; pos0[2] = -0.45f; pos0[3] = 0.0f;
+    } else {
+        pos0[0] = 0.50f; pos0[1] = 0.38f; pos0[2] = -0.70f; pos0[3] = 0.0f;
+    }
     glLightfv(GL_LIGHT0, GL_POSITION, pos0);
 
     // LIGHT5: Street lamps — averaged position of the two lamp posts

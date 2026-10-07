@@ -86,6 +86,7 @@ void display()
 
     // Set up camera transformation (Orbit or First-Person)
     applyCameraView();
+    updateOutdoorView();                // camera position for the distance detail of trees and bushes
 
     // Dynamically apply all light components & flicker parameters
     applyLightingParameters();
