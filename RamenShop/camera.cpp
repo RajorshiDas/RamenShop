@@ -4,6 +4,7 @@
 #include "shader.h"
 #include "raytracer.h"
 #include "game.h"
+#include "lighting.h"
 #include <cstdio>
 
 CameraMode currentCamMode = CAM_ORBIT;
@@ -20,16 +21,23 @@ float fpsYaw   = 180.0f;
 float fpsPitch = 0.0f;
 
 // Upper Room orbit
-float upperAngle    = 45.0f;
-float upperDistance  = 5.5f;
-float upperHeight   = 5.5f;
-float upperLookAtY  = 3.8f;
+float upperAngle    = 40.0f;
+float upperDistance  = 3.6f;
+float upperHeight   = 4.5f;
+float upperLookAtY  = 3.5f;
+
+// Pond View orbit (around the lake behind the shop at (0, -24), where the ducks swim)
+static const float POND_X = 0.0f, POND_Z = -24.0f;
+float pondAngle    = 70.0f;        // from the shop side, a little to the right
+float pondDistance = 9.0f;
+float pondHeight   = 3.8f;
+float pondLookAtY  = 0.2f;
 
 // Counter View orbit
-float counterAngle    = 0.0f;
-float counterDistance  = 3.5f;
-float counterHeight   = 2.0f;
-float counterLookAtY  = 1.2f;
+float counterAngle    = 16.0f;     // slightly off-axis: shows the counter, kitchen and stools in depth
+float counterDistance  = 4.6f;
+float counterHeight   = 1.75f;     // roughly seated-guest eye height
+float counterLookAtY  = 1.30f;
 
 // Key states
 bool keyStates[256]        = { false };
@@ -38,6 +46,41 @@ bool specialKeyStates[256] = { false };
 static int  lastMouseX     = -1, lastMouseY = -1;
 static bool isMouseDragging = false;
 
+// ─── Light tour ─────────────────────────────────────────────────────────────
+// Key 8: the camera glides to the next interior light source and that light is switched on.
+// Key 9: toggles the light group of the source you are looking at.
+struct LightStop { const char* name; Vec3 cam, look; int group; };   // group: 0 point, 1 spot, 2 area
+static const LightStop LIGHT_STOPS[] = {
+    { "Dining pendant lamps",       {  0.0f, 2.35f,  2.6f }, {  0.0f, 2.80f, -0.2f }, 0 },
+    { "Table spotlights (x2)",       {  0.0f, 2.45f,  0.9f }, {  0.0f, 3.10f,  2.8f }, 1 },
+    { "Ceiling area light",         {  0.0f, 2.45f,  1.8f }, {  0.0f, 3.20f, -1.2f }, 2 },
+    { "Paper box lanterns",         {  1.4f, 2.45f,  2.6f }, {  0.5f, 3.10f,  0.6f }, 0 },
+    { "Hanging lanterns",           {  0.0f, 2.40f,  2.2f }, { -1.8f, 3.00f,  0.0f }, 0 },
+    { "Floor lantern tower",        { -2.4f, 1.60f,  4.4f }, { -4.1f, 1.40f,  3.2f }, 0 },
+    { "Second-floor paper dome",    {  0.0f, 4.35f,  2.8f }, {  0.0f, 5.10f,  0.0f }, 2 },
+};
+static const int NUM_LIGHT_STOPS = sizeof(LIGHT_STOPS) / sizeof(LIGHT_STOPS[0]);
+static int  lightStop = -1;
+static Vec3 lightCamPos = { 0, 2.4f, 3.0f }, lightCamLook = { 0, 2.8f, 0 };
+
+const char* getLightTourName() { return (lightStop >= 0) ? LIGHT_STOPS[lightStop].name : "-"; }
+
+static bool groupOn(int g) { return g == 0 ? lightPoint : (g == 1 ? lightSpot : lightArea); }
+static void toggleGroup(int g) { if (g == 0) togglePointLights(); else if (g == 1) toggleSpotLight(); else toggleAreaLight(); }
+
+static void nextLightStop()
+{
+    if (currentCamMode != CAM_LIGHT) {                       // start the tour from where the camera is now
+        lightCamPos  = { fpsPos.x, fpsPos.y, fpsPos.z };
+        lightCamLook = { 0.0f, 2.5f, 0.0f };
+    }
+    lightStop = (lightStop + 1) % NUM_LIGHT_STOPS;
+    currentCamMode = CAM_LIGHT;
+    if (!groupOn(LIGHT_STOPS[lightStop].group)) toggleGroup(LIGHT_STOPS[lightStop].group);   // switch the group on
+    fixtureOn[lightStop] = true;                                                             // and this fixture
+    updateWindowTitle();
+}
+
 // ─── Window title ──────────────────────────────────────────────────────────
 void updateWindowTitle()
 {
@@ -45,18 +88,27 @@ void updateWindowTitle()
     const char* camName =
         (currentCamMode == CAM_ORBIT)   ? "Orbit" :
         (currentCamMode == CAM_FPS)     ? "Walkthrough" :
-        (currentCamMode == CAM_UPPER)   ? "Upper Room" : "Counter View";
+        (currentCamMode == CAM_UPPER)   ? "Upper Room" :
+        (currentCamMode == CAM_POND)    ? "Pond View" :
+        (currentCamMode == CAM_LIGHT)   ? "Light Tour" : "Counter View";
+    char tourBuf[96];
+    if (currentCamMode == CAM_LIGHT) {
+        sprintf_s(tourBuf, sizeof(tourBuf), "Light: %s %s [8 next, 9 toggle]", getLightTourName(), (lightStop >= 0 && fixtureOn[lightStop]) ? "ON" : "OFF");
+        camName = tourBuf;
+    }
 
     const char* objName =
         (selectedObj == OBJ_NONE) ? "none" : sceneObjects[selectedObj].name;
 
     sprintf_s(buf, sizeof(buf),
-        "3D Ramen Shop | %s | %s[T] | %s[G] | Cam:%s[C] | Preset:%s[P]",
-        getRayTracingStatusString(),
+        "3D Ramen Shop | %s | Cam:%s[C] | Sun/Moon[0]:%s | Lights 1-7: %c %c %c %c %c %c %c | [-] Amb:%s [=] Dif:%s [Bksl] Spec:%s | [8] tour",
         getDayNightModeName(),
-        usePhongShading ? "Phong" : "Gouraud",
         camName,
-        getCurrentPresetName());
+        lightDirectional ? "ON" : "off",
+        (lightPoint && fixtureOn[0]) ? '1' : '-', (lightSpot && fixtureOn[1]) ? '2' : '-', (lightArea && fixtureOn[2]) ? '3' : '-',
+        (lightPoint && fixtureOn[3]) ? '4' : '-', (lightPoint && fixtureOn[4]) ? '5' : '-', (lightPoint && fixtureOn[5]) ? '6' : '-',
+        (lightArea && fixtureOn[6]) ? '7' : '-',
+        lightAmbient ? "ON" : "off", lightDiffuse ? "ON" : "off", lightSpecular ? "ON" : "off");
     glutSetWindowTitle(buf);
 }
 
@@ -77,6 +129,18 @@ void applyCameraView()
         float fz = cos(radPitch) * cos(radYaw);
         gluLookAt(fpsPos.x, fpsPos.y, fpsPos.z,
                   fpsPos.x + fx, fpsPos.y + fy, fpsPos.z + fz,
+                  0, 1, 0);
+    }
+    else if (currentCamMode == CAM_LIGHT) {
+        gluLookAt(lightCamPos.x, lightCamPos.y, lightCamPos.z,
+                  lightCamLook.x, lightCamLook.y, lightCamLook.z,
+                  0, 1, 0);
+    }
+    else if (currentCamMode == CAM_POND) {
+        // Orbit around the pond, looking at the water where the ducks swim
+        float a = pondAngle * PI / 180.0f;
+        gluLookAt(POND_X + pondDistance * sin(a), pondHeight, POND_Z + pondDistance * cos(a),
+                  POND_X, pondLookAtY, POND_Z,
                   0, 1, 0);
     }
     else if (currentCamMode == CAM_UPPER) {
@@ -148,6 +212,12 @@ void updateCameraMovement()
     if (dt > 0.1f) dt = 0.1f;
     if (dt <= 0.0f) dt = 0.001f;
 
+    if (currentCamMode == CAM_LIGHT && lightStop >= 0) {      // glide toward the chosen light
+        float k = 1.0f - expf(-4.0f * dt);
+        const LightStop& t = LIGHT_STOPS[lightStop];
+        lightCamPos.x  += (t.cam.x  - lightCamPos.x)  * k;  lightCamPos.y  += (t.cam.y  - lightCamPos.y)  * k;  lightCamPos.z  += (t.cam.z  - lightCamPos.z)  * k;
+        lightCamLook.x += (t.look.x - lightCamLook.x) * k;  lightCamLook.y += (t.look.y - lightCamLook.y) * k;  lightCamLook.z += (t.look.z - lightCamLook.z) * k;
+    }
     if (currentCamMode != CAM_FPS) return;
 
     // In the game the arrow keys turn the cook (keyboard alternative to mouse drag)
@@ -194,12 +264,39 @@ void handleKeyboardDown(unsigned char key, int, int)
     // Game input first (E interact, 1-6 ingredient, ESC pause ...)
     if (gameKeyDown(key)) { glutPostRedisplay(); return; }
 
-    // ── Camera mode cycle (Orbit → FPS → Focused → Upper → Orbit) ──
+    // ── Camera mode cycle (Orbit → FPS → Focused → Upper → Pond → Orbit) ──
     if (key == 'c' || key == 'C') {
         if      (currentCamMode == CAM_ORBIT)   currentCamMode = CAM_FPS;
         else if (currentCamMode == CAM_FPS)     currentCamMode = CAM_FOCUSED;
         else if (currentCamMode == CAM_FOCUSED) currentCamMode = CAM_UPPER;
+        else if (currentCamMode == CAM_UPPER)   currentCamMode = CAM_POND;
         else                                    currentCamMode = CAM_ORBIT;
+        updateWindowTitle();
+    }
+
+    // ── - / = / \ : show or hide ONE lighting term on every light (ambient / diffuse / specular) ──
+    if (key == '-')  { toggleAmbient();  updateWindowTitle(); }
+    if (key == '=')  { toggleDiffuse();  updateWindowTitle(); }
+    if (key == 92) { toggleSpecular(); updateWindowTitle(); }          // backslash
+
+    // ── 0 = sun / moon (directional light) ──
+    if (key == '0') { toggleDirectional(); updateWindowTitle(); }
+
+    // ── Keys 1-7 switch each light fixture on / off on its own ──
+    //   1 dining pendants, 2 kitchen spotlight, 3 ceiling area light, 4 paper box lanterns,
+    //   5 hanging lanterns, 6 floor lantern tower, 7 second-floor paper dome
+    if (key >= '1' && key <= '7') {
+        int f = key - '1';
+        if (!groupOn(LIGHT_STOPS[f].group)) { toggleGroup(LIGHT_STOPS[f].group); fixtureOn[f] = true; }   // group was off: turn it on
+        else fixtureOn[f] = !fixtureOn[f];
+        updateWindowTitle();
+    }
+
+    // ── Light tour: 8 = next light source (zoom + switch on), 9 = toggle it ──
+    if (key == '8') nextLightStop();
+    if (key == '9' && currentCamMode == CAM_LIGHT && lightStop >= 0) {
+        if (!groupOn(LIGHT_STOPS[lightStop].group)) toggleGroup(LIGHT_STOPS[lightStop].group);
+        fixtureOn[lightStop] = !fixtureOn[lightStop];                                // this fixture only
         updateWindowTitle();
     }
 
@@ -269,6 +366,13 @@ void handleSpecialDown(int key, int, int)
         if (key == GLUT_KEY_DOWN)                  camDistance += 1;
         if (key == GLUT_KEY_PAGE_UP)   { camHeight += 0.5f; camLookAtY += 0.4f; }
         if (key == GLUT_KEY_PAGE_DOWN) { camHeight -= 0.5f; camLookAtY -= 0.4f; }
+    } else if (currentCamMode == CAM_POND) {
+        if (key == GLUT_KEY_LEFT)                       pondAngle    -= 5;
+        if (key == GLUT_KEY_RIGHT)                      pondAngle    += 5;
+        if (key == GLUT_KEY_UP && pondDistance > 3)     pondDistance -= 0.5f;
+        if (key == GLUT_KEY_DOWN && pondDistance < 25)  pondDistance += 0.5f;
+        if (key == GLUT_KEY_PAGE_UP)   pondHeight += 0.3f;
+        if (key == GLUT_KEY_PAGE_DOWN && pondHeight > 0.6f) pondHeight -= 0.3f;
     } else if (currentCamMode == CAM_UPPER) {
         if (key == GLUT_KEY_LEFT)                       upperAngle    -= 5;
         if (key == GLUT_KEY_RIGHT)                      upperAngle    += 5;
@@ -370,6 +474,8 @@ void handleMouseClick(int button, int state, int x, int y)
             camDistance -= 0.8f;
         else if (currentCamMode == CAM_UPPER && upperDistance > 2)
             upperDistance -= 0.5f;
+        else if (currentCamMode == CAM_POND && pondDistance > 3)
+            pondDistance -= 0.5f;
         else if (currentCamMode == CAM_FOCUSED && counterDistance > 1.5f)
             counterDistance -= 0.5f;
         else if (currentCamMode == CAM_FPS)
@@ -381,6 +487,8 @@ void handleMouseClick(int button, int state, int x, int y)
             camDistance += 0.8f;
         else if (currentCamMode == CAM_UPPER)
             upperDistance += 0.5f;
+        else if (currentCamMode == CAM_POND && pondDistance < 25)
+            pondDistance += 0.5f;
         else if (currentCamMode == CAM_FOCUSED)
             counterDistance += 0.5f;
         else if (currentCamMode == CAM_FPS && fpsPos.y > 0.8f)
@@ -403,6 +511,10 @@ void handleMouseMotion(int x, int y)
         camAngle  += dx * 0.35f;
         camHeight += dy * 0.04f;
         if (camHeight < 0.5f) camHeight = 0.5f;
+    } else if (currentCamMode == CAM_POND) {
+        pondAngle  += dx * 0.35f;
+        pondHeight += dy * 0.04f;
+        if (pondHeight < 0.6f) pondHeight = 0.6f;
     } else if (currentCamMode == CAM_UPPER) {
         upperAngle  += dx * 0.35f;
         upperHeight += dy * 0.04f;

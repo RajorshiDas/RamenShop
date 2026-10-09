@@ -81,6 +81,7 @@ extern bool drawingShadow;   // true during shadow-projection pass (skips sphere
 void applyTransform(Vec3 pos, Vec3 rot, Vec3 scale);
 void setColor(Color c);
 Color darker(Color c);
+extern float emissionScale;   // multiplies every setEmission() glow
 void setEmission(float r, float g, float b);
 void clearEmission();
 void setMaterialGloss(float r, float g, float b, float shininess);
@@ -172,7 +173,7 @@ void drawClearGlassPartition(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, floa
 void drawClearGlassWindow(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, float width = 2.0f, float height = 1.5f);
 
 // Physical light fixtures (Spotlight can, Area light luminaire panel, Pendant glass lamp)
-void drawSpotlightFixture(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, bool isOn = true);
+void drawSpotlightFixture(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, bool isOn = true, bool whiteShade = false);
 void drawSpotlightBeam(Vec3 pos, float height = 2.2f, float topRadius = 0.08f, float bottomRadius = 0.75f);
 void drawAreaLightFixture(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, bool isOn = true);
 void drawPendantGlassLamp(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE, bool isOn = true);

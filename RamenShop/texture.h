@@ -16,6 +16,7 @@ enum TexID {
     TEX_WATER,      // wave pattern for lake surface
     TEX_CLOUD,      // soft cloud puff sprite (RGBA)
     TEX_GRASS_MACRO,// large-scale mottling (neutral grey ~0.5) that hides the lawn tiling
+    TEX_TATAMI,     // woven igusa-rush tatami surface (rows run across U)
     TEX_COUNT
 };
 

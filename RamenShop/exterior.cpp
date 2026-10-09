@@ -13,11 +13,16 @@ void drawShopBuilding(Vec3 pos, Vec3 rot, Vec3 scale)
 
     // Floor: gray ceramic tiles (skip in shadow pass so floor doesn't cast a bulk slab)
     if (!outdoorShadowPass) {
+        setMaterialGloss(0.75f, 0.73f, 0.66f, 55.0f);      // glazed tiles: lamps leave shiny highlights
         drawTexturedBox({ 0, 0, 0 }, NO_ROT, { 10, 0.1f, 8 },
                         getTexID(TEX_TILE_FLOOR), WHITE, 2.0f);
+        resetMaterialGloss();
     }
 
     // Ground floor walls (open front) — with window openings
+
+    // Plaster walls are matte: almost no specular, very broad
+    setMaterialGloss(0.04f, 0.04f, 0.04f, 8.0f);
 
     // ── Back wall: two window openings at x=±3.5, y=[1.3,2.3], size 1.2×1.0 ──
     {
@@ -39,9 +44,11 @@ void drawShopBuilding(Vec3 pos, Vec3 rot, Vec3 scale)
 
     // ── Side walls: window openings for clear glass windows at z=0.5, 2.4×2.0 ──
     for (int sx = -1; sx <= 1; sx += 2) {
-        // Lower dark wood wainscot (unchanged)
+        // Lower dark wood wainscot: satin varnish
+        setMaterialGloss(0.30f, 0.29f, 0.26f, 50.0f);
         drawTexturedBox({ sx * 4.9f, 0, 0 }, NO_ROT, { 0.2f, 1.2f, 8 },
                         getTexID(TEX_DARK_WOOD), WHITE, 1.0f);
+        setMaterialGloss(0.04f, 0.04f, 0.04f, 8.0f);
 
         // Upper wall split around window opening: z=[-0.7,1.7], y=[1.2,3.2]
         GLuint wallTex = getTexID(TEX_WALL);
@@ -57,6 +64,8 @@ void drawShopBuilding(Vec3 pos, Vec3 rot, Vec3 scale)
                         wallTex, WHITE, 2.0f);
     }
 
+    resetMaterialGloss();
+
     // Front: structural wood posts
     drawCuboid({ -4.9f, 0, 3.9f }, NO_ROT, { 0.25f, GH, 0.25f }, DARK_WOOD);
     drawCuboid({  4.9f, 0, 3.9f }, NO_ROT, { 0.25f, GH, 0.25f }, DARK_WOOD);
@@ -65,7 +74,15 @@ void drawShopBuilding(Vec3 pos, Vec3 rot, Vec3 scale)
     drawCuboid({ 0, GH - 0.15f, 3.95f }, NO_ROT, { 10.2f, 0.18f, 0.14f }, DARK_WOOD);
 
     // Second floor walls — light cream plaster with dark wood frame
-    drawTexturedBox({  0,    GH,  3.9f }, NO_ROT, { 10,   UH, 0.2f }, getTexID(TEX_WALL), WHITE, 2.0f);
+    {   // upper front wall with two window openings (x = +-[2.2, 4.2], y = [3.65, 4.95])
+        GLuint wt = getTexID(TEX_WALL);
+        const float wy0 = 3.65f, wy1 = 4.95f;
+        drawTexturedBox({  0.0f, GH,  3.9f }, NO_ROT, { 10.0f, wy0 - GH,  0.2f }, wt, WHITE, 2.0f);   // below the windows
+        drawTexturedBox({  0.0f, wy1, 3.9f }, NO_ROT, { 10.0f, TH - wy1, 0.2f }, wt, WHITE, 2.0f);   // above the windows
+        drawTexturedBox({  0.0f, wy0, 3.9f }, NO_ROT, { 4.4f,  wy1 - wy0, 0.2f }, wt, WHITE, 2.0f);  // between them
+        drawTexturedBox({ -4.6f, wy0, 3.9f }, NO_ROT, { 0.8f,  wy1 - wy0, 0.2f }, wt, WHITE, 2.0f);  // left end
+        drawTexturedBox({  4.6f, wy0, 3.9f }, NO_ROT, { 0.8f,  wy1 - wy0, 0.2f }, wt, WHITE, 2.0f);  // right end
+    }
     drawTexturedBox({  0,    GH, -3.9f }, NO_ROT, { 10,   UH, 0.2f }, getTexID(TEX_WALL), WHITE, 2.0f);
     drawTexturedBox({ -4.9f, GH,  0    }, NO_ROT, { 0.2f, UH, 8    }, getTexID(TEX_WALL), WHITE, 2.0f);
     drawTexturedBox({  4.9f, GH,  0    }, NO_ROT, { 0.2f, UH, 8    }, getTexID(TEX_WALL), WHITE, 2.0f);
@@ -189,11 +206,11 @@ void drawStreet(Vec3 pos, Vec3 rot, Vec3 scale)
     const Color STONE_DARK  = { 0.42f, 0.40f, 0.36f };
     const Color GROUT       = { 0.35f, 0.32f, 0.28f };
 
-    // Road bed
-    drawPlane({ 0, 0.015f, 0 }, NO_ROT, { 60, 1, 8 }, STONE_BASE);
+    // Road bed (runs out to the edge of the world on both sides)
+    drawPlane({ 0, 0.015f, 0 }, NO_ROT, { 240, 1, 8 }, STONE_BASE);
 
     // Cobblestone pattern — rows of rectangular stones with grout lines
-    float roadHalfW = 30.0f, roadHalfD = 4.0f;
+    float roadHalfW = 120.0f, roadHalfD = 4.0f;
     float stoneW = 1.2f, stoneD = 0.8f, gap = 0.06f;
 
     for (float sx = -roadHalfW; sx < roadHalfW; sx += stoneW + gap) {
@@ -213,11 +230,11 @@ void drawStreet(Vec3 pos, Vec3 rot, Vec3 scale)
 
     // Raised stone curb edges on both sides
     const Color CURB = { 0.50f, 0.48f, 0.44f };
-    drawCuboid({ 0, 0.04f,  roadHalfD }, NO_ROT, { 60, 0.08f, 0.18f }, CURB);
-    drawCuboid({ 0, 0.04f, -roadHalfD }, NO_ROT, { 60, 0.08f, 0.18f }, CURB);
+    drawCuboid({ 0, 0.04f,  roadHalfD }, NO_ROT, { 240, 0.08f, 0.18f }, CURB);
+    drawCuboid({ 0, 0.04f, -roadHalfD }, NO_ROT, { 240, 0.08f, 0.18f }, CURB);
 
     // Center line — inlaid darker stone strip (subtle, not painted)
-    drawPlane({ 0, 0.026f, 0 }, NO_ROT, { 60, 1, 0.12f }, STONE_DARK);
+    drawPlane({ 0, 0.026f, 0 }, NO_ROT, { 240, 1, 0.12f }, STONE_DARK);
 
     glPopMatrix();
 }
@@ -232,10 +249,10 @@ void drawSidewalk(Vec3 pos, Vec3 rot, Vec3 scale)
     const Color FLAG_ALT  = { 0.62f, 0.58f, 0.52f };
 
     // Raised walkway base
-    drawCuboid({ 0, 0, 0 }, NO_ROT, { 60, 0.10f, 3 }, { 0.55f, 0.52f, 0.48f });
+    drawCuboid({ 0, 0, 0 }, NO_ROT, { 240, 0.10f, 3 }, { 0.55f, 0.52f, 0.48f });
 
     // Flagstone tiles on top
-    float walkHalf = 30.0f;
+    float walkHalf = 120.0f;
     float tileW = 1.4f, tileD = 1.4f, gap = 0.05f;
     for (float sx = -walkHalf; sx < walkHalf; sx += tileW + gap) {
         for (float sz = -1.4f; sz < 1.4f; sz += tileD + gap) {
@@ -247,7 +264,7 @@ void drawSidewalk(Vec3 pos, Vec3 rot, Vec3 scale)
     }
 
     // Low stone edge border
-    drawCuboid({ 0, 0.05f, 1.45f }, NO_ROT, { 60, 0.12f, 0.10f }, { 0.50f, 0.48f, 0.44f });
+    drawCuboid({ 0, 0.05f, 1.45f }, NO_ROT, { 240, 0.12f, 0.10f }, { 0.50f, 0.48f, 0.44f });
     glPopMatrix();
 }
 
@@ -343,7 +360,7 @@ void drawLamp(Vec3 pos, Vec3 rot, Vec3 scale)
 // Trees and bushes far from the camera use a lighter version of the same design:
 // same main branches, one branch level fewer, fewer but slightly larger flowers /
 // leaves.  updateOutdoorView() is called once per frame (main.cpp).
-static float g_eyeX = 0.0f, g_eyeZ = 0.0f;
+static float g_eyeX = 0.0f, g_eyeY = 0.0f, g_eyeZ = 0.0f;
 static float g_objDist2 = 0.0f;                  // distance^2 of the object whose bushes are being drawn
 
 static float g_fr[6][4];                         // view frustum planes (world space)
@@ -355,6 +372,7 @@ void updateOutdoorView()
     glGetFloatv(GL_PROJECTION_MATRIX, P);
     glGetFloatv(GL_MODELVIEW_MATRIX, M);
     g_eyeX = -(M[0] * M[12] + M[1] * M[13] + M[2] * M[14]);
+    g_eyeY = -(M[4] * M[12] + M[5] * M[13] + M[6] * M[14]);
     g_eyeZ = -(M[8] * M[12] + M[9] * M[13] + M[10] * M[14]);
     for (int col = 0; col < 4; col++)                 // clip = P * M (column-major)
         for (int row = 0; row < 4; row++) {
@@ -381,6 +399,12 @@ static float outdoorDist2(float x, float z)
 // View culling: true when a world-space sphere is completely outside the view frustum,
 // so the object is simply not drawn.  Changes nothing visually.  In the shadow pass the
 // radius grows by the longest shadow so shadows of off-screen objects still appear.
+// True when the camera is inside the shop (ground or upper floor)
+bool cameraInsideShop()
+{
+    return fabsf(g_eyeX) < 4.8f && g_eyeZ > -3.8f && g_eyeZ < 4.6f && g_eyeY > 0.1f && g_eyeY < 5.4f;
+}
+
 static bool outdoorCulled(float x, float y, float z, float r)
 {
     if (!g_frOk) return false;
@@ -396,9 +420,9 @@ static bool cullObj(Vec3 pos, Vec3 scale, float hr)       // hr = object radius 
     return outdoorCulled(pos.x, pos.y + hr * scale.y * 0.5f, pos.z, hr * sc);
 }
 
-static const float TREE_LOD_DIST  = 26.0f;       // trees farther than this use the lighter build
-static const float BAMBOO_LOD_DIST = 30.0f;
-static const float BUSH_LOD_DIST  = 26.0f;
+static const float TREE_LOD_DIST  = 18.0f;       // trees farther than this use the lighter build
+static const float BAMBOO_LOD_DIST = 24.0f;
+static const float BUSH_LOD_DIST  = 18.0f;
 
 // ─── Ground shadows and dark-grass decals ───────────────────────────────────
 // Soft elliptical decals on the lawn (alpha fades to nothing at the rim).  The
@@ -424,6 +448,7 @@ static void shadowEllipsoid(float cx, float cy, float cz, float rx, float ry, fl
 }
 
 bool outdoorShadowPass = false;
+static const float SHADOW_DETAIL_Z = -6.0f;       // trees in front of this z (near the shop and road) cast detailed shadows; the forest behind uses cheap crown shapes
 bool outdoorShadowDetail = true;                 // true: full-detail casters (sun/moon); false: cheap crown shapes (lamps)                  // true while scene.cpp flattens the outdoor scene into the shadow mask
 static float g_shadowRot = 0.0f;                 // yaw of the object being drawn (set by callers)
 
@@ -486,7 +511,7 @@ static void buildDomeImpl(GLuint& list, int N, float widthMul, float lenMul)
     list = glGenLists(1);
     glNewList(list, GL_COMPILE);
     glDisable(GL_CULL_FACE);
-    setColor({ 0.07f, 0.20f, 0.05f });
+    setColor({ 0.17f, 0.33f, 0.10f });
     glPushMatrix();
     glScalef(1.0f, 1.0f, 1.0f);
     gluSphere(quad, 0.90f, 18, 10);                    // dark core hides gaps between blades
@@ -507,10 +532,10 @@ static void buildDomeImpl(GLuint& list, int N, float widthMul, float lenMul)
         float px = nx * 0.93f, py = ny * 0.93f, pz = nz * 0.93f;
         float tint = 0.80f + 0.40f * h3;
         glNormal3f(nx, ny, nz);
-        glColor3f(0.10f * tint, 0.30f * tint, 0.07f * tint);
+        glColor3f(0.20f * tint, 0.40f * tint, 0.11f * tint);
         glVertex3f(px - sx * w, py - sy * w, pz - sz * w);
         glVertex3f(px + sx * w, py + sy * w, pz + sz * w);
-        float tr = 0.30f + 0.10f * h4, tg = 0.60f + 0.14f * h1, tb = 0.16f;
+        float tr = 0.40f + 0.12f * h4, tg = 0.64f + 0.12f * h1, tb = 0.20f;
         glColor3f(tr * tint, tg * tint, tb * tint);
         glVertex3f(px + dx * L, py + dy * L, pz + dz * L);
     }
@@ -518,8 +543,8 @@ static void buildDomeImpl(GLuint& list, int N, float widthMul, float lenMul)
     glEndList();
 }
 
-static void buildDome()    { buildDomeImpl(g_dome, 750, 1.2f, 1.08f); }   // a little simpler: fewer, slightly broader blades
-static void buildDomeLod() { buildDomeImpl(g_domeLod, 220, 1.9f, 1.2f); }   // far bushes: fewer, broader blades
+static void buildDome()    { buildDomeImpl(g_dome, 260, 1.7f, 1.15f); }   // a little simpler: fewer, slightly broader blades
+static void buildDomeLod() { buildDomeImpl(g_domeLod, 90, 2.6f, 1.2f); }   // far bushes: fewer, broader blades
 
 // Cheap upper hemisphere used only as the bush silhouette in the shadow pass
 static GLuint g_domeShadow = 0;
@@ -557,7 +582,7 @@ static void domeBush(float x, float y, float z, float rx, float ry, float phase)
     bool farBush = g_objDist2 > BUSH_LOD_DIST * BUSH_LOD_DIST;
     if (farBush) { if (!g_domeLod) buildDomeLod(); } else if (!g_dome) buildDome();
     if (y < 0.3f) {                                   // bush standing on the lawn (not in a pot)
-        groundBlob(x, z, rx * 1.9f, rx * 1.9f, 0.0f, { 0.02f, 0.09f, 0.02f }, 0.70f, 0.010f);   // darker grass around the base
+        if (isDayTime) groundBlob(x, z, rx * 1.9f, rx * 1.9f, 0.0f, { 0.10f, 0.22f, 0.06f }, 0.30f, 0.010f);   // slightly darker grass around the base (day only: it is drawn unlit, so at night it would glow)
     }
     float sw = 1.6f * sinf(animTime * 1.3f + phase) + 0.8f * sinf(animTime * 2.7f + phase * 1.9f);
     glPushMatrix();
@@ -830,7 +855,7 @@ static void flowerAt(Vec3 p, Vec3 n, float r, float roll, int style)
 static void blossomCluster(Vec3 c, float size)
 {
     setEmission(0.14f, 0.07f, 0.10f);                // faint pink glow so they stay visible at night
-    int n = (g_lod ? 3 : 6) + (int)(rnd() * (g_lod ? 2.0f : 3.0f));
+    int n = (g_lod ? 3 : 5) + (int)(rnd() * (g_lod ? 2.0f : 2.0f));
     for (int i = 0; i < n; i++) {
         float a = rnd() * 6.2832f;
         float e = rnd() * 1.7f - 0.45f;              // biased upward
@@ -906,14 +931,14 @@ static void mapleLeafCluster(Vec3 c, float size)
         { 0.88f, 0.20f, 0.10f }, { 0.95f, 0.34f, 0.12f }, { 0.93f, 0.50f, 0.14f },
         { 0.72f, 0.11f, 0.08f }, { 0.90f, 0.26f, 0.11f }, { 0.97f, 0.60f, 0.18f } };
     setEmission(0.10f, 0.03f, 0.01f);                // keeps the red readable at night
-    int n = (g_lod ? 4 : 7) + (int)(rnd() * (g_lod ? 2.0f : 3.0f));
+    int n = (g_lod ? 3 : 5) + (int)(rnd() * (g_lod ? 2.0f : 3.0f));
     for (int i = 0; i < n; i++) {
         float a = rnd() * 6.2832f;
         float e = rnd() * 1.7f - 0.5f;
         float d = size * (0.30f + 0.70f * rnd());
         Vec3 off = { cosf(a) * d, e * d * 0.7f, sinf(a) * d };
         Vec3 nrm = vNorm({ off.x, off.y * 0.6f + 0.45f, off.z });
-        float r = (0.12f + 0.07f * rnd()) * (g_lod ? 1.5f : 1.0f);
+        float r = (0.12f + 0.07f * rnd()) * (g_lod ? 1.7f : 1.25f);
         setColor(COL[(int)(rnd() * rnd() * 6.0f) % 6]);      // mostly the reds and oranges
         glPushMatrix();
         glTranslatef(c.x + off.x, c.y + off.y, c.z + off.z);
@@ -958,7 +983,7 @@ static void greenLeafCluster(Vec3 c, float size, int count)
         float e = (rnd() - 0.5f) * 1.6f;                       // fuller vertically
         float d = size * (0.25f + 0.75f * rnd());
         Vec3 nrm = vNorm({ cosf(a) * d * 0.35f + (rnd() - 0.5f) * 0.5f, 0.85f, sinf(a) * d * 0.35f + (rnd() - 0.5f) * 0.5f });
-        float sz = (0.24f + 0.12f * rnd()) * (g_lod ? 1.6f : 1.18f);   // fewer, slightly larger leaves
+        float sz = (0.24f + 0.12f * rnd()) * (g_lod ? 1.7f : 1.32f);   // fewer, slightly larger leaves
         glPushMatrix();
         glTranslatef(c.x + cosf(a) * d, c.y + e * d * 0.5f, c.z + sinf(a) * d);
         alignZ(nrm);
@@ -986,7 +1011,7 @@ static void emitShadowList(GLuint list)
     for (int i = 0; i < g_recN; i++) {
         glPushMatrix();
         glTranslatef(g_rec[i].x, g_rec[i].y, g_rec[i].z);
-        gluSphere(quad, g_rec[i].r, 6, 3);
+        gluSphere(quad, g_rec[i].r, 8, 4);
         glPopMatrix();
     }
     glEndList();
@@ -1025,14 +1050,14 @@ static void growBranch(Vec3 base, Vec3 dir, float len, float r, int level)
         growBranch(p2, dir2, len * 0.55f, r * 0.45f, level + 1);   // the branch keeps going
     }
     if (g_greenStyle) {
-        greenLeafCluster(p2, level == 1 ? 0.70f : (level == 2 ? 0.62f : 0.55f), 14);
-        recordCluster(p2, (level == 1 ? 0.70f : (level == 2 ? 0.62f : 0.55f)) + 0.30f);
-        if (level >= 2) { greenLeafCluster(p1, 0.48f, 8); recordCluster(p1, 0.48f + 0.30f); }   // extra pad part-way along the branch
+        greenLeafCluster(p2, level == 1 ? 0.70f : (level == 2 ? 0.62f : 0.55f), 10);
+        recordCluster(p2, (level == 1 ? 0.70f : (level == 2 ? 0.62f : 0.55f)) + 0.18f);
+        if (level >= 2) { greenLeafCluster(p1, 0.48f, 6); recordCluster(p1, 0.48f + 0.18f); }   // extra pad part-way along the branch
     } else if (g_mapleStyle) {
-        if (level >= g_maxLevel - 1) { mapleLeafCluster(p2, level == g_maxLevel ? 0.27f : 0.31f); recordCluster(p2, (level == g_maxLevel ? 0.27f : 0.31f) + 0.16f); }
+        if (level >= g_maxLevel - 1) { mapleLeafCluster(p2, level == g_maxLevel ? 0.27f : 0.31f); recordCluster(p2, (level == g_maxLevel ? 0.27f : 0.31f) + 0.12f); }
     } else {
         blossomCluster(p2, level == 1 ? 0.40f : (level == 2 ? 0.34f : 0.29f));
-        recordCluster(p2, (level == 1 ? 0.40f : (level == 2 ? 0.34f : 0.29f)) + 0.26f);
+        recordCluster(p2, (level == 1 ? 0.40f : (level == 2 ? 0.34f : 0.29f)) + 0.18f);
     }
 }
 
@@ -1220,7 +1245,7 @@ void drawTree(Vec3 pos, Vec3 rot, Vec3 scale)
         glRotatef(a, 0, 0, 1);
         glRotatef(a * 0.45f, 1, 0, 0);
         glTranslatef(-L.pivot[g].x, -L.pivot[g].y, -L.pivot[g].z);
-        glCallList(L.base + ((outdoorShadowPass && !outdoorShadowDetail) ? 8 : 1) + g);
+        glCallList(L.base + ((outdoorShadowPass && pos.z < SHADOW_DETAIL_Z) ? 8 : 1) + g);
         glPopMatrix();
     }
     glPopMatrix();
@@ -1244,7 +1269,7 @@ static void drawGreenTreeLOD(Vec3 p, float s, int idx)
         glRotatef(a, 0, 0, 1);
         glRotatef(a * 0.45f, 1, 0, 0);
         glTranslatef(-L.pivot[g].x, -L.pivot[g].y, -L.pivot[g].z);
-        glCallList(L.base + ((outdoorShadowPass && !outdoorShadowDetail) ? 8 : 1) + g);
+        glCallList(L.base + ((outdoorShadowPass && p.z < SHADOW_DETAIL_Z) ? 8 : 1) + g);
         glPopMatrix();
     }
     glPopMatrix();
@@ -1294,7 +1319,7 @@ static void buildPineVariant(int v)
 
     glNewList(base + 1, GL_COMPILE);                           // crown
     {
-        const int tiers = 9;
+        const int tiers = 6;
         for (int t = 0; t < tiers; t++) {
             float u = t / (tiers - 1.0f);
             float y = 0.85f + u * 2.55f;
@@ -1435,13 +1460,13 @@ void drawCherryBlossomTree(Vec3 pos, Vec3 rot, Vec3 scale)
         glRotatef(a, 0, 0, 1);
         glRotatef(a * 0.45f, 1, 0, 0);
         glTranslatef(-L.pivot[g].x, -L.pivot[g].y, -L.pivot[g].z);
-        glCallList(L.base + ((outdoorShadowPass && !outdoorShadowDetail) ? 8 : 1) + g);
+        glCallList(L.base + ((outdoorShadowPass && pos.z < SHADOW_DETAIL_Z) ? 8 : 1) + g);
         glPopMatrix();
     }
     resetMaterialGloss();
 
     int seed = (int)(pos.x * 7.0f + pos.z * 13.0f);
-    drawFallingPetals(2.1f, 3.7f, 30, false, seed);
+    drawFallingPetals(2.1f, 3.7f, 14, false, seed);
     drawPetalCarpet(false, 2.8f, 110);
 
     glPopMatrix();
@@ -1533,6 +1558,8 @@ void drawEntranceDoor(float angle)
         float y = latticeBot + i * hStep;
         drawCube({ 0, y, 0.01f }, NO_ROT,
                  { latticeW - 0.04f, 0.03f, 0.03f }, DARK_WOOD);
+        drawCube({ 0, y, -0.045f }, NO_ROT,
+                 { latticeW - 0.04f, 0.03f, 0.03f }, DARK_WOOD);   // lattice also on the inside face
     }
 
     // Vertical kumiko lattice bars
@@ -1541,6 +1568,8 @@ void drawEntranceDoor(float angle)
         float barY = (latticeBot + latticeTop) * 0.5f;
         drawCube({ x, barY, 0.01f }, NO_ROT,
                  { 0.03f, latticeH, 0.03f }, DARK_WOOD);
+        drawCube({ x, barY, -0.045f }, NO_ROT,
+                 { 0.03f, latticeH, 0.03f }, DARK_WOOD);   // lattice also on the inside face
     }
 
     // Bottom kick panel — koshi-ita (solid wood)
@@ -1589,6 +1618,8 @@ void drawEntranceDoor(float angle)
         float y = latticeBot + i * hStep;
         drawCube({ 0, y, 0.01f }, NO_ROT,
                  { latticeW - 0.04f, 0.03f, 0.03f }, DARK_WOOD);
+        drawCube({ 0, y, -0.045f }, NO_ROT,
+                 { latticeW - 0.04f, 0.03f, 0.03f }, DARK_WOOD);   // lattice also on the inside face
     }
 
     // Vertical kumiko lattice bars
@@ -1597,6 +1628,8 @@ void drawEntranceDoor(float angle)
         float barY = (latticeBot + latticeTop) * 0.5f;
         drawCube({ x, barY, 0.01f }, NO_ROT,
                  { 0.03f, latticeH, 0.03f }, DARK_WOOD);
+        drawCube({ x, barY, -0.045f }, NO_ROT,
+                 { 0.03f, latticeH, 0.03f }, DARK_WOOD);   // lattice also on the inside face
     }
 
     // Bottom kick panel — koshi-ita
@@ -1649,6 +1682,7 @@ static void drawShojiPanelCentered(float width, float height)
     for (int i = 1; i <= hBars; i++) {
         float y = latticeBot + i * hStep;
         drawCube({ 0, y, 0.008f }, NO_ROT, { latticeW - 0.02f, 0.025f, 0.025f }, DARK_WOOD);
+        drawCube({ 0, y, -0.045f }, NO_ROT, { latticeW - 0.02f, 0.025f, 0.025f }, DARK_WOOD);   // lattice also on the inside face
     }
 
     // Kumiko lattice (vertical bars)
@@ -1658,6 +1692,7 @@ static void drawShojiPanelCentered(float width, float height)
         float x = -hw + fw + i * vStep;
         float barCY = (latticeBot + latticeTop) * 0.5f;
         drawCube({ x, barCY, 0.008f }, NO_ROT, { 0.025f, latticeH, 0.025f }, DARK_WOOD);
+        drawCube({ x, barCY, -0.045f }, NO_ROT, { 0.025f, latticeH, 0.025f }, DARK_WOOD);   // lattice also on the inside face
     }
 
     // Kick panel (solid wood — koshi-ita)
@@ -1758,6 +1793,7 @@ void drawShojiDoor(Vec3 pos, Vec3 rot, Vec3 scale, float width, float height)
     for (int i = 1; i <= hBars; i++) {
         float y = -hh + 0.06f + i * hStep;
         drawCube({ 0, y, 0.01f }, NO_ROT, { width - 0.10f, 0.03f, 0.03f }, DARK_WOOD);
+        drawCube({ 0, y, -0.045f }, NO_ROT, { width - 0.10f, 0.03f, 0.03f }, DARK_WOOD);   // lattice also on the inside face
     }
 
     // Vertical kumiko lattice bars
@@ -1766,6 +1802,7 @@ void drawShojiDoor(Vec3 pos, Vec3 rot, Vec3 scale, float width, float height)
     for (int i = 1; i <= vBars; i++) {
         float x = -hw + 0.06f + i * vStep;
         drawCube({ x, 0, 0.01f }, NO_ROT, { 0.03f, height - 0.10f, 0.03f }, DARK_WOOD);
+        drawCube({ x, 0, -0.045f }, NO_ROT, { 0.03f, height - 0.10f, 0.03f }, DARK_WOOD);   // lattice also on the inside face
     }
 
     // Bottom kick panel (solid wood, lower portion of traditional shoji)
@@ -1823,10 +1860,12 @@ void drawShojiWindow(Vec3 pos, Vec3 rot, Vec3 scale, float width, float height)
     for (int i = 1; i <= cols; i++) {
         float x = -hw + 0.05f + i * cellW;
         drawCube({ x, 0, 0.01f }, NO_ROT, { 0.025f, height - 0.10f, 0.025f }, DARK_WOOD);
+        drawCube({ x, 0, -0.045f }, NO_ROT, { 0.025f, height - 0.10f, 0.025f }, DARK_WOOD);   // lattice also on the inside face
     }
     for (int j = 1; j <= rows; j++) {
         float y = -hh + 0.05f + j * cellH;
         drawCube({ 0, y, 0.01f }, NO_ROT, { width - 0.10f, 0.025f, 0.025f }, DARK_WOOD);
+        drawCube({ 0, y, -0.045f }, NO_ROT, { width - 0.10f, 0.025f, 0.025f }, DARK_WOOD);   // lattice also on the inside face
     }
 
     // Sill
@@ -1919,9 +1958,10 @@ static void bambooLeaf(Vec3 base, Vec3 dir, float len, float w, float droop, flo
 }
 
 // Fan of leaves at the end of a twig
+static bool g_bambooLod = false;                 // building the lighter distance version of a bamboo grove
 static void bambooLeafCluster(Vec3 c, float yawBase, float size)
 {
-    int n = 4 + (int)(rnd() * 3.0f);
+    int n = (g_bambooLod ? 3 : 4) + (int)(rnd() * (g_bambooLod ? 2.0f : 3.0f));
     for (int i = 0; i < n; i++) {
         float yaw = yawBase + (i - (n - 1) * 0.5f) * 0.55f + (rnd() - 0.5f) * 0.3f;
         float up = 0.25f + 0.35f * rnd();
@@ -1930,17 +1970,20 @@ static void bambooLeafCluster(Vec3 c, float yawBase, float size)
     }
 }
 
-static GLuint g_bamboo[3] = { 0, 0, 0 };
+static GLuint g_bamboo[6] = { 0, 0, 0, 0, 0, 0 };          // [0..2] full, [3..5] distance version
 static const int BAMBOO_CULMS = 9;
 struct BambooPos { float x, z; };
-static BambooPos g_bambooPos[3][BAMBOO_CULMS];
+static BambooPos g_bambooPos[6][BAMBOO_CULMS];
 
 static void buildBambooVariant(int v)
 {
+    const bool lod = v >= 3;
+    const int sv = lod ? v - 3 : v;
+    g_bambooLod = lod;
     g_bamboo[v] = glGenLists(BAMBOO_CULMS);
     for (int c = 0; c < BAMBOO_CULMS; c++) {
-        g_rndSeed = 7000 + v * 101 + c * 13; g_rndCtr = 0;
-        float ang = c * 2.39996f + v, rad = 0.12f + 0.62f * sqrtf((c + 0.5f) / BAMBOO_CULMS);
+        g_rndSeed = 7000 + sv * 101 + c * 13; g_rndCtr = 0;
+        float ang = c * 2.39996f + sv, rad = 0.12f + 0.62f * sqrtf((c + 0.5f) / BAMBOO_CULMS);
         g_bambooPos[v][c] = { cosf(ang) * rad, sinf(ang) * rad };
 
         float H = 4.6f + 2.0f * rnd();
@@ -1966,19 +2009,19 @@ static void buildBambooVariant(int v)
             float mid = 0.5f * (nr[i] + nr[i + 1]);
             float k = 0.92f + 0.10f * rnd();
             setColor({ body.r * k, body.g * k, body.b * k });
-            bambooTube(np[i], np[i + 1], nr[i] * 0.97f, nr[i + 1] * 0.97f, 8);
+            bambooTube(np[i], np[i + 1], nr[i] * 0.97f, nr[i + 1] * 0.97f, lod ? 6 : 8);
             (void)mid;
             // swollen pale node band + thin dark ring below it
             Vec3 n0 = np[i + 1], n1 = { np[i + 1].x, np[i + 1].y + 0.045f, np[i + 1].z };
             setColor({ 0.66f, 0.68f, 0.34f });
-            bambooTube(n0, n1, nr[i + 1] * 1.22f, nr[i + 1] * 1.12f, 8);
+            bambooTube(n0, n1, nr[i + 1] * 1.22f, nr[i + 1] * 1.12f, lod ? 6 : 8);
             Vec3 d0 = { np[i + 1].x, np[i + 1].y - 0.012f, np[i + 1].z };
             setColor({ 0.26f, 0.30f, 0.12f });
             bambooTube(d0, n0, nr[i + 1] * 1.15f, nr[i + 1] * 1.18f, 8);
         }
         // side branches + leaves on the upper nodes
         for (int i = nodes / 2; i <= nodes; i++) {
-            int nb = (i == nodes) ? 1 : 2;
+            int nb = (i == nodes || lod) ? 1 : 2;
             for (int q = 0; q < nb; q++) {
                 float yaw = (rnd() * 6.2832f);
                 float out = 0.35f + 0.45f * rnd();
@@ -1992,12 +2035,15 @@ static void buildBambooVariant(int v)
         }
         glEndList();
     }
+    g_bambooLod = false;
 }
 
 void drawBambooGrove(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     if (cullObj(pos, scale, 8.0f)) return;
     int v = ((int)floorf(fabsf(pos.x) * 3.0f + fabsf(pos.z) * 5.0f)) % 3;
+    const bool farGrove = !outdoorShadowPass && outdoorDist2(pos.x, pos.z) > BAMBOO_LOD_DIST * BAMBOO_LOD_DIST;
+    if (farGrove) v += 3;                          // lighter distance version of the same grove
     if (!g_bamboo[v]) buildBambooVariant(v);
 
     glPushMatrix();
@@ -2014,7 +2060,7 @@ void drawBambooGrove(Vec3 pos, Vec3 rot, Vec3 scale)
     }
 
     float phase = pos.x * 0.3f + pos.z * 0.2f;
-    int nCulms = (!outdoorShadowPass && outdoorDist2(pos.x, pos.z) > BAMBOO_LOD_DIST * BAMBOO_LOD_DIST) ? 6 : BAMBOO_CULMS;
+    int nCulms = (!outdoorShadowPass && outdoorDist2(pos.x, pos.z) > BAMBOO_LOD_DIST * BAMBOO_LOD_DIST) ? 7 : BAMBOO_CULMS;
     for (int c = 0; c < nCulms; c++) {
         float a = 1.6f * breeze(phase + c * 0.9f);                  // each culm sways on its own
         glPushMatrix();
@@ -2052,12 +2098,12 @@ void drawMapleTree(Vec3 pos, Vec3 rot, Vec3 scale)
         glRotatef(a, 0, 0, 1);
         glRotatef(a * 0.45f, 1, 0, 0);
         glTranslatef(-L.pivot[g].x, -L.pivot[g].y, -L.pivot[g].z);
-        glCallList(L.base + ((outdoorShadowPass && !outdoorShadowDetail) ? 8 : 1) + g);
+        glCallList(L.base + ((outdoorShadowPass && pos.z < SHADOW_DETAIL_Z) ? 8 : 1) + g);
         glPopMatrix();
     }
 
     int seed = (int)(pos.x * 5.0f + pos.z * 11.0f) + 400;
-    drawFallingPetals(2.3f, 4.4f, 26, true, seed);
+    drawFallingPetals(2.3f, 4.4f, 12, true, seed);
     drawPetalCarpet(true, 2.6f, 80);
 
     glPopMatrix();
@@ -2638,7 +2684,7 @@ void drawLake(Vec3 pos, Vec3 rot, Vec3 scale)
 // Cluster of grass blade quads rising from the ground
 void drawGrassPatch(Vec3 pos, Vec3 rot, Vec3 scale)
 {
-    if (cullObj(pos, scale, 1.8f)) return;
+    if (cullObj(pos, scale, 1.8f) || outdoorDist2(pos.x, pos.z) > 32.0f * 32.0f) return;   // skip far tufts
     if (outdoorShadowPass) return;
     int v = ((int)floorf(fabsf(pos.x) * 3.0f + fabsf(pos.z) * 5.0f)) % 3;
     if (!g_tuft[v]) buildTuft(v);
@@ -2677,11 +2723,8 @@ void drawJungle(Vec3 pos, Vec3 rot, Vec3 scale)
     domeBush( 0.3f, 0.15f, -0.8f, 0.70f, 0.95f, pos.x + pos.z);
 
     // Tall jungle trees rising above the canopy
-    for (int i = 0; i < 2; i++) {
-        float tx = sinf(i * 1.8f + 0.6f) * 1.6f;
-        float tz = cosf(i * 2.3f + 0.4f) * 1.6f;
-        drawGreenTreeLOD({ tx, 0, tz }, 0.78f + 0.12f * i, i);        // real broadleaf trees
-    }
+    // (the jungle patches no longer carry their own broadleaf trees: they are ground cover only,
+    //  which keeps the forests light.  Trees are placed individually in scene.cpp.)
 
     // Fern fronds (flat leaf-like quads fanning out from ground)
     for (int i = 0; i < 6; i++) {

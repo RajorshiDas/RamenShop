@@ -77,9 +77,11 @@ Color darker(Color c)
     return { c.r * 0.55f, c.g * 0.55f, c.b * 0.55f };
 }
 
+float emissionScale = 1.0f;   // 0 = every glow is off (used when no interior light is on)
+
 void setEmission(float r, float g, float b)
 {
-    GLfloat em[] = { r, g, b, 1.0f };
+    GLfloat em[] = { r * emissionScale, g * emissionScale, b * emissionScale, 1.0f };
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, em);
 }
 
@@ -97,9 +99,11 @@ void setMaterialGloss(float r, float g, float b, float shininess)
 
 void resetMaterialGloss()
 {
-    GLfloat noSpec[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, noSpec);
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 0.0f);
+    // Default surface: a soft satin sheen, so every object picks up a light highlight and
+    // shaded falloff from the lamps and the sun, instead of looking flat.
+    GLfloat softSpec[] = { 0.14f, 0.14f, 0.14f, 1.0f };
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, softSpec);
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.0f);
 }
 
 // Dielectric: white specular — the highlight colour is always white,
@@ -163,9 +167,14 @@ void setMaterialPBRMetallic(const MaterialPBR& mat, const Color& metalColor)
 
 // Sphere-map environment reflection — adds a warm interior glow on top of the
 // Phong-lit metal surface, approximating ray-traced reflections.
+static bool g_sphereSkipped = false;
+
 void beginSphereReflect()
 {
-    if (drawingShadow) return;   // skip during shadow-projection pass
+    // The fake "warm interior" reflection is only light that comes from the lamps: with every
+    // interior light off (emissionScale == 0) there is nothing to reflect, so skip it.
+    g_sphereSkipped = (drawingShadow || emissionScale <= 0.0f);
+    if (g_sphereSkipped) return;
     disablePhongShader();        // sphere-map texgen needs fixed-function
     GLuint env = getTexID(TEX_ENV_MAP);
     if (!env) return;
@@ -182,7 +191,7 @@ void beginSphereReflect()
 
 void endSphereReflect()
 {
-    if (drawingShadow) return;
+    if (g_sphereSkipped) { g_sphereSkipped = false; return; }
     glDisable(GL_TEXTURE_GEN_S);
     glDisable(GL_TEXTURE_GEN_T);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -945,43 +954,57 @@ void drawClearGlassWindow(Vec3 pos, Vec3 rot, Vec3 scale, float width, float hei
 // Ceiling Track Spotlight Fixture:
 // Modern black aluminum track can with swivel mount, polished inner reflector cone,
 // and glowing halogen/LED emitter.
-void drawSpotlightFixture(Vec3 pos, Vec3 rot, Vec3 scale, bool isOn)
+void drawSpotlightFixture(Vec3 pos, Vec3 rot, Vec3 scale, bool isOn, bool whiteShade)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
-    // Track rail clamp & bracket
-    drawCuboid({ 0, 0.22f, 0 }, NO_ROT, { 0.12f, 0.08f, 0.08f }, DARK_GRAY);
-    drawCylinder({ 0, 0.12f, 0 }, NO_ROT, { 0.03f, 0.10f, 0.03f }, METAL);
+    // Thin hanging cord up to the ceiling
+    drawCylinder({ 0, 0.0f, 0 }, NO_ROT, { 0.006f, 0.04f, 0.006f }, whiteShade ? Color{ 0.85f, 0.85f, 0.85f } : Color{ 0.04f, 0.04f, 0.04f });
 
-    // Swivel knuckle
-    drawSphere({ 0, 0.10f, 0 }, NO_ROT, { 0.05f, 0.05f, 0.05f }, DARK_GRAY);
-
-    // Spotlight cylindrical can body
-    glPushMatrix();
-    setMaterialConductive(DARK_GRAY, 45.0f);
-    drawCylinderCustom({ 0, -0.16f, 0 }, NO_ROT, ONE, DARK_GRAY, 0.13f, 0.11f, 0.26f);
+    // Small wooden cap on top of the bell
+    setMaterialPBR(Materials::WoodPolished, LIGHT_WOOD);
+    drawCylinderCustom({ 0, -0.07f, 0 }, NO_ROT, ONE, LIGHT_WOOD, 0.060f, 0.045f, 0.075f);
     resetMaterialGloss();
 
-    // Inner parabolic reflector cone (polished specular metal)
-    setMaterialConductive(STEEL, 100.0f);
-    beginSphereReflect();
-    drawCone({ 0, -0.15f, 0 }, { 180, 0, 0 }, { 0.18f, 0.14f, 0.18f }, STEEL);
-    endSphereReflect();
+    // Bell shade: lathe profile (neck, rounded shoulder, flared skirt, rolled lip)
+    static const float prof[][2] = {      // { radius, y }
+        { 0.062f, -0.105f }, { 0.062f, -0.175f }, { 0.072f, -0.205f }, { 0.098f, -0.235f },
+        { 0.135f, -0.275f }, { 0.172f, -0.330f }, { 0.200f, -0.395f }, { 0.216f, -0.450f },
+        { 0.220f, -0.485f }, { 0.215f, -0.500f }
+    };
+    const int N = (int)(sizeof(prof) / sizeof(prof[0])), SEG = 28;
+    const Color shade = whiteShade ? Color{ 0.88f, 0.90f, 0.92f } : Color{ 0.12f, 0.12f, 0.13f };
+    setMaterialDielectric(whiteShade ? 70.0f : 110.0f);      // glossy paint: tight white highlight
+    glColor3f(shade.r, shade.g, shade.b);
+    for (int pass = 0; pass < 2; pass++) {                    // outside, then a plain inside lining
+        for (int i = 0; i + 1 < N; i++) {                     // one strip between profile rings i and i+1
+            glBegin(GL_QUAD_STRIP);
+            for (int j = 0; j <= SEG; j++) {
+                float a = j * 2.0f * PI / SEG, ca = cosf(a), sa = sinf(a);
+                for (int k = 0; k < 2; k++) {
+                    int m = i + k, lo = m > 0 ? m - 1 : m, hi = m + 1 < N ? m + 1 : m;
+                    float dr = prof[hi][0] - prof[lo][0], dy = prof[hi][1] - prof[lo][1];
+                    float nl = sqrtf(dr * dr + dy * dy), nr = dy / nl, ny = -dr / nl;   // outward profile normal
+                    float rr = prof[m][0] - (pass ? 0.006f : 0.0f);
+                    if (pass) { nr = -nr; ny = -ny; }
+                    glNormal3f(nr * ca, ny, nr * sa);
+                    glVertex3f(rr * ca, prof[m][1], rr * sa);
+                }
+            }
+            glEnd();
+        }
+    }
     resetMaterialGloss();
 
-    // High-intensity center emitter bulb / lens
+    // Warm bulb glowing inside the shade
     if (isOn) {
         setEmission(1.00f, 0.94f, 0.80f);
-        drawSphere({ 0, -0.12f, 0 }, NO_ROT, { 0.065f, 0.065f, 0.065f }, WHITE);
+        drawSphere({ 0, -0.40f, 0 }, NO_ROT, { 0.05f, 0.05f, 0.05f }, WHITE);
         clearEmission();
     } else {
-        drawSphere({ 0, -0.12f, 0 }, NO_ROT, { 0.065f, 0.065f, 0.065f }, GRAY);
+        drawSphere({ 0, -0.40f, 0 }, NO_ROT, { 0.05f, 0.05f, 0.05f }, GRAY);
     }
-
-    // Outer lens rim ring
-    drawTorus({ 0, -0.16f, 0 }, { 90, 0, 0 }, ONE, DARK_GRAY, 0.015f, 0.13f);
-    glPopMatrix();
 
     glPopMatrix();
 }
@@ -1038,7 +1061,7 @@ void drawAreaLightFixture(Vec3 pos, Vec3 rot, Vec3 scale, bool isOn)
     for (int sx = -1; sx <= 1; sx += 2) {
         for (int sz = -1; sz <= 1; sz += 2) {
             drawCylinder({ sx * 1.45f, panelH, sz * 0.36f }, NO_ROT,
-                         { 0.008f, 0.80f, 0.008f }, STEEL);
+                         { 0.008f, 0.012f, 0.008f }, STEEL);   // up to the ceiling (y 3.30), not through it
         }
     }
 
@@ -1082,51 +1105,81 @@ void drawAreaLightFixture(Vec3 pos, Vec3 rot, Vec3 scale, bool isOn)
 // glowing filament Edison light bulb inside the transparent glass!
 void drawPendantGlassLamp(Vec3 pos, Vec3 rot, Vec3 scale, bool isOn)
 {
+    // Industrial pendant: riveted dark-steel dome shade, brass collar stack and bracket,
+    // brass cage rings with steel bands around an exposed glowing bulb.
+    const Color STEEL_D = { 0.30f, 0.34f, 0.38f }, BRASS = { 0.78f, 0.60f, 0.24f };
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
-    // Hanging black cord & brass fitting
-    drawCylinder({ 0, 0.20f, 0 }, NO_ROT, { 0.015f, 1.20f, 0.015f }, BLACK);
-    setMaterialConductive(GOLD, 75.0f);
-    drawCylinder({ 0, 0.12f, 0 }, NO_ROT, { 0.06f, 0.12f, 0.06f }, GOLD);
-    resetMaterialGloss();
+    // cable
+    drawCylinder({ 0, 0.0f, 0 }, NO_ROT, { 0.014f, 0.45f, 0.014f }, BLACK);   // cord ends at the ceiling (y 3.30)
 
-    // Incandescent / Edison Bulb inside the shade
-    if (isOn) {
-        setEmission(1.00f, 0.85f, 0.45f);
-        drawSphere({ 0, -0.05f, 0 }, NO_ROT, { 0.12f, 0.14f, 0.12f }, { 1.0f, 0.92f, 0.60f });
-        // Glowing inner filament
-        setEmission(1.00f, 0.95f, 0.70f);
-        drawTorus({ 0, -0.05f, 0 }, { 90, 0, 0 }, ONE, GOLD, 0.015f, 0.04f);
-        clearEmission();
-    } else {
-        drawSphere({ 0, -0.05f, 0 }, NO_ROT, { 0.12f, 0.14f, 0.12f }, GRAY);
+    // steel U-bracket with a small hook ring
+    setMaterialConductive(STEEL_D, 70.0f);
+    drawCuboid({ -0.07f, 0.17f, 0 }, NO_ROT, { 0.025f, 0.30f, 0.09f }, STEEL_D);
+    drawCuboid({  0.07f, 0.17f, 0 }, NO_ROT, { 0.025f, 0.30f, 0.09f }, STEEL_D);
+    drawCuboid({ 0, 0.46f, 0 }, NO_ROT, { 0.17f, 0.025f, 0.09f }, STEEL_D);
+    setMaterialConductive(BRASS, 80.0f);
+    drawTorus({ 0, 0.50f, 0 }, { 0, 90, 0 }, ONE, BRASS, 0.007f, 0.025f);
+
+    // brass collar stack above the shade
+    for (int i = 0; i < 5; i++) {
+        float y = 0.13f + i * 0.045f;
+        drawCylinder({ 0, y, 0 }, NO_ROT, { 0.085f - 0.004f * i, 0.030f, 0.085f - 0.004f * i }, BRASS);
+        drawTorus({ 0, y + 0.03f, 0 }, NO_ROT, ONE, BRASS, 0.007f, 0.045f - 0.002f * i);
     }
 
-    // Clear Glass Bell Shade (drawn transparently around the bulb)
-    setMaterialDielectric(125.0f);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_FALSE);
-
-    glColor4f(CLEAR_GLASS.r, CLEAR_GLASS.g, CLEAR_GLASS.b, 0.20f);
-    // Tapered glass bell neck and flared dome
-    rawTube(0.08f, 0.18f, 0.15f, 0.04f);
-    rawTube(0.18f, 0.32f, 0.22f, -0.18f);
-
-    // Rounded lip ring at bottom
-    glColor4f(CLEAR_GLASS.r, CLEAR_GLASS.g, CLEAR_GLASS.b, 0.35f);
-    glPushMatrix();
-    glTranslatef(0, -0.18f, 0);
-    glRotatef(90, 1, 0, 0);
-    glutSolidTorus(0.02, 0.32, 12, SLICES);
-    glPopMatrix();
-
-    rawCircleOutline(0.32f, -0.18f, CLEAR_GLASS);
-
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
+    // dome shade (surface of revolution)
+    setMaterialConductive(STEEL_D, 60.0f);
+    setColor(STEEL_D);
+    const int SL = 28, ST = 8;
+    for (int i = 0; i < ST; i++) {
+        float p0 = i * 1.5708f / ST, p1 = (i + 1) * 1.5708f / ST;
+        float r0 = 0.09f + 0.25f * sinf(p0), y0 = 0.13f - 0.16f * (1.0f - cosf(p0));
+        float r1 = 0.09f + 0.25f * sinf(p1), y1 = 0.13f - 0.16f * (1.0f - cosf(p1));
+        float n0y = 0.25f + 0.75f * cosf(p0), n1y = 0.25f + 0.75f * cosf(p1);
+        glBegin(GL_QUAD_STRIP);
+        for (int j = 0; j <= SL; j++) {
+            float a2 = j * 6.2832f / SL, ca = cosf(a2), sa = sinf(a2);
+            glNormal3f(ca * sinf(p0), n0y, sa * sinf(p0)); glVertex3f(ca * r0, y0, sa * r0);
+            glNormal3f(ca * sinf(p1), n1y, sa * sinf(p1)); glVertex3f(ca * r1, y1, sa * r1);
+        }
+        glEnd();
+    }
+    // rolled brass rim and a ring of rivets
+    setMaterialConductive(BRASS, 80.0f);
+    drawTorus({ 0, -0.03f, 0 }, NO_ROT, ONE, BRASS, 0.012f, 0.345f);
+    for (int i = 0; i < 16; i++) {
+        float a2 = i * 6.2832f / 16.0f;
+        drawSphere({ cosf(a2) * 0.325f, -0.012f, sinf(a2) * 0.325f }, NO_ROT, { 0.026f, 0.026f, 0.026f }, BRASS);
+    }
+    // brass cage rings under the shade and four steel bands over the bulb
+    drawTorus({ 0, -0.075f, 0 }, NO_ROT, ONE, BRASS, 0.008f, 0.30f);
+    drawTorus({ 0, -0.125f, 0 }, NO_ROT, ONE, BRASS, 0.008f, 0.245f);
+    drawTorus({ 0, -0.175f, 0 }, NO_ROT, ONE, BRASS, 0.008f, 0.17f);
+    setMaterialConductive(STEEL_D, 60.0f);
+    for (int k = 0; k < 4; k++) {
+        float a2 = k * 1.5708f + 0.4f;
+        glBegin(GL_QUAD_STRIP);
+        glNormal3f(cosf(a2), 0.2f, sinf(a2));
+        for (int i = 0; i <= 8; i++) {
+            float t = i / 8.0f, r = 0.34f * cosf(t * 1.45f), y = -0.03f - 0.22f * sinf(t * 1.45f);
+            float w = 0.012f;
+            glVertex3f(cosf(a2) * r - sinf(a2) * w, y, sinf(a2) * r + cosf(a2) * w);
+            glVertex3f(cosf(a2) * r + sinf(a2) * w, y, sinf(a2) * r - cosf(a2) * w);
+        }
+        glEnd();
+    }
     resetMaterialGloss();
+
+    // exposed bulb
+    if (isOn) {
+        setEmission(1.00f, 0.88f, 0.55f);
+        drawSphere({ 0, -0.06f, 0 }, NO_ROT, { 0.15f, 0.20f, 0.15f }, { 1.0f, 0.93f, 0.65f });
+        clearEmission();
+    } else {
+        drawSphere({ 0, -0.06f, 0 }, NO_ROT, { 0.15f, 0.20f, 0.15f }, { 0.75f, 0.75f, 0.72f });
+    }
 
     glPopMatrix();
 }
@@ -1179,34 +1232,35 @@ void drawJapaneseFloorLanternTower(Vec3 pos, Vec3 rot, Vec3 scale, bool isOn)
         float pp0 = y0 + 0.020f;   // paper starts just above bottom rail
         float pp1 = y1 - 0.018f;   // paper ends just below top rail
 
-        if (isOn) {
-            setEmission(1.0f * flick, 0.68f * flick, 0.18f * flick);
-            glColor3f(1.0f, 0.85f, 0.56f);
-        } else {
-            clearEmission();
-            glColor3f(0.87f, 0.82f, 0.68f);
+        // Glow gradient like a real paper lamp: bright in the middle of each section, plain darker cream
+        // toward the rails and posts.  Flat cream when switched off.
+        {
+            const int NC = 4, NR = 5;
+            const float pw = hw * 2.0f, ph = pp1 - pp0;
+            auto panel = [&](float ox, float oz, float ux, float uz, float nx, float nz) {
+                setLighting(false);
+                glBegin(GL_QUADS);
+                glNormal3f(nx, 0, nz);
+                for (int i = 0; i < NC; i++)
+                    for (int j = 0; j < NR; j++) {
+                        float u0 = i / (float)NC, u1 = (i + 1) / (float)NC, v0 = j / (float)NR, v1 = (j + 1) / (float)NR;
+                        float uu[4] = { u0, u1, u1, u0 }, vv[4] = { v0, v0, v1, v1 };
+                        for (int k = 0; k < 4; k++) {
+                            float cu = uu[k] * 2.0f - 1.0f, dv = (vv[k] - 0.5f) / 0.55f;
+                            float g = expf(-(cu * cu * 1.4f + dv * dv * 1.5f)) * (1.0f - 0.35f * powf(fabsf(cu), 4.0f));
+                            if (isOn) { float f = g * flick; glColor3f(0.56f + 0.40f * f, 0.42f + 0.44f * f, 0.24f + 0.26f * f); }
+                            else glColor3f(0.87f, 0.82f, 0.68f);
+                            glVertex3f(ox + ux * uu[k], pp1 - ph * vv[k], oz + uz * uu[k]);
+                        }
+                    }
+                glEnd();
+                setLighting(true);
+            };
+            panel(-hw,  hw,  pw, 0,   0,  1);     // +Z front
+            panel( hw, -hw, -pw, 0,   0, -1);     // -Z back
+            panel(-hw, -hw,  0, pw,  -1,  0);     // -X left
+            panel( hw,  hw,  0, -pw,  1,  0);     // +X right
         }
-
-        // +Z front
-        glBegin(GL_QUADS); glNormal3f(0, 0, 1);
-        glVertex3f(-hw, pp1, hw); glVertex3f( hw, pp1, hw);
-        glVertex3f( hw, pp0, hw); glVertex3f(-hw, pp0, hw);
-        glEnd();
-        // -Z back
-        glBegin(GL_QUADS); glNormal3f(0, 0, -1);
-        glVertex3f( hw, pp1, -hw); glVertex3f(-hw, pp1, -hw);
-        glVertex3f(-hw, pp0, -hw); glVertex3f( hw, pp0, -hw);
-        glEnd();
-        // -X left
-        glBegin(GL_QUADS); glNormal3f(-1, 0, 0);
-        glVertex3f(-hw, pp1, -hw); glVertex3f(-hw, pp1,  hw);
-        glVertex3f(-hw, pp0,  hw); glVertex3f(-hw, pp0, -hw);
-        glEnd();
-        // +X right
-        glBegin(GL_QUADS); glNormal3f(1, 0, 0);
-        glVertex3f( hw, pp1,  hw); glVertex3f( hw, pp1, -hw);
-        glVertex3f( hw, pp0, -hw); glVertex3f( hw, pp0,  hw);
-        glEnd();
 
         clearEmission();
     }
@@ -1240,8 +1294,8 @@ static void drawOneBoxLantern(float rx, float rz, float cordLen, bool isOn, floa
     glRotatef(sway, 0, 0, 1);
 
     // Thin dark hanging cord
-    drawCylinder({ 0, -cordLen * 0.5f, 0 }, NO_ROT,
-                 { 0.007f, cordLen, 0.007f }, DARK_WOOD);
+    drawCylinder({ 0, -cordLen, 0 }, NO_ROT,
+                 { 0.007f, cordLen, 0.007f }, DARK_WOOD);      // from the lantern up to the mount only
 
     glTranslatef(0, -cordLen, 0);   // move to top-centre of the lantern box
 
@@ -1268,35 +1322,63 @@ static void drawOneBoxLantern(float rx, float rz, float cordLen, bool isOn, floa
 
     resetMaterialGloss();
 
-    // ── Emissive washi-paper panels ──────────────────────────────────────
-    if (isOn) {
-        setEmission(1.0f * flick, 0.70f * flick, 0.20f * flick);
-        glColor3f(1.0f, 0.87f, 0.60f);
-    } else {
-        clearEmission();
-        glColor3f(0.86f, 0.80f, 0.65f);
+    // ── Washi-paper panels with a glow gradient ──────────────────────────
+    // Like a real paper lamp (see reference): the paper is brightest in front of the bulb and fades to
+    // plain, darker cream toward the top and bottom edges and near the frame posts.  When the lantern
+    // is off the paper is a flat cream colour.
+    {
+        const int NC = 6, NR = 8;
+        auto glowAt = [&](float u, float v) {                          // u: -1..1 across, v: 0 top .. 1 bottom
+            float dv = (v - 0.46f) / 0.52f;
+            float g = expf(-(u * u * 1.5f + dv * dv * 1.4f));          // soft hot spot at the bulb
+            float post = 1.0f - 0.35f * powf(fabsf(u), 4.0f);          // darker toward the corner posts
+            return g * post;
+        };
+        auto panel = [&](float ox, float oy, float oz, float ux, float uy, float uz, float vx, float vy, float vz,
+                         float nx, float ny, float nz) {
+            glBegin(GL_QUADS);
+            glNormal3f(nx, ny, nz);
+            for (int i = 0; i < NC; i++)
+                for (int j = 0; j < NR; j++) {
+                    float u0 = i / (float)NC, u1 = (i + 1) / (float)NC, v0 = j / (float)NR, v1 = (j + 1) / (float)NR;
+                    float uu[4] = { u0, u1, u1, u0 }, vv[4] = { v0, v0, v1, v1 };
+                    for (int k = 0; k < 4; k++) {
+                        float g = isOn ? glowAt(uu[k] * 2.0f - 1.0f, vv[k]) : 0.0f;
+                        if (isOn) {
+                            float f = g * flick;
+                            glColor3f(0.56f + 0.40f * f, 0.42f + 0.44f * f, 0.24f + 0.26f * f);   // cream -> soft warm glow
+                        } else glColor3f(0.86f, 0.80f, 0.65f);
+                        glVertex3f(ox + ux * uu[k] + vx * vv[k], oy + uy * uu[k] + vy * vv[k], oz + uz * uu[k] + vz * vv[k]);
+                    }
+                }
+            glEnd();
+        };
+        const float W2 = 2.0f * hw, D2 = 2.0f * hd, H2 = 2.0f * hh;
+        setLighting(false);                       // the glow is the lantern's own light, not lit by anything else
+        panel(-hw,  hh,  hd,   W2, 0, 0,   0, -H2, 0,   0, 0,  1);      // +Z front
+        panel( hw,  hh, -hd,  -W2, 0, 0,   0, -H2, 0,   0, 0, -1);      // -Z back
+        panel(-hw,  hh, -hd,   0, 0, D2,   0, -H2, 0,  -1, 0,  0);      // -X left
+        panel( hw,  hh,  hd,   0, 0, -D2,  0, -H2, 0,   1, 0,  0);      // +X right
+        setLighting(true);
     }
 
-    // +Z front
-    glBegin(GL_QUADS); glNormal3f(0, 0, 1);
-    glVertex3f(-hw,  hh, hd); glVertex3f( hw,  hh, hd);
-    glVertex3f( hw, -hh, hd); glVertex3f(-hw, -hh, hd);
-    glEnd();
-    // -Z back
-    glBegin(GL_QUADS); glNormal3f(0, 0, -1);
-    glVertex3f( hw,  hh, -hd); glVertex3f(-hw,  hh, -hd);
-    glVertex3f(-hw, -hh, -hd); glVertex3f( hw, -hh, -hd);
-    glEnd();
-    // -X left
-    glBegin(GL_QUADS); glNormal3f(-1, 0, 0);
-    glVertex3f(-hw,  hh, -hd); glVertex3f(-hw,  hh,  hd);
-    glVertex3f(-hw, -hh,  hd); glVertex3f(-hw, -hh, -hd);
-    glEnd();
-    // +X right
-    glBegin(GL_QUADS); glNormal3f(1, 0, 0);
-    glVertex3f( hw,  hh,  hd); glVertex3f( hw,  hh, -hd);
-    glVertex3f( hw, -hh, -hd); glVertex3f( hw, -hh,  hd);
-    glEnd();
+    // soft yellow glow halo around the lit lantern
+    if (isOn) {
+        glPushMatrix();
+        glTranslatef(0, 0.0f, 0);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+        setLighting(false);
+        glColor4f(1.0f, 0.86f, 0.5f, 0.05f * flick);
+        gluSphere(quad, 0.30f, 12, 12);
+        glColor4f(1.0f, 0.88f, 0.55f, 0.04f * flick);
+        gluSphere(quad, 0.19f, 12, 12);
+        glDepthMask(GL_TRUE);
+        setLighting(true);
+        glDisable(GL_BLEND);
+        glPopMatrix();
+    }
 
     clearEmission();
     glPopMatrix();

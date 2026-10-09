@@ -82,3 +82,18 @@ void applyLightingParameters();
 
 // Fog state (shared with shader)
 extern bool showFog;
+
+// ── Individual light fixtures (each can be switched on its own) ─────────────
+// Order matches the light tour in camera.cpp.  A fixture is lit when its group switch
+// (lightPoint / lightSpot / lightArea) AND its own switch are on.
+enum FixtureId { FX_PENDANTS, FX_SPOT, FX_PANEL, FX_BOX, FX_HANGING, FX_TOWER, FX_DOME, FX_COUNT };
+extern bool fixtureOn[FX_COUNT];
+// Share (0..1) of the shared "dining point light" supplied by the fixtures that are on
+float pointFixtureShare();
+
+// Reuse lights 2, 3, 5, 6 as interior fixtures while the interior is drawn (see lighting.cpp)
+void applyInteriorFixtureLights();
+void restoreExteriorFixtureLights();
+
+// True while at least one interior fixture (keys 1-7) is switched on
+bool anyInteriorLightOn();

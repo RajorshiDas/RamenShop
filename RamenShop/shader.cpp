@@ -120,12 +120,14 @@ void main()
             float NdotL = max(dot(N, L), 0.0);
             result += gl_LightSource[i].diffuse * baseColor * NdotL * atten;
 
-            // Specular (Phong reflection)
+            // Specular (Blinn-Phong: half vector H between light and view, as in OpenGL's
+            // own lighting model).  Gives the broad, visible gloss streaks real lacquered
+            // wood and polished metal show on flat surfaces under a lamp.
             if (NdotL > 0.0) {
-                vec3  R         = reflect(-L, N);
-                float RdotV     = max(dot(R, V), 0.0);
+                vec3  H         = normalize(L + V);
+                float NdotH     = max(dot(N, H), 0.0);
                 float shininess = max(gl_FrontMaterial.shininess, 1.0);
-                float spec      = pow(RdotV, shininess);
+                float spec      = pow(NdotH, shininess);
                 result += gl_LightSource[i].specular
                         * gl_FrontMaterial.specular
                         * spec * atten;
@@ -224,6 +226,24 @@ void disablePhongShader()
     shaderActive = false;
 }
 
+static bool g_interiorScope = false;
+
+// Interior scope: the lights outside the shop (entrance lanterns 2/3, street lamps 5, shop sign 6)
+// do not light interior objects.  Their four light slots are reused for the other interior
+// fixtures, so the interior is lit by its own fixtures plus the sun / moon through the windows.
+void setInteriorLightScope(bool interior)
+{
+    g_interiorScope = interior;
+    // Glowing details (LED strips, burner flames, fridge lamp ...) are light sources of the
+    // interior too: with every interior light switched off nothing glows by itself.
+    bool any = anyInteriorLightOn();
+    emissionScale = (interior && !any) ? 0.0f : 1.0f;
+
+    if (interior) applyInteriorFixtureLights();          // lights 2,3,5,6 become interior fixtures
+    else          restoreExteriorFixtureLights();        // ...and go back to their outdoor roles
+    updatePhongUniforms();
+}
+
 void updatePhongUniforms()
 {
     if (!shaderActive) return;
@@ -246,6 +266,7 @@ void updatePhongUniforms()
     mask[5] = (lightArea && !isDayTime) ? 1.0f : 0.0f;
     mask[6] = lightArea        ? 1.0f : 0.0f;
     mask[7] = lightArea        ? 1.0f : 0.0f;
+    if (g_interiorScope) { mask[2] = mask[3] = mask[5] = mask[6] = 1.0f; }   // interior fixtures (zero colour when switched off)
     glUniform1fv(uLightOn, 8, mask);
 
     // Fog state

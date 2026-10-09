@@ -99,27 +99,44 @@ void drawCylinderLantern(Vec3 pos, Vec3 rot, Vec3 scale)
 
         float flicker = 1.0f + 0.08f * sin(animTime * 4.2f + pos.x);
 
-        // ────── Solid glowing red lantern body ──────
-        //   Warm red-orange glow — the lantern surface itself looks lit
-        const Color LANTERN_RED = { 0.90f, 0.10f, 0.08f };
-        float dayLanHang = isDayTime ? 0.20f : 1.0f;
-        setEmission(0.90f * flicker * dayLanHang,
-                    0.18f * flicker * dayLanHang,
-                    0.06f * flicker * dayLanHang);
-        setMaterialPBR(Materials::GlazedMatte, LANTERN_RED);
-        drawSphere({ 0, -0.08f, 0 }, NO_ROT, { 0.36f, 0.54f, 0.36f }, LANTERN_RED);
-        clearEmission();
+        // ────── Tall slim paper lantern (chochin) ──────
+        //   Cream-orange paper, nearly cylindrical with rounded shoulders, fine horizontal ribs,
+        //   glowing from inside,.
+        float dayLanHang = (isDayTime ? 0.20f : 1.0f) * (fixtureOn[FX_HANGING] ? 1.0f : 0.06f);
+        {
+            const float R = 0.17f, HH = 0.38f, CY = -0.08f;
+            const int SL = 24, ST = 26;
+            setEmission(0.45f * flicker * dayLanHang, 0.32f * flicker * dayLanHang, 0.12f * flicker * dayLanHang);   // gentle self-glow: the vertex-colour gradient carries the look
+            for (int i = 0; i < ST; i++) {
+                float u0 = -1.0f + 2.0f * i / ST, u1 = -1.0f + 2.0f * (i + 1) / ST;
+                float r0 = R * powf(1.0f - powf(fabsf(u0), 6.0f), 0.5f), r1 = R * powf(1.0f - powf(fabsf(u1), 6.0f), 0.5f);
+                float rib = (i % 2 == 0) ? 1.0f : 0.90f;                           // fine horizontal ribs
+                float um = 0.5f * (u0 + u1);
+                float gl = expf(-((um + 0.10f) * (um + 0.10f)) * 2.6f);          // bright around the bulb, dimmer cream at the ends
+                glColor3f((0.56f + 0.40f * gl) * rib, (0.42f + 0.44f * gl) * rib, (0.24f + 0.24f * gl) * rib);
+                glBegin(GL_QUAD_STRIP);
+                for (int j = 0; j <= SL; j++) {
+                    float ang = j * 6.2832f / SL, ca = cosf(ang), sa = sinf(ang);
+                    glNormal3f(ca, 0.25f * u0, sa); glVertex3f(ca * r0, CY + u0 * HH, sa * r0);
+                    glNormal3f(ca, 0.25f * u1, sa); glVertex3f(ca * r1, CY + u1 * HH, sa * r1);
+                }
+                glEnd();
+            }
+            clearEmission();
+        }
 
         // Additive glow halo (visible warm light spill around the lantern)
-        if (!isDayTime) {
+        if (!isDayTime && fixtureOn[FX_HANGING]) {
             glPushMatrix();
             glTranslatef(0, -0.08f, 0);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE);
             glDepthMask(GL_FALSE);
             setLighting(false);
-            glColor4f(0.90f, 0.20f, 0.06f, 0.06f * flicker);
+            glColor4f(1.0f, 0.78f, 0.38f, 0.06f * flicker);
             gluSphere(quad, 0.50f, 12, 12);
+            glColor4f(1.0f, 0.86f, 0.5f, 0.04f * flicker);
+            gluSphere(quad, 0.30f, 12, 12);
             glDepthMask(GL_TRUE);
             setLighting(true);
             glDisable(GL_BLEND);
@@ -136,7 +153,7 @@ void drawCylinderLantern(Vec3 pos, Vec3 rot, Vec3 scale)
 
         // ────── Hanging string/chain ──────
         setMaterialPBR(Materials::SeaweedNori, {0.1f, 0.1f, 0.1f});
-        drawCylinder({ 0, 0.45f, 0 }, NO_ROT, { 0.008f, 0.85f, 0.008f }, {0.1f, 0.1f, 0.1f});
+        drawCylinder({ 0, 0.38f, 0 }, NO_ROT, { 0.008f, 0.06f, 0.008f }, {0.1f, 0.1f, 0.1f});   // short string to the ceiling
 
         // ────── Bottom metal ring ──────
         setMaterialPBRMetallic(Materials::BrushedMetal, DARK_GRAY);

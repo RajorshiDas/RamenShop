@@ -2,7 +2,7 @@
 
 #include "shapes.h"
 
-enum CameraMode { CAM_ORBIT, CAM_FPS, CAM_FOCUSED, CAM_UPPER };
+enum CameraMode { CAM_ORBIT, CAM_FPS, CAM_FOCUSED, CAM_UPPER, CAM_LIGHT, CAM_POND };
 extern CameraMode currentCamMode;
 
 // Orbit Camera parameters (exterior overview)
@@ -44,3 +44,6 @@ void handleSpecialDown(int key, int x, int y);
 void handleSpecialUp(int key, int x, int y);
 void handleMouseClick(int button, int state, int x, int y);
 void handleMouseMotion(int x, int y);
+
+// Light tour: key 8 flies the camera to the next light source and switches it on; key 9 toggles it
+const char* getLightTourName();

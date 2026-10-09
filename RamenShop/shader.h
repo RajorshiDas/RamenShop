@@ -23,3 +23,7 @@ void shaderSetTexture(bool on);
 // Wrapper: replaces every glEnable/Disable(GL_LIGHTING) in the codebase
 // so the shader's lightingOn uniform stays in sync.
 void setLighting(bool on);
+
+// While true, only interior lights (and sun/moon) light the scene: entrance lanterns, street lamps
+// and the shop-sign light are skipped (call false to restore).
+void setInteriorLightScope(bool interior);

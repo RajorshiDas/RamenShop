@@ -112,6 +112,7 @@ void display()
         updatePhongUniforms();
     }
 
+    resetMaterialGloss();               // soft default sheen on everything that sets no material
     drawGround();
     drawExterior();
     drawInterior();

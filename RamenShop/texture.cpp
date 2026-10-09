@@ -5,6 +5,7 @@
 
 static GLuint texIDs[TEX_COUNT];
 
+static float fbmTile(float u, float v, int baseFreq, int octaves);
 static unsigned char clampByte(float v) {
     if (v < 0.0f) return 0;
     if (v > 255.0f) return 255;
@@ -24,27 +25,36 @@ static float hashf(int x, int y) {
 // r0,g0,b0 = base colour in [0,1].
 static void genWood(unsigned char* px, int W, int H, float r0, float g0, float b0)
 {
-    const float PI2 = 6.28318f;
+    // Wooden planks: 6 boards across the texture, long grain streaks along U, a dark seam
+    // between boards, a slightly different tone per board, and a few knots / end joints.
+    const int PLANKS = 6;
     for (int y = 0; y < H; y++) {
+        int plank = y * PLANKS / H;
+        float inPlank = (float)(y * PLANKS % H) / H;                       // 0..1 across one board
+        float tone = 0.86f + 0.28f * hashf(plank * 17 + 3, 5);             // board colour variation
+        float seam = (inPlank < 0.035f || inPlank > 0.975f) ? 0.45f : 1.0f; // dark gap between boards
+        float shift = hashf(plank * 31 + 7, 9);                             // each board's grain is offset
         for (int x = 0; x < W; x++) {
             float fx = (float)x / W;
-            float fy = (float)y / H;
-
-            // Slight horizontal warp based on x position
-            float warp = sinf(fx * 7.3f) * 0.04f + hashf(x * 2, 0) * 0.03f - 0.015f;
-            float gy   = fy + warp;
-
-            // Two-frequency grain bands
-            float g1    = sinf(gy *  8.0f * PI2);
-            float g2    = sinf(gy * 22.0f * PI2) * 0.25f;
-            float grain = ((g1 + g2) / 1.25f) * 0.5f + 0.5f;   // [0,1]
-
-            // Micro surface noise
-            float n = (hashf(x, y) - 0.5f) * 0.05f;
-
-            px[(y * W + x) * 3 + 0] = clampByte((r0 + (grain - 0.5f) * 0.20f + n) * 255);
-            px[(y * W + x) * 3 + 1] = clampByte((g0 + (grain - 0.5f) * 0.14f + n) * 255);
-            px[(y * W + x) * 3 + 2] = clampByte((b0 + (grain - 0.5f) * 0.07f + n) * 255);
+            // long stretched grain: slow along x, quick across the board
+            float wave = sinf((fx * 3.0f + shift * 6.0f) * 6.28318f) * 0.02f;
+            float across = inPlank + wave + shift;
+            float g1 = sinf(across * 34.0f) * 0.5f + 0.5f;
+            float g2 = sinf(across * 91.0f + hashf(x / 24, plank) * 6.0f) * 0.5f + 0.5f;
+            float grain = g1 * 0.6f + g2 * 0.4f;
+            // end joint: a short dark line at a per-board position
+            float jx = hashf(plank * 13 + 1, 2);
+            float joint = (fabsf(fx - jx) < 0.006f) ? 0.55f : 1.0f;
+            // knot: darker rounded spot
+            float kx = hashf(plank * 7 + 4, 8), ky = 0.3f + 0.4f * hashf(plank * 5 + 2, 6);
+            float dx = (fx - kx) * 6.0f, dy = (inPlank - ky) * 2.2f;
+            float kd = sqrtf(dx * dx + dy * dy);
+            float knot = (hashf(plank, 77) > 0.55f && kd < 0.5f) ? (0.62f + 0.38f * (kd / 0.5f)) : 1.0f;
+            float n = (hashf(x, y) - 0.5f) * 0.04f;
+            float k = tone * seam * joint * knot * (0.80f + 0.30f * grain) + n;
+            px[(y * W + x) * 3 + 0] = clampByte(r0 * k * 255);
+            px[(y * W + x) * 3 + 1] = clampByte(g0 * k * 255);
+            px[(y * W + x) * 3 + 2] = clampByte(b0 * k * 255);
         }
     }
 }
@@ -52,29 +62,36 @@ static void genWood(unsigned char* px, int W, int H, float r0, float g0, float b
 // 4×4 ceramic tile grid with grout lines
 static void genTile(unsigned char* px, int W, int H)
 {
+    // Warm glazed ceramic floor tiles: per-tile tone and tint, soft bevelled edges (bright
+    // top-left lip, darker bottom-right), fine speckle, and dark narrow grout lines.
     int tW = W / 4, tH = H / 4;
     const int grout = 2;
-
     for (int y = 0; y < H; y++) {
         for (int x = 0; x < W; x++) {
             int tx = x % tW, ty = y % tH;
             int ti = x / tW, tj = y / tH;
-            bool isGrout = (tx < grout || tx >= tW - grout ||
-                            ty < grout || ty >= tH - grout);
-
-            float base, var;
+            bool isGrout = (tx < grout || tx >= tW - grout || ty < grout || ty >= tH - grout);
+            float r, g, b;
             if (isGrout) {
-                base = 0.30f;
-                var  = (hashf(x, y) - 0.5f) * 0.02f;
+                float v = 0.26f + (hashf(x, y) - 0.5f) * 0.03f;
+                r = v + 0.01f; g = v; b = v - 0.01f;
             } else {
-                float tileVar = (hashf(ti, tj) - 0.5f) * 0.04f;
-                base = 0.60f + tileVar;
-                var  = (hashf(x, y) - 0.5f) * 0.03f;
+                float tone = 0.60f + (hashf(ti * 5 + 1, tj * 3 + 2) - 0.5f) * 0.10f;      // each tile a bit different
+                float warm = (hashf(ti * 7 + 3, tj * 11 + 5) - 0.5f) * 0.05f;
+                float edge = 0.0f;                                                       // bevel
+                int e = 4;
+                if (tx < grout + e) edge += 0.07f * (1.0f - (tx - grout) / (float)e);
+                if (ty < grout + e) edge += 0.07f * (1.0f - (ty - grout) / (float)e);
+                if (tx >= tW - grout - e) edge -= 0.08f * (1.0f - (tW - grout - 1 - tx) / (float)e);
+                if (ty >= tH - grout - e) edge -= 0.08f * (1.0f - (tH - grout - 1 - ty) / (float)e);
+                float speck = (hashf(x * 3, y * 5) > 0.985f) ? -0.10f : 0.0f;              // tiny dark flecks
+                float n = (hashf(x, y) - 0.5f) * 0.025f;
+                float v = tone + edge + speck + n;
+                r = v + 0.05f + warm; g = v + 0.01f; b = v - 0.07f - warm;
             }
-            float v = base + var;
-            px[(y * W + x) * 3 + 0] = clampByte((v + 0.01f) * 255);
-            px[(y * W + x) * 3 + 1] = clampByte( v           * 255);
-            px[(y * W + x) * 3 + 2] = clampByte((v - 0.01f) * 255);
+            px[(y * W + x) * 3 + 0] = clampByte(r * 255);
+            px[(y * W + x) * 3 + 1] = clampByte(g * 255);
+            px[(y * W + x) * 3 + 2] = clampByte(b * 255);
         }
     }
 }
@@ -82,18 +99,17 @@ static void genTile(unsigned char* px, int W, int H)
 // Cream plaster with multi-octave noise
 static void genWall(unsigned char* px, int W, int H)
 {
+    // Warm lime-plaster wall: soft large-scale mottling plus a fine trowel grain.
     for (int y = 0; y < H; y++) {
         for (int x = 0; x < W; x++) {
-            float n = hashf(x,     y)     * 0.500f
-                    + hashf(x * 2, y * 2) * 0.250f
-                    + hashf(x * 4, y * 4) * 0.125f
-                    + hashf(x * 8, y * 8) * 0.0625f;
-            n = n / 0.9375f;         // normalize → ~[0,1]
-            n = (n - 0.5f) * 0.06f; // small variation
-
+            float u = (float)x / W, v = (float)y / H;
+            float big = fbmTile(u, v, 3, 4) - 0.5f;                       // soft clouds
+            float fine = (hashf(x, y) - 0.5f) * 0.035f;
+            float stroke = (fbmTile(u * 1.0f + 0.2f, v * 0.2f, 12, 2) - 0.5f) * 0.05f;   // faint horizontal trowel marks
+            float n = big * 0.10f + fine + stroke;
             px[(y * W + x) * 3 + 0] = clampByte((0.93f + n)        * 255);
-            px[(y * W + x) * 3 + 1] = clampByte((0.88f + n)        * 255);
-            px[(y * W + x) * 3 + 2] = clampByte((0.76f + n * 0.5f) * 255);
+            px[(y * W + x) * 3 + 1] = clampByte((0.87f + n)        * 255);
+            px[(y * W + x) * 3 + 2] = clampByte((0.74f + n * 0.6f) * 255);
         }
     }
 }
@@ -298,11 +314,11 @@ static void genGrass(unsigned char* px, int W, int H)
             float n2 = fbmTile(u + 0.31f, v + 0.77f, 7, 4);
             float n3 = fbmTile(u + 0.12f, v + 0.45f, 22, 3);
             float dry = fbmTile(u + 0.55f, v + 0.20f, 4, 4);
-            Rgb c = mixRgb(G0, G1, sstep(0.30f, 0.70f, n2));
-            c = mixRgb(c, G2, sstep(0.45f, 0.75f, n1) * 0.85f);
-            c = mixRgb(c, G3, sstep(0.60f, 0.85f, n3) * 0.45f);
-            c = mixRgb(c, BR, sstep(0.52f, 0.68f, dry) * 0.85f);                    // dry patches
-            float shade = 0.80f + 0.40f * fbmTile(u + 0.9f, v + 0.1f, 40, 2);       // fine mottling
+            Rgb c = mixRgb(G1, G2, sstep(0.30f, 0.70f, n2) * 0.55f);
+            c = mixRgb(c, G2, sstep(0.45f, 0.75f, n1) * 0.35f);
+            c = mixRgb(c, G3, sstep(0.60f, 0.85f, n3) * 0.12f);
+            c = mixRgb(c, BR, sstep(0.52f, 0.68f, dry) * 0.0f);                     // no dry patches: plain green field
+            float shade = 0.94f + 0.12f * fbmTile(u + 0.9f, v + 0.1f, 40, 2);       // fine mottling
             float* o = &f[((size_t)y * W + x) * 3];
             o[0] = c.r * shade; o[1] = c.g * shade; o[2] = c.b * shade;
         }
@@ -316,7 +332,7 @@ static void genGrass(unsigned char* px, int W, int H)
 
     // 2. fine blades: thousands of short strokes in many directions
     g_grassRng = 987654u;
-    const int blades = W * H / 11;
+    const int blades = W * H / 40;
     for (int i = 0; i < blades; i++) {
         float x0 = rnd01() * W, y0 = rnd01() * H;
         float ang = (rnd01() < 0.80f) ? (1.5708f + (rnd01() - 0.5f) * 1.2f) : (rnd01() * 6.2832f);
@@ -332,13 +348,13 @@ static void genGrass(unsigned char* px, int W, int H)
         for (float t = 0.0f; t < len; t += 0.7f) {
             float taper = 1.0f - 0.5f * (t / len);                                  // tip fades
             int ix = (int)(x0 + dx * t), iy = (int)(y0 + dy * t);
-            plot(ix, iy, col, 0.50f * taper);
-            plot(ix + 1, iy, col, 0.16f * taper);
+            plot(ix, iy, col, 0.22f * taper);
+            plot(ix + 1, iy, col, 0.08f * taper);
         }
     }
 
     // 3. clover / leaf specks (small clumps of three tiny round leaves)
-    const int clumps = W * H / 2600;
+    const int clumps = 0;
     for (int i = 0; i < clumps; i++) {
         float cx = rnd01() * W, cy = rnd01() * H;
         Rgb col = { 0.40f + 0.18f * rnd01(), 0.58f + 0.14f * rnd01(), 0.16f + 0.10f * rnd01() };
@@ -353,7 +369,7 @@ static void genGrass(unsigned char* px, int W, int H)
         }
     }
     // a few tiny pale flowers
-    const int flowers = W * H / 9000;
+    const int flowers = 0;
     for (int i = 0; i < flowers; i++) {
         int fx = (int)(rnd01() * W), fy = (int)(rnd01() * H);
         Rgb col = (rnd01() < 0.5f) ? Rgb{ 0.92f, 0.90f, 0.55f } : Rgb{ 0.95f, 0.95f, 0.92f };
@@ -362,7 +378,7 @@ static void genGrass(unsigned char* px, int W, int H)
 
     for (int y = 0; y < H; y++)
         for (int x = 0; x < W; x++) {
-            float n = 0.92f + 0.16f * hashf(x * 3 + 11, y * 5 + 7);            // +-8% grain
+            float n = 0.97f + 0.06f * hashf(x * 3 + 11, y * 5 + 7);            // +-3% grain
             for (int ch = 0; ch < 3; ch++) {
                 size_t i = ((size_t)y * W + x) * 3 + ch;
                 px[i] = clampByte(f[i] * n * 255.0f);
@@ -378,7 +394,7 @@ static void genGrassMacro(unsigned char* px, int W, int H)
             float u = (float)x / W, v = (float)y / H;
             float a = fbmTile(u, v, 3, 4);
             float b = fbmTile(u + 0.4f, v + 0.2f, 5, 3);
-            float val = 0.5f + (a - 0.5f) * 0.55f;                    // brightness 0.36 .. 0.64
+            float val = 0.5f + (a - 0.5f) * 0.18f;                    // very gentle large-scale variation
             float warm = (b - 0.5f) * 0.12f;                           // slight warm / cool shift
             px[(y * W + x) * 3 + 0] = clampByte((val + warm) * 255.0f);
             px[(y * W + x) * 3 + 1] = clampByte(val * 255.0f);
@@ -478,6 +494,29 @@ static GLuint makeGLTex(unsigned char* px, int W, int H)
     return id;
 }
 
+// Tatami: woven igusa rush.  Rows of rounded reeds run across U (one mat length = one
+// texture repeat), each row slightly different in tone, with fine fibres along the rows
+// and a soft large-scale mottling from wear and sun.
+static void genTatami(unsigned char* px, int W, int H)
+{
+    const float ROWS = 80.0f;
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            float u = (float)x / W, v = (float)y / H;
+            float r = u * ROWS, f = r - floorf(r);
+            float reed = 0.78f + 0.22f * sinf(3.14159f * f);                 // rounded reed, darker groove between rows
+            int   row = (int)r;
+            float rowTone = (hashf(row, 7) - 0.5f) * 0.08f;                   // each row a little different
+            float fibre = (hashf(row * 13 + (int)(v * 96.0f), y / 3) - 0.5f) * 0.06f;
+            float mott = (fbmTile(u, v, 3, 3) - 0.5f) * 0.10f;
+            float stitch = (fmodf(v * 8.0f, 1.0f) < 0.02f) ? -0.10f : 0.0f;  // warp threads holding the rushes
+            float k = reed + rowTone + fibre + mott + stitch;
+            px[(y * W + x) * 3 + 0] = clampByte(0.80f * k * 255);
+            px[(y * W + x) * 3 + 1] = clampByte(0.76f * k * 255);
+            px[(y * W + x) * 3 + 2] = clampByte(0.50f * k * 255);
+        }
+}
+
 void initTextures()
 {
     const int W = 256, H = 256;
@@ -500,6 +539,7 @@ void initTextures()
         texIDs[TEX_GRASS_MACRO] = makeGLTex(px, W, H);
     }
     genWater(px, W, H);                         texIDs[TEX_WATER]      = makeGLTex(px, W, H);
+    genTatami(px, W, H);                        texIDs[TEX_TATAMI]     = makeGLTex(px, W, H);
     texIDs[TEX_CLOUD] = makeCloudTexture();
 }
 

@@ -98,8 +98,10 @@ void drawChopsticks(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    setMaterialGloss(0.70f, 0.66f, 0.60f, 90.0f);   // lacquered chopsticks
     drawCylinderCustom({ -0.5f, 0, -0.03f }, { 0, 0, -90 }, ONE, DARK_WOOD, 0.03f, 0.018f, 1.0f);
     drawCylinderCustom({ -0.5f, 0,  0.03f }, { 0, 0, -90 }, ONE, DARK_WOOD, 0.03f, 0.018f, 1.0f);
+    resetMaterialGloss();
     glPopMatrix();
 }
 
@@ -107,7 +109,9 @@ void drawSpoon(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    setMaterialDielectric(100.0f);   // glazed ceramic spoon: white highlight
     drawSphere({ 0, 0.03f, 0 },    NO_ROT,         { 0.35f, 0.12f, 0.45f }, WHITE);
     drawCube({ 0, 0.07f, 0.33f }, { -15, 0, 0 },  { 0.10f, 0.04f, 0.35f }, WHITE);
+    resetMaterialGloss();
     glPopMatrix();
 }

@@ -290,7 +290,7 @@ void drawSky()
 // ─── Floor Reflection (stencil-based ray-tracing approximation) ─────────────
 // Renders key interior objects mirrored through y=0 as a semi-transparent
 // warm overlay, simulating reflections on a polished wooden floor.
-static void drawFloorReflection()
+[[maybe_unused]] static void drawFloorReflection()
 {
     disablePhongShader();   // uses special material overrides
     float FY         = FLOOR_Y;
@@ -345,7 +345,7 @@ static void drawFloorReflection()
 // Projects the main interior objects onto the floor (y=0) from the warm
 // overhead point light.  Uses a material override so all projected geometry
 // renders as a dark, semi-transparent silhouette.
-static void drawShadows()
+[[maybe_unused]] static void drawShadows()
 {
     disablePhongShader();   // uses special material overrides
     float FY         = FLOOR_Y;
@@ -420,6 +420,83 @@ static void drawShadows()
     enablePhongShader();        // restore Phong after shadow pass
 }
 
+// ─── Interior shadows (projected onto the tiled floor) ─────────────────────
+// Each interior light that is switched on projects the furniture under it onto the floor
+// plane (planar shadow matrix for a point light).  The stencil buffer (floor platform = 1)
+// keeps every shadow on the floor and stops overlapping parts darkening twice; the stencil
+// is put back to 1 afterwards so the next light gets its own shadow layer.
+static void multShadowMatrix(int mode, float lx, float ly, float lz, float h);
+static void interiorShadowLayer(float lx, float ly, float lz, float alpha, void (*casters)())
+{
+    const float h = FLOOR_Y + 0.004f;
+    glEnable(GL_STENCIL_TEST);
+    glStencilMask(0xFF);
+    glStencilFunc(GL_EQUAL, 1, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);                 // first fragment: 1 -> 2, later ones fail
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glDepthMask(GL_FALSE);
+    drawingShadow = true;
+    glPushMatrix();
+    multShadowMatrix(1, lx, ly, lz, h);
+    casters();
+    glPopMatrix();
+    drawingShadow = false;
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+    glStencilFunc(GL_EQUAL, 2, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_DECR);                 // darken once, then back to 1
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.02f, 0.015f, 0.01f, alpha);
+    glBegin(GL_QUADS);
+    glVertex3f(-4.8f, h, -3.8f); glVertex3f(4.8f, h, -3.8f);
+    glVertex3f( 4.8f, h,  3.8f); glVertex3f(-4.8f, h,  3.8f);
+    glEnd();
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+}
+
+static float g_tableX = 0.0f;
+static void tableCasters()
+{
+    drawTable({ g_tableX, FLOOR_Y, 2.8f }, NO_ROT, { 0.8f, 0.9f, 0.8f });
+    drawChair({ g_tableX, FLOOR_Y, 2.8f - 0.55f }, NO_ROT, { 0.85f, 0.85f, 0.85f });
+    drawChair({ g_tableX, FLOOR_Y, 2.8f + 0.55f }, { 0, 180, 0 }, { 0.85f, 0.85f, 0.85f });
+}
+static void diningCasters()
+{
+    drawCounter({ 0, FLOOR_Y, -0.5f });
+    for (int i = 0; i < 6; i++) drawStool({ -2.8f + i * 1.12f, FLOOR_Y, 0.8f });
+    for (int t = 0; t < 2; t++) { g_tableX = (t == 0) ? -2.4f : 2.4f; tableCasters(); }
+}
+
+static void drawInteriorShadows()
+{
+    disablePhongShader();
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(-1.0f, -2.0f);
+    const float k = isDayTime ? 0.6f : 1.0f;                // softer when daylight fills the room
+    // table lamps (key 2): sharp shadows of each table and its chairs straight below the lamp
+    if (lightSpot && fixtureOn[FX_SPOT])
+        for (int t = 0; t < 2; t++) {
+            g_tableX = (t == 0) ? -2.4f : 2.4f;
+            interiorShadowLayer(g_tableX, 2.75f, 2.8f, 0.42f * k, tableCasters);
+        }
+    // dining pendants (key 1): counter, stools and tables
+    if (lightPoint && fixtureOn[FX_PENDANTS])
+        interiorShadowLayer(0.0f, 2.85f, 0.0f, 0.26f * k, diningCasters);
+    // (the paper box lanterns cast no separate shadow: their light comes through large
+    //  paper panels, so a real lantern shadow is so soft it is barely visible.  One clear
+    //  shadow per object, from the pendant lamps.)
+    glDisable(GL_POLYGON_OFFSET_FILL);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_STENCIL_TEST);
+    enablePhongShader();
+}
+
 // ─── Ground ─────────────────────────────────────────────────────────────────
 void drawGround()
 {
@@ -428,7 +505,7 @@ void drawGround()
     // it dark but still textured.  A second, large-scale layer breaks up tiling.
     setLighting(false);
     {
-        const float ext = 120.0f, tile = 5.0f, macro = 55.0f, gy = -0.005f;
+        const float ext = 120.0f, tile = 14.0f, macro = 90.0f, gy = -0.005f;
         Color tint = isDayTime ? Color{ 1.0f, 1.0f, 1.0f } : Color{ 0.17f, 0.22f, 0.17f };
         auto lawnQuad = [&](float scale) {
             glBegin(GL_QUADS);
@@ -468,18 +545,17 @@ void drawGround()
     glStencilFunc(GL_ALWAYS, 1, 0xFF);
     glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
     drawTexturedBox({ 0, -0.20f, 0.5f }, NO_ROT, { 12.5f, 0.20f, 11.0f },
-                    getTexID(TEX_DARK_WOOD), WHITE, 1.0f);
+                    getTexID(TEX_DARK_WOOD), WHITE, 3.0f);
     glDisable(GL_STENCIL_TEST);
 
-    drawCuboid({ 0, -0.10f, 5.5f }, NO_ROT, { 13.0f, 0.10f, 1.2f }, WOOD);
+    drawCuboid({ 0, -0.108f, 5.5f }, NO_ROT, { 13.0f, 0.10f, 1.2f }, WOOD);   // top 0.008 below the porch surface (was coplanar: z-fighting stripes)
     drawSidewalk({ 0, 0, 7.0f });
     drawStreet({ 0, 0, 12.0f });
     drawSidewalk({ 0, 0, 17.0f });   // far-side sidewalk across the street
 
     // Polished-floor reflection overlay (stencil-masked to the floor platform)
-    drawFloorReflection();
-    // Projected shadows from the warm interior light (stencil prevents double-darkening)
-    drawShadows();
+    // (floor reflection removed: it leaked the stool reflections out onto the porch and street)
+    // (interior shadows are drawn in drawInterior, on top of the tiled floor)
 }
 
 // ─── Exterior Shadows: real projected shadows ───────────────────────────────
@@ -517,8 +593,8 @@ static void shadowRegion(bool sidewalk, float h)
     } else {                                              // the two sidewalk strips (z = 5.5..8.5 and 15.5..18.5)
         const float z0[2] = { 5.5f, 15.5f }, z1[2] = { 8.5f, 18.5f };
         for (int i = 0; i < 2; i++) {
-            glVertex3f(-30.0f, h, z0[i]); glVertex3f(30.0f, h, z0[i]);
-            glVertex3f( 30.0f, h, z1[i]); glVertex3f(-30.0f, h, z1[i]);
+            glVertex3f(-120.0f, h, z0[i]); glVertex3f(120.0f, h, z0[i]);
+            glVertex3f( 120.0f, h, z1[i]); glVertex3f(-120.0f, h, z1[i]);
         }
     }
     glEnd();
@@ -562,19 +638,81 @@ static void shadowLayer(int mode, float lx, float ly, float lz, float h, bool si
     glDisable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.02f, 0.05f, 0.02f, alpha);
+    glColor4f(0.01f, 0.03f, 0.01f, sidewalk ? alpha : alpha * 1.15f);
     shadowRegion(sidewalk, h);
     glDisable(GL_BLEND);
 }
 
+// Night: very simple, static shadows (soft dark shapes on the sidewalk) for the cherry
+// blossom tree and the small posts beside the shop.  They do not move with the breeze.
+static void nightBlob(float cx, float cz, float rx, float rz, float alpha)
+{
+    const float h = 0.14f;
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(0.0f, 0.0f, 0.0f, alpha);
+    glVertex3f(cx, h, cz);
+    glColor4f(0.0f, 0.0f, 0.0f, 0.0f);                    // soft edge
+    for (int i = 0; i <= 24; i++) {
+        float a = i * 6.2832f / 24.0f;
+        glVertex3f(cx + cosf(a) * rx, h, cz + sinf(a) * rz);
+    }
+    glEnd();
+}
+static void nightStrip(float x0, float z0, float x1, float z1, float w, float alpha)
+{
+    const float h = 0.14f;
+    float dx = x1 - x0, dz = z1 - z0, l = sqrtf(dx * dx + dz * dz);
+    float nx = -dz / l * w * 0.5f, nz = dx / l * w * 0.5f;
+    glBegin(GL_QUADS);
+    glColor4f(0.0f, 0.0f, 0.0f, alpha);
+    glVertex3f(x0 + nx, h, z0 + nz); glVertex3f(x0 - nx, h, z0 - nz);
+    glColor4f(0.0f, 0.0f, 0.0f, alpha * 0.4f);          // fades toward the tip
+    glVertex3f(x1 - nx, h, z1 - nz); glVertex3f(x1 + nx, h, z1 + nz);
+    glEnd();
+}
+static void drawNightStaticShadows()
+{
+    disablePhongShader();
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_STENCIL_TEST);
+    glStencilFunc(GL_EQUAL, 0, 0xFF);                     // outside ground only (not the shop floor)
+    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+    glDepthMask(GL_FALSE);
+    GLboolean cull = glIsEnabled(GL_CULL_FACE);
+    glDisable(GL_DEPTH_TEST);                             // only the ground is drawn so far: nothing can hide them
+    glDisable(GL_CULL_FACE);                              // flat shapes seen from above: draw both windings
+    const float sx = -0.45f, sz = 0.55f;                  // shadows fall slightly toward -x, +z
+    // cherry blossom tree at (-5.5, 6.2): crown and trunk
+    nightBlob(-5.5f + sx * 1.6f, 6.2f + sz * 1.6f, 1.8f, 1.3f, 0.62f);
+    nightStrip(-5.5f, 6.2f, -5.5f + sx * 1.8f, 6.2f + sz * 1.8f, 0.32f, 0.60f);
+    // small stone lantern posts and street lamp posts beside the shop
+    const float px[4] = { -6.5f, 6.5f, -7.0f, 7.0f }, pz[4] = { 6.2f, 6.2f, 7.0f, 7.0f };
+    for (int i = 0; i < 4; i++) {
+        float len = (i < 2) ? 0.9f : 1.6f;
+        nightStrip(px[i], pz[i], px[i] + sx * len, pz[i] + sz * len, (i < 2) ? 0.24f : 0.14f, 0.58f);
+        nightBlob(px[i] + sx * len, pz[i] + sz * len, (i < 2) ? 0.22f : 0.28f, (i < 2) ? 0.20f : 0.24f, 0.55f);
+        nightBlob(px[i], pz[i], 0.28f, 0.28f, 0.50f);     // contact shadow at the base
+    }
+    if (cull) glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+    enablePhongShader();
+}
+
 static void drawExteriorShadows()
 {
-    if (!isDayTime) return;                            // no ground shadows at night (they only showed as blotches)
+    if (!isDayTime) { drawNightStaticShadows(); return; }
 
     const float HG = 0.03f, HW = 0.135f;             // lawn / street, and sidewalk-top planes
     // Sun / moon direction (vector toward the light): shadows fall toward -x, +z
-    const float sx = isDayTime ? 0.62f : 0.80f, sy = 1.0f, sz = isDayTime ? -0.77f : -1.10f;
-    const float sunA = isDayTime ? 0.42f : 0.20f;
+    const float sx = 0.40f, sy = 1.0f, sz = -0.52f;      // steeper sun: shorter shadows that stay attached to their objects
+    const float sunA = 0.52f;
 
     disablePhongShader();
     shadowLayer(0, sx, sy, sz, HG, false, sunA, false);
@@ -586,6 +724,75 @@ static void drawExteriorShadows()
     enablePhongShader();
 }
 
+// ─── Round paper lantern (chochin) ──────────────────────────────────────────
+// Glowing orange paper globe with fine horizontal ribs, two darker vertical bands, gold
+// caps and collar, a fringe and a hanging tassel.  Pivot (0,0,0) is the hanging point;
+// the globe centre is 0.35 below it.  `em` scales the glow (flicker, daytime dimming).
+static void drawChochinLantern(float em)
+{
+    const float R = 0.30f, H = 0.33f;
+    const Color GOLD_C = { 0.86f, 0.68f, 0.16f }, TASSEL = { 0.98f, 0.82f, 0.12f };
+    glPushMatrix();
+    glTranslatef(0.0f, -0.35f, 0.0f);
+
+    // paper globe
+    setEmission(0.95f * em, 0.55f * em, 0.10f * em);
+    setColor({ 0.97f, 0.66f, 0.16f });
+    glPushMatrix();
+    glScalef(R, H, R);
+    gluSphere(quad, 1.0, 20, 14);
+    glPopMatrix();
+    clearEmission();
+
+    // ribs and bands drawn unlit, scaled with the glow so they dim with the lantern
+    float k = 0.45f + 0.55f * (em > 1.0f ? 1.0f : em);
+    setLighting(false);
+    glLineWidth(1.0f);
+    glColor3f(0.62f * k, 0.30f * k, 0.04f * k);
+    for (int i = 1; i < 14; i++) {                              // horizontal ribs
+        float lat = -1.5708f + 3.14159f * i / 14.0f;
+        float y = sinf(lat) * H * 1.006f, r = cosf(lat) * R * 1.006f;
+        glBegin(GL_LINE_LOOP);
+        for (int j = 0; j < 20; j++) { float a = j * 6.2832f / 20.0f; glVertex3f(cosf(a) * r, y, sinf(a) * r); }
+        glEnd();
+    }
+    glColor3f(0.80f * k, 0.38f * k, 0.05f * k);
+    for (int side = 0; side < 4; side++) {                      // darker vertical bands (front, back, sides)
+        float a0 = side * 1.5708f;
+        const float half = (side % 2 == 0) ? 0.30f : 0.16f;
+        glBegin(GL_QUAD_STRIP);
+        for (int i = 0; i <= 12; i++) {
+            float lat = -1.35f + 2.70f * i / 12.0f;
+            float y = sinf(lat) * H * 1.01f, r = cosf(lat) * R * 1.01f;
+            glVertex3f(cosf(a0 - half) * r, y, sinf(a0 - half) * r);
+            glVertex3f(cosf(a0 + half) * r, y, sinf(a0 + half) * r);
+        }
+        glEnd();
+    }
+    setLighting(true);
+
+    // gold caps, collar ring and gold ornament band
+    setMaterialGloss(0.9f, 0.8f, 0.4f, 60.0f);
+    drawCylinder({ 0, H * 0.90f, 0 }, NO_ROT, { 0.20f, 0.075f, 0.20f }, GOLD_C);
+    drawCylinder({ 0, -H * 0.90f - 0.065f, 0 }, NO_ROT, { 0.19f, 0.075f, 0.19f }, GOLD_C);
+    drawTorus({ 0, H * 0.80f, 0 }, NO_ROT, ONE, GOLD_C, 0.012f, 0.205f);
+    drawTorus({ 0, -H * 0.80f, 0 }, NO_ROT, ONE, GOLD_C, 0.012f, 0.205f);
+    resetMaterialGloss();
+
+    // fringe and tassel under the bottom cap
+    float fy = -H * 0.90f - 0.065f;
+    for (int i = 0; i < 14; i++) {
+        float a = i * 6.2832f / 14.0f;
+        drawCylinderCustom({ cosf(a) * 0.075f, fy - 0.17f, sinf(a) * 0.075f }, NO_ROT, ONE, TASSEL, 0.007f, 0.004f, 0.17f);
+    }
+    drawCylinder({ 0, fy - 0.30f, 0 }, NO_ROT, { 0.03f, 0.30f, 0.03f }, TASSEL);
+    drawSphere({ 0, fy - 0.07f, 0 }, NO_ROT, { 0.05f, 0.05f, 0.05f }, { 0.55f, 0.85f, 0.25f });
+    glPopMatrix();
+
+    // small gold hook ring where it hangs
+    drawTorus({ 0, 0.0f, 0 }, { 90, 0, 0 }, ONE, GOLD_C, 0.008f, 0.03f);
+}
+
 // ─── Exterior ───────────────────────────────────────────────────────────────
 void drawExterior()
 {
@@ -594,11 +801,334 @@ void drawExterior()
     drawExteriorBody();
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  MOVING THINGS: bicycle on the road, walking cat, nobori banner, ceiling fan
+// ════════════════════════════════════════════════════════════════════════════
+
+// Cylinder from point a to point b (used for tubes, limbs, spokes)
+static void limb(Vec3 a, Vec3 b, float r, Color c)
+{
+    float dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+    float len = sqrtf(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-4f) return;
+    glPushMatrix();
+    glTranslatef(a.x, a.y, a.z);
+    float ax = dz, az = -dx, al = sqrtf(ax * ax + az * az);        // rotation axis = Y x d
+    float ang = acosf(fmaxf(-1.0f, fminf(1.0f, dy / len))) * 57.29578f;
+    if (al > 1e-5f) glRotatef(ang, ax, 0.0f, az);
+    else if (dy < 0.0f) glRotatef(180.0f, 1.0f, 0.0f, 0.0f);
+    drawCylinderCustom({ 0, 0, 0 }, NO_ROT, ONE, c, r, r, len);
+    glPopMatrix();
+}
+
+// Two-bone leg: knee found from the hip and foot positions (bends toward +x)
+static Vec3 kneeFor(Vec3 hip, Vec3 foot, float L1, float L2)
+{
+    float ux = foot.x - hip.x, uy = foot.y - hip.y;
+    float d = sqrtf(ux * ux + uy * uy);
+    d = fmaxf(0.05f, fminf(d, L1 + L2 - 0.001f));
+    float a = (L1 * L1 - L2 * L2 + d * d) / (2.0f * d);
+    float h = sqrtf(fmaxf(0.0f, L1 * L1 - a * a));
+    ux /= d; uy /= d;
+    return { hip.x + a * ux - h * uy, hip.y + a * uy + h * ux, hip.z };
+}
+
+// ── Bicycle with a pedalling rider ─────────────────────────────────────────
+// Rides along the road; the wheels roll (angle = distance / radius), the cranks and
+// the rider's legs follow the pedals, a headlight glows at night.
+static void drawBicycle()
+{
+    // rides from the left end to the right end of the street in front of the shop, then
+    // starts again on the left
+    const float speed = 7.0f, span = 32.0f, R = 0.33f, SC = 1.4f;
+    float dist = fmodf(animTime * speed, span);
+    float x = -16.0f + dist;
+    float wheelDeg = -(dist / (R * SC)) * 57.29578f;                      // rolling without slipping
+    float crank = -(dist / (R * SC)) * 0.55f;                             // pedals turn slower than the wheels
+
+    const Color FRAME = { 0.70f, 0.10f, 0.08f }, TYRE = { 0.06f, 0.06f, 0.06f };
+    const Color SHIRT = { 0.20f, 0.42f, 0.70f }, PANTS = { 0.15f, 0.15f, 0.20f }, SKIN = { 0.92f, 0.74f, 0.58f };
+
+    glPushMatrix();
+    glTranslatef(x, 0.03f, 10.6f);                                 // near lane of the street, riding toward +x
+    glScalef(SC, SC, SC);                                          // a bit bigger than life-size so it reads from afar
+
+    // wheels: tyre, rim, spokes, hub
+    for (int w = 0; w < 2; w++) {
+        float wx = w ? 0.52f : -0.52f;
+        glPushMatrix();
+        glTranslatef(wx, R, 0.0f);
+        glRotatef(wheelDeg, 0, 0, 1);
+        setMaterialGloss(0.3f, 0.3f, 0.3f, 30.0f);
+        drawTorus({ 0, 0, 0 }, { 90, 0, 0 }, ONE, TYRE, 0.030f, R - 0.03f);
+        setMaterialConductive(STEEL, 80.0f);
+        drawTorus({ 0, 0, 0 }, { 90, 0, 0 }, ONE, STEEL, 0.010f, R - 0.07f);
+        for (int k = 0; k < 6; k++) {
+            float a = k * 3.14159f / 3.0f;
+            limb({ 0, 0, 0 }, { cosf(a) * (R - 0.07f), sinf(a) * (R - 0.07f), 0 }, 0.004f, STEEL);
+        }
+        drawSphere({ 0, 0, 0 }, NO_ROT, { 0.06f, 0.06f, 0.08f }, STEEL);
+        glPopMatrix();
+    }
+
+    // frame
+    Vec3 RH = { -0.52f, R, 0 }, FH = { 0.52f, R, 0 }, BB = { -0.02f, 0.30f, 0 };
+    Vec3 ST = { -0.20f, 0.86f, 0 }, HT = { 0.38f, 0.84f, 0 }, HB = { 0.34f, 1.02f, 0 };
+    setMaterialConductive(FRAME, 70.0f);
+    limb(BB, ST, 0.022f, FRAME);  limb(ST, HT, 0.020f, FRAME);  limb(BB, HT, 0.024f, FRAME);
+    limb(RH, BB, 0.016f, FRAME);  limb(RH, ST, 0.014f, FRAME);
+    limb(FH, HT, 0.018f, FRAME);  limb(HT, HB, 0.016f, FRAME);
+    setMaterialConductive(STEEL, 80.0f);
+    limb({ HB.x, HB.y, -0.24f }, { HB.x, HB.y, 0.24f }, 0.014f, STEEL);   // handlebar
+    resetMaterialGloss();
+    drawCuboid({ -0.22f, 0.88f, 0 }, NO_ROT, { 0.22f, 0.04f, 0.10f }, TYRE);  // saddle
+
+    // cranks and pedals
+    Vec3 P[2];
+    for (int sd = 0; sd < 2; sd++) {
+        float a = crank + sd * 3.14159f, zz = sd ? -0.11f : 0.11f;
+        P[sd] = { BB.x + cosf(a) * 0.17f, BB.y + sinf(a) * 0.17f, zz };
+        limb({ BB.x, BB.y, zz }, P[sd], 0.010f, DARK_GRAY);
+        drawCuboid({ P[sd].x, P[sd].y - 0.01f, zz }, NO_ROT, { 0.09f, 0.02f, 0.07f }, DARK_GRAY);
+    }
+
+    // rider
+    Vec3 hip = { -0.22f, 0.98f, 0 }, sh = { 0.04f, 1.46f, 0 };
+    limb(hip, sh, 0.12f, SHIRT);                                           // torso
+    drawSphere({ 0.10f, 1.64f, 0 }, NO_ROT, { 0.20f, 0.22f, 0.20f }, SKIN); // head
+    drawSphere({ 0.08f, 1.70f, 0 }, NO_ROT, { 0.22f, 0.14f, 0.22f }, { 0.12f, 0.10f, 0.08f });  // hair
+    for (int sd = 0; sd < 2; sd++) {
+        float zz = sd ? -0.11f : 0.11f;
+        Vec3 hp = { hip.x, hip.y, zz }, ft = { P[sd].x, P[sd].y + 0.03f, zz };
+        Vec3 kn = kneeFor(hp, ft, 0.47f, 0.47f);
+        limb(hp, kn, 0.055f, PANTS);  limb(kn, ft, 0.045f, PANTS);          // thigh, shin
+        limb({ sh.x, sh.y - 0.04f, zz * 1.6f }, { HB.x, HB.y, zz * 2.0f }, 0.035f, SHIRT);   // arm to the bar
+    }
+
+    // headlight (glows at night) and rear reflector
+    if (!isDayTime) setEmission(1.0f, 0.95f, 0.75f);
+    drawSphere({ 0.44f, 0.92f, 0 }, NO_ROT, { 0.07f, 0.07f, 0.07f }, { 1.0f, 0.95f, 0.8f });
+    clearEmission();
+    drawSphere({ -0.60f, 0.70f, 0 }, NO_ROT, { 0.04f, 0.04f, 0.04f }, RED);
+    glPopMatrix();
+
+    // headlight beam on the road at night (additive, cheap)
+    if (!isDayTime && !drawingShadow) {
+        glPushMatrix();
+        glTranslatef(x, 0.0f, 10.6f);
+        glScalef(SC, 1.0f, SC);
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE); setLighting(false);
+        glBegin(GL_TRIANGLES);
+        glColor4f(1.0f, 0.92f, 0.70f, 0.30f); glVertex3f(0.45f, 0.06f, 0.0f);
+        glColor4f(1.0f, 0.92f, 0.70f, 0.00f); glVertex3f(3.6f, 0.06f, -1.1f);
+        glColor4f(1.0f, 0.92f, 0.70f, 0.00f); glVertex3f(3.6f, 0.06f, 1.1f);
+        glEnd();
+        setLighting(true); glDepthMask(GL_TRUE); glDisable(GL_BLEND);
+        glPopMatrix();
+    }
+}
+
+// ── Walking cat ────────────────────────────────────────────────────────────
+// Walks back and forth along the sidewalk, turns round at each end; legs swing in
+// diagonal pairs (walk gait), the body bobs and the tail sways.
+static void drawWalkingCat()
+{
+    // walks from the left to the right along the sidewalk in front of the shop, then starts
+    // again on the left (offset so it is not next to the bicycle)
+    const float speed = 3.0f, span = 20.0f, SC = 1.8f;
+    float x = -10.0f + fmodf(animTime * speed + 7.0f, span);
+    const bool back = false;
+    float phase = animTime * 15.0f;                                 // step rate to match the speed
+    float bob = 0.012f * fabsf(sinf(phase));
+
+    const Color FUR = { 0.86f, 0.52f, 0.20f }, FUR_D = { 0.62f, 0.34f, 0.12f }, PINK = { 0.95f, 0.62f, 0.62f };
+    glPushMatrix();
+    glTranslatef(x, 0.115f + bob * SC, 8.05f);                      // on the near sidewalk, street side
+    glScalef(SC, SC, SC);                                          // bigger so it is easy to see
+    glRotatef(back ? 180.0f : 0.0f, 0, 1, 0);                      // face the walking direction
+    setMaterialGloss(0.15f, 0.15f, 0.15f, 20.0f);
+
+    // legs (diagonal pairs move together)
+    const float lx[4] = { 0.15f, 0.15f, -0.15f, -0.15f }, lz[4] = { 0.06f, -0.06f, 0.06f, -0.06f };
+    const float ph[4] = { 0.0f, 3.14159f, 3.14159f, 0.0f };
+    for (int i = 0; i < 4; i++) {
+        float sw = sinf(phase + ph[i]) * 0.06f, lift = fmaxf(0.0f, cosf(phase + ph[i])) * 0.025f;
+        limb({ lx[i], 0.20f, lz[i] }, { lx[i] + sw, lift, lz[i] }, 0.022f, FUR);
+        drawSphere({ lx[i] + sw, lift + 0.01f, lz[i] }, NO_ROT, { 0.05f, 0.03f, 0.05f }, FUR);   // paw
+    }
+    // body and head
+    drawSphere({ 0, 0.24f, 0 }, NO_ROT, { 0.46f, 0.17f, 0.17f }, FUR);
+    drawSphere({ 0.02f, 0.29f, 0 }, NO_ROT, { 0.34f, 0.08f, 0.13f }, FUR_D);  // darker back stripe
+    float nod = sinf(phase * 0.5f) * 0.01f;
+    drawSphere({ 0.27f, 0.34f + nod, 0 }, NO_ROT, { 0.15f, 0.14f, 0.15f }, FUR);
+    drawSphere({ 0.34f, 0.32f + nod, 0 }, NO_ROT, { 0.06f, 0.05f, 0.07f }, { 0.95f, 0.85f, 0.70f });  // muzzle
+    drawSphere({ 0.37f, 0.335f + nod, 0 }, NO_ROT, { 0.018f, 0.014f, 0.022f }, PINK);                // nose
+    for (int sd = -1; sd <= 1; sd += 2) {
+        drawCone({ 0.25f, 0.39f + nod, sd * 0.045f }, { sd * 12.0f, 0, 0 }, { 0.05f, 0.07f, 0.04f }, FUR);  // ears
+        drawSphere({ 0.335f, 0.36f + nod, sd * 0.037f }, NO_ROT, { 0.022f, 0.022f, 0.016f }, { 0.25f, 0.55f, 0.15f });  // eyes
+    }
+    // tail: a few segments curving up, swaying side to side
+    Vec3 prev = { -0.22f, 0.26f, 0 };
+    for (int k = 1; k <= 5; k++) {
+        float u = k / 5.0f;
+        Vec3 nx = { -0.22f - 0.10f * u, 0.26f + 0.24f * u * u, sinf(animTime * 2.5f + u * 1.5f) * 0.06f * u };
+        limb(prev, nx, 0.022f - 0.003f * u, k > 3 ? FUR_D : FUR);
+        prev = nx;
+    }
+    resetMaterialGloss();
+    glPopMatrix();
+}
+
+// ── Person walking on the sidewalk (right to left) ─────────────────────────
+// Hierarchical model: each leg is hip -> thigh -> knee -> shin -> foot, each arm swings
+// from the shoulder opposite to its leg; the body bobs twice per stride.
+static void drawWalkingPerson()
+{
+    const float speed = 1.8f, span = 26.0f;
+    float x = 13.0f - fmodf(animTime * speed + 4.0f, span);       // right -> left, then again from the right
+    float ph = animTime * speed / 1.4f * 6.2832f;                  // one stride (two steps) every 1.4 m
+    float bob = 0.035f * fabsf(cosf(ph));
+
+    const Color JACKET = { 0.55f, 0.18f, 0.16f }, PANTS = { 0.18f, 0.20f, 0.26f };
+    const Color SKIN = { 0.92f, 0.74f, 0.58f }, HAIR = { 0.10f, 0.08f, 0.07f }, SHOE = { 0.12f, 0.10f, 0.09f };
+
+    glPushMatrix();
+    glTranslatef(x, 0.115f + bob, 6.85f);                          // sidewalk, between the shop and the lamp posts
+    glRotatef(180.0f, 0, 1, 0);                                    // local +x = walking direction (world -x)
+    setMaterialGloss(0.12f, 0.12f, 0.12f, 18.0f);
+
+    const float hipY = 0.92f, thigh = 0.46f, shin = 0.44f;
+    for (int sd = 0; sd < 2; sd++) {
+        float zz = sd ? -0.10f : 0.10f;
+        float a = (sd ? -1.0f : 1.0f) * 28.0f * sinf(ph);          // thigh swing (degrees)
+        float bend = 35.0f * fmaxf(0.0f, sinf(ph + (sd ? 3.14159f : 0.0f) + 1.2f));   // knee bends while the leg swings forward
+        glPushMatrix();
+        glTranslatef(0.0f, hipY, zz);
+        glRotatef(a, 0, 0, 1);                                     // hip joint
+        limb({ 0, 0, 0 }, { 0, -thigh, 0 }, 0.065f, PANTS);
+        glTranslatef(0.0f, -thigh, 0.0f);
+        glRotatef(-bend, 0, 0, 1);                                 // knee joint
+        limb({ 0, 0, 0 }, { 0, -shin, 0 }, 0.055f, PANTS);
+        drawCuboid({ 0.05f, -shin - 0.03f, 0 }, NO_ROT, { 0.24f, 0.07f, 0.10f }, SHOE);
+        glPopMatrix();
+
+        // arm on the same side swings opposite to the leg
+        glPushMatrix();
+        glTranslatef(0.0f, 1.42f, zz * 2.1f);
+        glRotatef(-a * 0.8f, 0, 0, 1);                             // shoulder joint
+        limb({ 0, 0, 0 }, { 0, -0.30f, 0 }, 0.048f, JACKET);
+        glTranslatef(0.0f, -0.30f, 0.0f);
+        glRotatef(15.0f, 0, 0, 1);                                 // relaxed elbow
+        limb({ 0, 0, 0 }, { 0, -0.27f, 0 }, 0.040f, JACKET);
+        drawSphere({ 0, -0.30f, 0 }, NO_ROT, { 0.08f, 0.09f, 0.08f }, SKIN);   // hand
+        glPopMatrix();
+    }
+    // hips, torso, neck, head
+    drawCuboid({ 0, hipY - 0.06f, 0 }, NO_ROT, { 0.22f, 0.14f, 0.32f }, PANTS);
+    drawCylinderCustom({ 0, hipY + 0.04f, 0 }, NO_ROT, ONE, JACKET, 0.15f, 0.18f, 0.44f);
+    drawSphere({ 0, 1.46f, 0 }, NO_ROT, { 0.30f, 0.14f, 0.44f }, JACKET);    // shoulders
+    limb({ 0, 1.48f, 0 }, { 0, 1.58f, 0 }, 0.05f, SKIN);
+    drawSphere({ 0.01f, 1.69f, 0 }, NO_ROT, { 0.21f, 0.24f, 0.20f }, SKIN);
+    drawSphere({ -0.02f, 1.74f, 0 }, NO_ROT, { 0.22f, 0.17f, 0.21f }, HAIR);
+    resetMaterialGloss();
+    glPopMatrix();
+}
+
+// ── Nobori banner beside the door ──────────────────────────────────────────
+// Tall vertical cloth flag on a pole.  The cloth is a grid of quads displaced by a
+// travelling sine wave that grows away from the pole (it is held on that edge).
+static void drawNoboriBanner(float px, float pz)
+{
+    const float poleH = 3.0f, top = 2.85f, bot = 0.75f, W = 0.55f;
+    const Color POLE = { 0.85f, 0.82f, 0.74f };
+    setMaterialConductive(DARK_GRAY, 40.0f);
+    drawCylinder({ px, 0.0f, pz }, NO_ROT, { 0.34f, 0.10f, 0.34f }, DARK_GRAY);   // weighted stand
+    resetMaterialGloss();
+    drawCylinder({ px, 0.0f, pz }, NO_ROT, { 0.045f, poleH, 0.045f }, POLE);
+    limb({ px, top + 0.03f, pz }, { px + W + 0.08f, top + 0.03f, pz }, 0.016f, POLE);   // top arm
+    drawSphere({ px, poleH + 0.03f, pz }, NO_ROT, { 0.08f, 0.08f, 0.08f }, GOLD);
+
+    const int NU = 12, NV = 28;
+    const Color BASE = { 0.12f, 0.20f, 0.52f }, BORDER = { 0.92f, 0.90f, 0.84f }, MARK = { 0.82f, 0.14f, 0.10f };
+    auto wave = [&](float u, float v) {                     // u: 0 at pole .. 1 free edge, v: 0 top .. 1 bottom
+        return sinf(animTime * 3.2f - u * 4.0f + v * 1.5f) * 0.09f * u + sinf(animTime * 5.1f + v * 3.0f) * 0.015f * u;
+    };
+    auto colorAt = [&](float u, float v) -> Color {
+        if (u < 0.08f || u > 0.92f || v < 0.04f) return BORDER;            // white edging
+        float cu = (u - 0.5f) * W, cv = (v - 0.22f) * (top - bot);
+        if (cu * cu + cv * cv < 0.16f * 0.16f) return MARK;                // red emblem disc
+        if (v > 0.42f && v < 0.90f && fabsf(u - 0.5f) < 0.10f &&
+            fmodf(v * 10.0f, 1.0f) < 0.55f) return BORDER;                  // simple brush-stroke marks
+        return BASE;
+    };
+    GLboolean cull = glIsEnabled(GL_CULL_FACE);
+    glDisable(GL_CULL_FACE);
+    setMaterialGloss(0.05f, 0.05f, 0.05f, 10.0f);          // cloth: matte
+    glBegin(GL_QUADS);
+    for (int i = 0; i < NU; i++)
+        for (int j = 0; j < NV; j++) {
+            float us[4] = { (float)i / NU, (float)(i + 1) / NU, (float)(i + 1) / NU, (float)i / NU };
+            float vs[4] = { (float)j / NV, (float)j / NV, (float)(j + 1) / NV, (float)(j + 1) / NV };
+            Color c = colorAt((us[0] + us[1]) * 0.5f, (vs[0] + vs[2]) * 0.5f);
+            glColor3f(c.r, c.g, c.b);
+            for (int k = 0; k < 4; k++) {
+                float u = us[k], v = vs[k], e = 0.01f;
+                float dzdu = (wave(u + e, v) - wave(u, v)) / e;            // slope of the cloth -> normal
+                glNormal3f(-dzdu / W, 0.0f, 1.0f);
+                glVertex3f(px + 0.05f + u * W, top - v * (top - bot), pz + wave(u, v));
+            }
+        }
+    glEnd();
+    resetMaterialGloss();
+    if (cull) glEnable(GL_CULL_FACE);
+}
+
+// ── Ceiling fan (upstairs tatami room) ─────────────────────────────────────
+static void drawCeilingFan(Vec3 p)
+{
+    const Color BRASS = { 0.78f, 0.60f, 0.26f };
+    const float spin = animTime * 160.0f;                           // degrees: about 0.45 turns per second
+    setMaterialConductive(DARK_GRAY, 60.0f);
+    drawCylinder({ p.x, p.y - 0.06f, p.z }, NO_ROT, { 0.16f, 0.06f, 0.16f }, DARK_GRAY);   // ceiling canopy
+    drawCylinder({ p.x, p.y - 0.36f, p.z }, NO_ROT, { 0.03f, 0.30f, 0.03f }, DARK_GRAY);   // down-rod
+    drawCylinderCustom({ p.x, p.y - 0.52f, p.z }, NO_ROT, ONE, DARK_GRAY, 0.10f, 0.14f, 0.16f);  // motor
+    resetMaterialGloss();
+    glPushMatrix();
+    glTranslatef(p.x, p.y - 0.50f, p.z);
+    glRotatef(spin, 0, 1, 0);                                      // blades turn about the vertical axis
+    for (int b = 0; b < 4; b++) {
+        glPushMatrix();
+        glRotatef(b * 90.0f, 0, 1, 0);
+        setMaterialConductive(BRASS, 70.0f);
+        drawCuboid({ 0.22f, 0.0f, 0.0f }, NO_ROT, { 0.16f, 0.02f, 0.05f }, BRASS);            // blade iron
+        glRotatef(10.0f, 1, 0, 0);                                                            // blade pitch
+        setMaterialGloss(0.45f, 0.42f, 0.36f, 60.0f);
+        drawTexturedBox({ 0.62f, -0.01f, 0.0f }, NO_ROT, { 0.70f, 0.02f, 0.16f }, getTexID(TEX_DARK_WOOD), WHITE, 1.0f);
+        resetMaterialGloss();
+        glPopMatrix();
+    }
+    glPopMatrix();
+    setMaterialConductive(BRASS, 70.0f);
+    drawSphere({ p.x, p.y - 0.56f, p.z }, NO_ROT, { 0.10f, 0.08f, 0.10f }, BRASS);           // bottom cap
+    resetMaterialGloss();
+}
+
 static void drawExteriorBody()
 {
+    // Seen from OUTSIDE the shell is lit by everything, as before (lantern-lit facade).  Seen from
+    // INSIDE it is lit like the interior only: the lanterns / street lamps / sign light outside have
+    // no occlusion in OpenGL, so they would light the inner faces of the walls and floor through
+    // the building and a "light switched off" interior would still glow.
+    const bool shellIndoors = !outdoorShadowPass && cameraInsideShop();
+    if (shellIndoors) setInteriorLightScope(true);
     drawShopBuilding({ 0, 0, 0 });
     if (showRoof) drawRoof({ 0, 0, 0 });
+    if (shellIndoors) setInteriorLightScope(false);
 
+    // The shop's own paper windows and doors glow because of the lamps inside: no interior light, no glow
+    emissionScale = anyInteriorLightOn() ? 1.0f : 0.10f;
+    if (shellIndoors) setInteriorLightScope(true);          // seen from inside: lit like the interior
     // Japanese paper (shoji) shopfront facade panels (replaces glass)
     drawShojiWindow({ -3.35f, 1.65f, 3.90f }, NO_ROT, ONE, 2.90f, 2.70f);
     drawShojiWindow({  3.35f, 1.65f, 3.90f }, NO_ROT, ONE, 2.90f, 2.70f);
@@ -655,6 +1185,8 @@ static void drawExteriorBody()
     // Second floor front facade: two shoji windows flush with the outer wall face
     drawShojiWindow({ -3.2f, 4.3f, 4.02f }, NO_ROT, ONE, 2.0f, 1.3f);
     drawShojiWindow({  3.2f, 4.3f, 4.02f }, NO_ROT, ONE, 2.0f, 1.3f);
+    if (shellIndoors) setInteriorLightScope(false);
+    emissionScale = 1.0f;
     // Ramen sign mounted above the roofline (above the gable peak)
     drawSignBoard({ 0, 7.6f, 4.05f });
 
@@ -672,9 +1204,7 @@ static void drawExteriorBody()
     glRotatef(swayL, 0, 0, 1);
     drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.02f, 0.4f, 0.02f }, BLACK);
     // Glowing lantern body (warm orange-amber, matching LIGHT2 color)
-    setEmission(0.95f * flickL * dayLanScale, 0.55f * flickL * dayLanScale, 0.10f * flickL * dayLanScale);
-    drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, { 0.95f, 0.65f, 0.15f });
-    clearEmission();
+    drawChochinLantern(flickL * dayLanScale);
     // Additive glow halo around lantern (visible light spill)
     if (!isDayTime) {
         glEnable(GL_BLEND);
@@ -695,9 +1225,7 @@ static void drawExteriorBody()
     applyObjDelta(OBJ_LANTERN_R);
     glRotatef(swayR, 0, 0, 1);
     drawCylinder({ 0, 0, 0 }, NO_ROT, { 0.02f, 0.4f, 0.02f }, BLACK);
-    setEmission(0.95f * flickR * dayLanScale, 0.55f * flickR * dayLanScale, 0.10f * flickR * dayLanScale);
-    drawSphere({ 0, -0.35f, 0 }, NO_ROT, { 0.55f, 0.65f, 0.55f }, { 0.95f, 0.65f, 0.15f });
-    clearEmission();
+    drawChochinLantern(flickR * dayLanScale);
     if (!isDayTime) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
@@ -711,13 +1239,7 @@ static void drawExteriorBody()
     }
     glPopMatrix();
 
-    for (int i = -5; i <= 5; i++)
-        drawFence({ i * 1.0f, 0, 5.8f });
 
-    drawPlant({ -4.5f, 0, 4.8f }, NO_ROT, { 1.2f, 1.2f, 1.2f });
-    drawPlant({  4.5f, 0, 4.8f }, NO_ROT, { 1.2f, 1.2f, 1.2f });
-    drawPlant({ -2.5f, 0, 5.4f });
-    drawPlant({  2.5f, 0, 5.4f });
 
     drawTree({ -7.0f, 0,  2.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
     drawTree({  7.0f, 0,  3.0f }, NO_ROT, { 1.2f, 1.5f, 1.2f });
@@ -742,6 +1264,12 @@ static void drawExteriorBody()
     drawLamp({  16.0f, 0, 17.0f }, { 0, 90, 0 });
     drawLamp({ -24.0f, 0, 17.0f }, { 0, 90, 0 });
     drawLamp({  24.0f, 0, 17.0f }, { 0, 90, 0 });
+
+    // ── Moving things: bicycle on the road, cat on the sidewalk, banner by the door ──
+    drawBicycle();
+    drawWalkingCat();
+    drawWalkingPerson();
+    drawNoboriBanner(2.35f, 5.25f);
 
     // (vending machine removed)
 
@@ -770,6 +1298,14 @@ static void drawExteriorBody()
     drawJapaneseHouse2({  16.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
     drawJapaneseHouse({  24.0f, 0, 20.75f }, { 0, 180, 0 }, ONE);
 
+    // ── Cherry blossom trees along the road beside the houses ─────────────
+    drawCherryBlossomTree({ -19.0f, 0,  4.6f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
+    drawCherryBlossomTree({  19.0f, 0,  4.6f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
+    drawCherryBlossomTree({ -12.0f, 0, 20.8f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
+    drawCherryBlossomTree({  12.0f, 0, 20.8f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
+    drawCherryBlossomTree({ -20.0f, 0, 21.0f }, NO_ROT, { 0.95f, 1.05f, 0.95f });
+    drawCherryBlossomTree({  20.0f, 0, 21.0f }, NO_ROT, { 0.95f, 1.05f, 0.95f });
+
     // ── Accent trees near the shop (not on road or lake) ──────────────
     drawMapleTree({ -10.5f, 0,   4.5f }, NO_ROT, { 1.0f, 1.0f, 1.0f });
     drawMapleTree({  10.5f, 0,   4.5f }, NO_ROT, { 1.1f, 1.2f, 1.1f });
@@ -782,36 +1318,17 @@ static void drawExteriorBody()
 
     // Tall pine trees (primary canopy)
     drawJapanesePineTree({ -16.0f, 0, -10.0f }, NO_ROT, { 1.2f, 1.5f, 1.2f });
-    drawJapanesePineTree({ -19.0f, 0, -12.0f }, NO_ROT, { 1.1f, 1.8f, 1.1f });
     drawJapanesePineTree({ -25.0f, 0, -13.0f }, NO_ROT, { 1.3f, 1.7f, 1.3f });
-    drawJapanesePineTree({ -28.0f, 0, -11.0f }, NO_ROT, { 0.9f, 1.4f, 0.9f });
-    drawJapanesePineTree({ -17.0f, 0, -16.0f }, NO_ROT, { 1.0f, 1.9f, 1.0f });
-    drawJapanesePineTree({ -21.0f, 0, -18.0f }, NO_ROT, { 1.2f, 1.6f, 1.2f });
-    drawJapanesePineTree({ -30.0f, 0, -14.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
-    drawJapanesePineTree({ -15.0f, 0, -22.0f }, NO_ROT, { 1.3f, 1.8f, 1.3f });
-    drawJapanesePineTree({ -29.0f, 0, -20.0f }, NO_ROT, { 0.9f, 1.4f, 0.9f });
-    drawJapanesePineTree({ -18.0f, 0, -28.0f }, NO_ROT, { 1.1f, 1.6f, 1.1f });
-    drawJapanesePineTree({ -27.0f, 0, -27.0f }, NO_ROT, { 1.2f, 1.8f, 1.2f });
-    drawJapanesePineTree({ -32.0f, 0, -25.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
 
     // Maple trees adding autumn colour variety
     drawMapleTree({ -17.0f, 0, -14.0f }, NO_ROT, { 1.1f, 1.3f, 1.1f });
     drawMapleTree({ -24.0f, 0, -16.0f }, NO_ROT, { 1.0f, 1.2f, 1.0f });
-    drawMapleTree({ -20.0f, 0, -21.0f }, NO_ROT, { 1.2f, 1.4f, 1.2f });
-    drawMapleTree({ -28.0f, 0, -23.0f }, NO_ROT, { 0.9f, 1.1f, 0.9f });
-    drawMapleTree({ -16.0f, 0, -26.0f }, NO_ROT, { 1.0f, 1.2f, 1.0f });
-    drawMapleTree({ -31.0f, 0, -18.0f }, NO_ROT, { 1.1f, 1.3f, 1.1f });
 
     // Regular broad-leaf trees filling gaps
     drawTree({ -18.0f, 0, -11.0f }, NO_ROT, { 1.0f, 1.4f, 1.0f });
-    drawTree({ -23.0f, 0, -15.0f }, NO_ROT, { 1.2f, 1.6f, 1.2f });
-    drawTree({ -27.0f, 0, -19.0f }, NO_ROT, { 1.1f, 1.5f, 1.1f });
-    drawTree({ -21.0f, 0, -26.0f }, NO_ROT, { 1.0f, 1.4f, 1.0f });
     drawTree({ -30.0f, 0, -22.0f }, NO_ROT, { 1.2f, 1.6f, 1.2f });
 
     // Cherry blossom accents at forest edge
-    drawCherryBlossomTree({ -25.0f, 0, -9.0f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
-    drawCherryBlossomTree({ -15.0f, 0, -14.0f }, NO_ROT, { 0.9f, 1.0f, 0.9f });
 
     // Dense jungle undergrowth throughout the forest floor
     drawJungle({ -20.0f, 0, -12.0f }, NO_ROT, { 1.5f, 0.8f, 1.5f });
@@ -828,30 +1345,13 @@ static void drawExteriorBody()
 
     // Dense bamboo clusters forming a continuous forest
     drawBambooGrove({ 17.0f, 0, -24.0f }, { 0, 45, 0 }, { 1.3f, 1.5f, 1.3f });
-    drawBambooGrove({ 23.0f, 0, -26.0f }, { 0, 60, 0 }, { 1.2f, 1.3f, 1.2f });
-    drawBambooGrove({ 16.0f, 0, -29.0f }, { 0, 75, 0 }, { 1.2f, 1.4f, 1.2f });
     drawBambooGrove({ 22.0f, 0, -30.0f }, { 0, -50, 0 }, { 1.3f, 1.5f, 1.3f });
-    drawBambooGrove({ 28.0f, 0, -28.0f }, { 0, 15, 0 }, { 1.0f, 1.3f, 1.0f });
 
     // Cherry blossom trees at bamboo grove edges (blossoms cascading over bamboo)
-    drawCherryBlossomTree({ 15.0f, 0, -9.0f }, NO_ROT, { 1.2f, 1.3f, 1.2f });
-    drawCherryBlossomTree({ 22.0f, 0, -9.0f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
-    drawCherryBlossomTree({ 29.0f, 0, -10.0f }, NO_ROT, { 1.1f, 1.2f, 1.1f });
-    drawCherryBlossomTree({ 14.0f, 0, -20.0f }, NO_ROT, { 0.9f, 1.0f, 0.9f });
-    drawCherryBlossomTree({ 31.0f, 0, -20.0f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
 
     // Red torii gate at the bamboo grove entrance
     drawToriiGate({ 20.0f, 0, -9.0f }, { 0, 90, 0 });
 
-    // Stone lanterns along the bamboo path
-    drawStoneLantern({ 15.0f, 0, -11.0f });
-    drawStoneLantern({ 18.0f, 0, -15.0f });
-    drawStoneLantern({ 21.0f, 0, -11.0f });
-    drawStoneLantern({ 24.0f, 0, -16.0f });
-    drawStoneLantern({ 27.0f, 0, -12.0f });
-    drawStoneLantern({ 16.0f, 0, -21.0f });
-    drawStoneLantern({ 20.0f, 0, -26.0f });
-    drawStoneLantern({ 25.0f, 0, -23.0f });
 
     // Falling cherry blossom petals drifting through the bamboo canopy
     drawFallingPetals({ 22.0f, 5.0f, -18.0f }, 12.0f, 30);
@@ -863,39 +1363,19 @@ static void drawExteriorBody()
 
     // Pine trees (primary canopy)
     drawJapanesePineTree({ -12.0f, 0, 28.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
-    drawJapanesePineTree({ -20.0f, 0, 30.0f }, NO_ROT, { 1.2f, 1.5f, 1.2f });
-    drawJapanesePineTree({ -28.0f, 0, 28.0f }, NO_ROT, { 1.0f, 1.4f, 1.0f });
     drawJapanesePineTree({  14.0f, 0, 27.0f }, NO_ROT, { 0.9f, 1.1f, 0.9f });
-    drawJapanesePineTree({  22.0f, 0, 29.0f }, NO_ROT, { 1.0f, 1.3f, 1.0f });
-    drawJapanesePineTree({  28.0f, 0, 27.0f }, NO_ROT, { 1.1f, 1.4f, 1.1f });
-    drawJapanesePineTree({  -3.0f, 0, 32.0f }, NO_ROT, { 1.1f, 1.6f, 1.1f });
-    drawJapanesePineTree({   5.0f, 0, 33.0f }, NO_ROT, { 0.8f, 1.2f, 0.8f });
-    drawJapanesePineTree({ -16.0f, 0, 34.0f }, NO_ROT, { 1.0f, 1.5f, 1.0f });
     drawJapanesePineTree({  18.0f, 0, 35.0f }, NO_ROT, { 1.2f, 1.7f, 1.2f });
-    drawJapanesePineTree({ -25.0f, 0, 33.0f }, NO_ROT, { 0.9f, 1.3f, 0.9f });
-    drawJapanesePineTree({  25.0f, 0, 34.0f }, NO_ROT, { 1.0f, 1.4f, 1.0f });
 
     // Maple trees interspersed
     drawMapleTree({ -5.0f, 0, 26.0f }, NO_ROT, { 1.0f, 1.2f, 1.0f });
-    drawMapleTree({  18.0f, 0, 28.0f }, NO_ROT, { 1.1f, 1.3f, 1.1f });
-    drawMapleTree({ -25.0f, 0, 32.0f }, NO_ROT, { 0.9f, 1.1f, 0.9f });
-    drawMapleTree({  26.0f, 0, 33.0f }, NO_ROT, { 1.0f, 1.2f, 1.0f });
-    drawMapleTree({  -8.0f, 0, 34.0f }, NO_ROT, { 1.1f, 1.3f, 1.1f });
     drawMapleTree({  10.0f, 0, 32.0f }, NO_ROT, { 0.9f, 1.0f, 0.9f });
 
     // Cherry blossom trees for colour accents
-    drawCherryBlossomTree({  3.0f, 0, 27.0f }, NO_ROT, { 1.0f, 1.1f, 1.0f });
-    drawCherryBlossomTree({ -18.0f, 0, 33.0f }, NO_ROT, { 1.1f, 1.2f, 1.1f });
-    drawCherryBlossomTree({  12.0f, 0, 30.0f }, NO_ROT, { 0.9f, 1.0f, 0.9f });
 
     // Dense undergrowth filling the far forest floor
     drawJungle({ -10.0f, 0, 30.0f }, { 0, 40, 0 }, { 1.5f, 0.8f, 1.5f });
-    drawJungle({  10.0f, 0, 31.0f }, { 0, -20, 0 }, { 1.4f, 0.7f, 1.4f });
     drawJungle({ -22.0f, 0, 32.0f }, { 0, 60, 0 }, { 1.6f, 0.9f, 1.6f });
-    drawJungle({  22.0f, 0, 30.0f }, { 0, -40, 0 }, { 1.3f, 0.8f, 1.3f });
     drawJungle({   0.0f, 0, 36.0f }, { 0, 30, 0 }, { 2.0f, 0.9f, 2.0f });
-    drawJungle({ -15.0f, 0, 38.0f }, { 0, -15, 0 }, { 1.5f, 0.8f, 1.5f });
-    drawJungle({  15.0f, 0, 37.0f }, { 0, 50, 0 }, { 1.4f, 0.7f, 1.4f });
 
     // ── Lake with swimming ducks (behind the shop, between houses) ──────
     drawLake({ 0, 0.04f, -24.0f }, NO_ROT, { 1.5f, 1.0f, 1.0f });
@@ -929,26 +1409,11 @@ static void drawExteriorBody()
     drawStoneLantern({ -6.5f, 0, 18.0f });
     drawStoneLantern({  6.5f, 0, 18.0f });
     // Near the lake shore (not in the water)
-    drawStoneLantern({  10.0f, 0, -15.0f });
-    drawStoneLantern({ -10.0f, 0, -15.0f });
-    drawStoneLantern({   0.0f, 0, -14.0f });
 
     // ══════════════════════════════════════════════════════════════════════
     //  PERIMETER JUNGLE — dense forest wall at world edges
     //  Moved away from road (z>5.5) and lake (z~-24) zones
     // ══════════════════════════════════════════════════════════════════════
-    drawJungle({ -35.0f, 0, -15.0f }, NO_ROT, { 2.0f, 1.2f, 2.0f });
-    drawJungle({  35.0f, 0, -12.0f }, { 0, 90, 0 }, { 1.8f, 1.1f, 1.8f });
-    drawJungle({ -35.0f, 0,  30.0f }, { 0, 45, 0 }, { 1.8f, 1.0f, 1.8f });
-    drawJungle({  35.0f, 0,  28.0f }, { 0, -30, 0 }, { 1.7f, 1.1f, 1.7f });
-    drawJungle({   0.0f, 0, -38.0f }, NO_ROT, { 3.0f, 1.2f, 2.0f });
-    drawJungle({   0.0f, 0,  42.0f }, { 0, 90, 0 }, { 2.5f, 1.0f, 2.0f });
-    drawJungle({ -35.0f, 0,   2.0f }, { 0, 20, 0 }, { 1.5f, 1.0f, 1.5f });
-    drawJungle({  35.0f, 0,   2.0f }, { 0,-20, 0 }, { 1.5f, 1.0f, 1.5f });
-    drawJungle({ -35.0f, 0, -30.0f }, { 0, -10, 0 }, { 1.8f, 1.0f, 1.8f });
-    drawJungle({  35.0f, 0, -28.0f }, { 0, 15, 0 }, { 1.6f, 1.0f, 1.6f });
-    drawJungle({ -20.0f, 0, -38.0f }, { 0, 30, 0 }, { 1.5f, 1.0f, 1.5f });
-    drawJungle({  20.0f, 0, -38.0f }, { 0, -30, 0 }, { 1.5f, 1.0f, 1.5f });
 
     // ── Grass tufts scattered over both sides, skipping buildings/road ──
     for (float gx = -36.0f; gx <= 36.0f; gx += 3.2f) {
@@ -988,6 +1453,10 @@ static void drawExteriorBody()
 }
 
 // ─── Second Floor ────────────────────────────────────────────────────────────
+// Gloss presets for the tatami room
+static void woodGlossTimber()  { setMaterialGloss(0.35f, 0.32f, 0.28f, 40.0f); }   // oiled dark timber
+static void woodGlossLacquer() { setMaterialGloss(0.85f, 0.80f, 0.72f, 55.0f); }   // lacquered furniture
+
 static void drawSecondFloor()
 {
     const float GH = 3.3f;   // base y of second floor (top of ground floor)
@@ -1003,137 +1472,388 @@ static void drawSecondFloor()
     drawTexturedBox({  4.0f, GH, -2.2f }, NO_ROT, { 1.0f, 0.12f, 3.4f }, slabTex, SLAB_TINT, 1.5f);
     drawTexturedBox({  4.0f, GH,  3.2f }, NO_ROT, { 1.0f, 0.12f, 1.4f }, slabTex, SLAB_TINT, 1.5f);
 
-    // ── Clean polished light wood bedroom floor (single surface, no grid lines) ──
-    const Color BEDROOM_FLOOR = { 0.90f, 0.82f, 0.65f };
-    drawTexturedBox({ 0, floorY2, 0 }, NO_ROT, { 8.0f, 0.06f, 7.0f },
-                    getTexID(TEX_DARK_WOOD), BEDROOM_FLOOR, 2.0f);
-
     // ══════════════════════════════════════════════════════════════════════
-    //   BEDROOM  — Japanese futon bed, nightstand, wardrobe, folding screen
+    //   COZY TATAMI ROOM — tatami floor, plaster walls with dark timber frame,
+    //   fusuma sliding doors, wooden board ceiling, chabudai tea table, tansu chests,
+    //   folded futons, a radio on the sideboard and an electric fan that swings round
     // ══════════════════════════════════════════════════════════════════════
-    const float TY = floorY2 + 0.06f;
+    const float TY = floorY2 + 0.06f;                 // tatami surface (3.48)
+    const float RX0 = -4.8f, RX1 = 3.45f;             // room interior in x (staircase partition at 3.5)
+    const float RZ0 = -3.8f, RZ1 = 3.8f;              // room interior in z
+    const Color TIMBER = { 0.24f, 0.15f, 0.09f };     // dark aged timber (posts, beams, frames)
+    const Color HERI   = { 0.10f, 0.14f, 0.10f };     // dark green cloth border of the tatami
 
-    // ── Futon Bed (shikibuton + kakebuton + makura) ──
-    // Shikibuton — thick cotton mattress pad
-    const Color FUTON_WHITE = { 0.95f, 0.93f, 0.88f };
-    setMaterialPBR(Materials::Fabric, FUTON_WHITE);
-    drawCuboid({ 0.8f, TY, 0.0f }, NO_ROT, { 1.1f, 0.10f, 2.1f }, FUTON_WHITE);
-    resetMaterialGloss();
-
-    // Kakebuton — duvet / blanket (deep indigo blue)
-    const Color FUTON_INDIGO = { 0.12f, 0.14f, 0.28f };
-    setMaterialPBR(Materials::Fabric, FUTON_INDIGO);
-    drawCuboid({ 0.8f, TY + 0.10f, -0.25f }, NO_ROT, { 1.05f, 0.06f, 1.5f }, FUTON_INDIGO);
-    // Folded-back edge near pillow
-    drawCuboid({ 0.8f, TY + 0.14f, 0.55f }, NO_ROT, { 1.0f, 0.04f, 0.20f }, FUTON_INDIGO);
-    resetMaterialGloss();
-
-    // Makura — buckwheat pillow
-    const Color PILLOW_CREAM = { 0.94f, 0.91f, 0.84f };
-    setMaterialPBR(Materials::Fabric, PILLOW_CREAM);
-    drawCuboid({ 0.8f, TY + 0.08f, 0.85f }, NO_ROT, { 0.50f, 0.12f, 0.25f }, PILLOW_CREAM);
-    resetMaterialGloss();
-
-    // ── Bedside Tansu (nightstand) ──
-    setMaterialPBR(Materials::WoodPolished, DARK_WOOD);
-    drawCuboid({ 2.0f, TY, 0.9f }, NO_ROT, { 0.55f, 0.40f, 0.45f }, DARK_WOOD);
-    drawCuboid({ 2.0f, TY + 0.40f, 0.9f }, NO_ROT, { 0.60f, 0.03f, 0.50f }, WOOD);
-    resetMaterialGloss();
-    // Drawer divider
-    drawCuboid({ 2.0f, TY + 0.19f, 1.125f }, NO_ROT, { 0.48f, 0.006f, 0.006f }, LIGHT_WOOD);
-    // Drawer knobs
-    setMaterialPBR(Materials::Gold, GOLD);
-    drawSphere({ 2.0f, TY + 0.30f, 1.13f }, NO_ROT, { 0.025f, 0.025f, 0.025f }, GOLD);
-    drawSphere({ 2.0f, TY + 0.10f, 1.13f }, NO_ROT, { 0.025f, 0.025f, 0.025f }, GOLD);
-    resetMaterialGloss();
-    // Book on nightstand
-    drawCuboid({ 1.95f, TY + 0.43f, 0.85f }, { 0, 15, 0 }, { 0.18f, 0.025f, 0.13f }, DARK_RED);
-
-    // ── Low Wardrobe Tansu (against back wall) ──
-    setMaterialPBR(Materials::WoodPolished, DARK_WOOD);
-    drawCuboid({ 2.0f, TY, -3.35f }, NO_ROT, { 1.6f, 0.75f, 0.55f }, DARK_WOOD);
-    drawCuboid({ 2.0f, TY + 0.75f, -3.35f }, NO_ROT, { 1.68f, 0.04f, 0.60f }, WOOD);
-    resetMaterialGloss();
-    // Metal corner brackets
-    for (int sx = -1; sx <= 1; sx += 2)
-        drawCuboid({ 2.0f + sx * 0.72f, TY + 0.74f, -3.07f }, NO_ROT,
-                   { 0.08f, 0.06f, 0.02f }, METAL);
-    // Drawer handles
-    setMaterialPBR(Materials::Gold, GOLD);
-    for (int r = 0; r < 2; r++)
-        for (int sx = -1; sx <= 1; sx += 2)
-            drawSphere({ 2.0f + sx * 0.40f, TY + 0.22f + r * 0.30f, -3.07f }, NO_ROT,
-                       { 0.025f, 0.025f, 0.025f }, GOLD);
-    resetMaterialGloss();
-
-    // ── Zabuton cushion (beside tokonoma alcove) ──
-    const Color ZABUTON = { 0.55f, 0.12f, 0.12f };
-    setMaterialPBR(Materials::Fabric, ZABUTON);
-    drawCuboid({ -3.0f, TY, -2.5f }, { 0, 15, 0 }, { 0.50f, 0.05f, 0.45f }, ZABUTON);
-    resetMaterialGloss();
-    // Tea cup near cushion
-    drawCup({ -2.6f, TY, -2.2f }, NO_ROT, { 0.09f, 0.09f, 0.09f }, CUP_GREEN);
-
-    // ── Folding Screen (byobu) — 3-panel room divider ──
+    // ── Tatami floor: mats laid in a running bond, each with its cloth border (heri) ──
     {
-        const Color SCREEN_GOLD = { 0.88f, 0.82f, 0.62f };
-        float scY = TY + 0.62f;
-        float scH = 1.20f, scW = 0.65f;
-        float px[] = { -2.6f, -1.95f, -1.3f };
-        float pz[] = {  1.7f,  1.6f,   1.7f };
-        float pa[] = {  12.0f, 0.0f, -12.0f };
+        GLuint tat = getTexID(TEX_TATAMI);
+        const float ML = 1.90f, MW = 0.95f;           // mat length / width
+        setMaterialGloss(0.10f, 0.10f, 0.08f, 12.0f); // woven rush: matte, faint sheen
+        int row = 0;
+        for (float z = RZ0; z < RZ1 - 0.01f; z += MW, row++) {
+            float zw = fminf(MW, RZ1 - z);
+            for (float x = RX0 - ((row & 1) ? ML * 0.5f : 0.0f); x < RX1 - 0.01f; x += ML) {
+                float x0 = fmaxf(x, RX0), x1 = fminf(x + ML, RX1);
+                if (x1 - x0 < 0.05f) continue;
+                drawTexturedBox({ (x0 + x1) * 0.5f, floorY2, z + zw * 0.5f }, NO_ROT,
+                                { x1 - x0, 0.06f, zw }, tat, WHITE, ML);
+                // heri: cloth border along both long edges of the mat
+                drawCuboid({ (x0 + x1) * 0.5f, TY, z + 0.02f },      NO_ROT, { x1 - x0, 0.004f, 0.04f }, HERI);
+                drawCuboid({ (x0 + x1) * 0.5f, TY, z + zw - 0.02f }, NO_ROT, { x1 - x0, 0.004f, 0.04f }, HERI);
+            }
+        }
+        resetMaterialGloss();
+    }
+
+    // ── Walls: plaster facing, dark posts (hashira), nageshi beam and skirting ──
+    {
+        GLuint wallTex = getTexID(TEX_WALL);
+        const Color PLASTER = { 0.84f, 0.80f, 0.72f };            // warm grey-beige clay plaster
+        setMaterialGloss(0.03f, 0.03f, 0.03f, 8.0f);
+        drawTexturedBox({ 0.0f, TY, RZ0 + 0.005f }, NO_ROT, { 9.6f, 1.80f, 0.01f }, wallTex, PLASTER, 1.5f);   // back
+        drawTexturedBox({ RX0 + 0.005f, TY, 0.0f }, NO_ROT, { 0.01f, 1.80f, 7.6f }, wallTex, PLASTER, 1.5f);   // left
+        resetMaterialGloss();
+
+        woodGlossTimber();
+        const float NY = TY + 1.82f;                                // nageshi (head beam) height
+        // posts
+        const float postX[] = { RX0 + 0.06f, -2.35f, 1.05f, RX1 - 0.06f };
+        for (float px : postX) drawCuboid({ px, TY, RZ0 + 0.06f }, NO_ROT, { 0.11f, 1.82f, 0.11f }, TIMBER);
+        const float postZ[] = { -1.3f, 1.3f, RZ1 - 0.06f };
+        for (float pz : postZ) drawCuboid({ RX0 + 0.06f, TY, pz }, NO_ROT, { 0.11f, 1.82f, 0.11f }, TIMBER);
+        // head beams and skirting boards along the back and left walls
+        drawCuboid({ 0.0f, NY, RZ0 + 0.06f }, NO_ROT, { 9.6f, 0.10f, 0.12f }, TIMBER);
+        drawCuboid({ RX0 + 0.06f, NY, 0.0f }, NO_ROT, { 0.12f, 0.10f, 7.6f }, TIMBER);
+        drawCuboid({ 0.0f, NY, RZ1 - 0.06f }, NO_ROT, { 9.6f, 0.10f, 0.12f }, TIMBER);   // front wall
+        drawCuboid({ 0.0f, TY, RZ0 + 0.02f }, NO_ROT, { 9.6f, 0.07f, 0.04f }, TIMBER);
+        drawCuboid({ RX0 + 0.02f, TY, 0.0f }, NO_ROT, { 0.04f, 0.07f, 7.6f }, TIMBER);
+        resetMaterialGloss();
+    }
+
+    // ── Fusuma: four paper sliding doors in the back wall, checkered lower band ──
+    {
+        const float fx0 = -2.30f, fw = 0.83f, fh = 1.80f, fz = RZ0 + 0.035f;
+        for (int i = 0; i < 4; i++) {
+            float cx = fx0 + fw * (i + 0.5f);
+            // paper face (vertex colours: soft grey washi, an ichimatsu checker band near the bottom)
+            setMaterialGloss(0.04f, 0.04f, 0.04f, 8.0f);
+            glBegin(GL_QUADS);
+            glNormal3f(0, 0, 1);
+            const int NXc = 6, NYc = 18;
+            for (int gx = 0; gx < NXc; gx++)
+                for (int gy = 0; gy < NYc; gy++) {
+                    float u0 = (float)gx / NXc, u1 = (float)(gx + 1) / NXc, v0 = (float)gy / NYc, v1 = (float)(gy + 1) / NYc;
+                    float tone = 0.86f + 0.04f * sinf(cx * 7.0f + gx * 1.3f + gy * 0.7f);
+                    Color pc = { tone, tone * 0.98f, tone * 0.93f };
+                    if (gy >= 2 && gy < 5) {                                   // checker band
+                        bool dark = ((gx + gy) & 1) != 0;
+                        pc = dark ? Color{ 0.52f, 0.55f, 0.50f } : Color{ 0.80f, 0.80f, 0.76f };
+                    }
+                    glColor3f(pc.r, pc.g, pc.b);
+                    float xa = cx - fw * 0.5f + 0.03f + u0 * (fw - 0.06f), xb = cx - fw * 0.5f + 0.03f + u1 * (fw - 0.06f);
+                    float ya = TY + 0.03f + v0 * (fh - 0.06f), yb = TY + 0.03f + v1 * (fh - 0.06f);
+                    glVertex3f(xa, ya, fz); glVertex3f(xb, ya, fz); glVertex3f(xb, yb, fz); glVertex3f(xa, yb, fz);
+                }
+            glEnd();
+            // lacquered frame and a small round recessed pull
+            woodGlossTimber();
+            drawCuboid({ cx - fw * 0.5f + 0.015f, TY, fz }, NO_ROT, { 0.03f, fh, 0.03f }, TIMBER);
+            drawCuboid({ cx + fw * 0.5f - 0.015f, TY, fz }, NO_ROT, { 0.03f, fh, 0.03f }, TIMBER);
+            drawCuboid({ cx, TY + fh - 0.03f, fz }, NO_ROT, { fw, 0.03f, 0.03f }, TIMBER);
+            drawCuboid({ cx, TY, fz }, NO_ROT, { fw, 0.03f, 0.03f }, TIMBER);
+            setMaterialConductive({ 0.25f, 0.22f, 0.18f }, 60.0f);
+            float hx = (i & 1) ? cx - fw * 0.5f + 0.10f : cx + fw * 0.5f - 0.10f;
+            drawCylinder({ hx, TY + 0.85f, fz + 0.012f }, { 90, 0, 0 }, { 0.06f, 0.006f, 0.06f }, { 0.25f, 0.22f, 0.18f });
+            resetMaterialGloss();
+        }
+        // threshold rail and lintel of the fusuma opening
+        woodGlossTimber();
+        drawCuboid({ fx0 + fw * 2.0f, TY + fh, RZ0 + 0.05f }, NO_ROT, { fw * 4.0f + 0.1f, 0.05f, 0.08f }, TIMBER);
+        resetMaterialGloss();
+    }
+
+    // ── Wooden board ceiling with dark battens ──
+    {
+        const float CY = GH + UH - 0.03f;
+        setMaterialGloss(0.15f, 0.14f, 0.12f, 30.0f);
+        drawTexturedBox({ -0.65f, CY, 0.0f }, NO_ROT, { 8.3f, 0.02f, 7.6f }, getTexID(TEX_WOOD), { 0.78f, 0.66f, 0.50f }, 1.6f);
+        for (float bx = RX0 + 0.6f; bx < RX1; bx += 0.9f)
+            drawCuboid({ bx, CY - 0.04f, 0.0f }, NO_ROT, { 0.05f, 0.04f, 7.6f }, TIMBER);
+        resetMaterialGloss();
+    }
+
+    // ── Square washi ceiling lamp with a pull cord (this is the room light, key 7) ──
+    {
+        const bool on = lightArea && fixtureOn[FX_DOME];
+        const float LY = GH + UH - 0.36f, s2 = 0.30f;
+        float dayDome = isDayTime ? 0.25f : 1.0f;
+        drawCylinder({ 0.0f, LY + 0.14f, 0.0f }, NO_ROT, { 0.01f, 0.20f, 0.01f }, TIMBER);       // hanging rod
+        if (on) setEmission(0.85f * dayDome, 0.70f * dayDome, 0.42f * dayDome);
+        drawCuboid({ 0.0f, LY, 0.0f }, NO_ROT, { s2 * 2.0f - 0.02f, 0.14f, s2 * 2.0f - 0.02f }, PAPER);   // glowing paper box
+        clearEmission();
+        woodGlossTimber();
+        for (int sx = -1; sx <= 1; sx += 2)
+            for (int sz = -1; sz <= 1; sz += 2)
+                drawCuboid({ sx * s2, LY - 0.01f, sz * s2 }, NO_ROT, { 0.03f, 0.17f, 0.03f }, TIMBER);   // corner posts
+        for (int k = -1; k <= 1; k++) {                                                                  // lattice bars
+            drawCuboid({ k * s2 * 0.5f, LY + 0.145f, 0.0f }, NO_ROT, { 0.02f, 0.02f, s2 * 2.0f }, TIMBER);
+            drawCuboid({ 0.0f, LY + 0.145f, k * s2 * 0.5f }, NO_ROT, { s2 * 2.0f, 0.02f, 0.02f }, TIMBER);
+        }
+        resetMaterialGloss();
+        drawCylinder({ 0.12f, LY - 0.62f, 0.10f }, NO_ROT, { 0.006f, 0.62f, 0.006f }, { 0.20f, 0.18f, 0.16f });   // pull cord
+        drawSphere({ 0.12f, LY - 0.64f, 0.10f }, NO_ROT, { 0.03f, 0.04f, 0.03f }, { 0.75f, 0.20f, 0.18f });
+    }
+
+    // ── Ceiling fan, turning slowly (away from the room light) ──
+    drawCeilingFan({ -1.6f, GH + UH - 0.03f, -0.8f });
+
+    // ── Chabudai: low wooden tea table with a tea set ──
+    {
+        const float tx = -0.6f, tz = 0.7f, th = 0.32f;
+        woodGlossLacquer();
+        drawTexturedBox({ tx, TY + th - 0.04f, tz }, NO_ROT, { 1.10f, 0.04f, 0.68f }, getTexID(TEX_WOOD), { 0.92f, 0.72f, 0.50f }, 1.2f);
+        drawCuboid({ tx, TY + th - 0.09f, tz }, NO_ROT, { 0.98f, 0.05f, 0.56f }, { 0.55f, 0.36f, 0.20f });   // apron
+        for (int sx = -1; sx <= 1; sx += 2)
+            for (int sz = -1; sz <= 1; sz += 2)
+                drawCuboid({ tx + sx * 0.46f, TY, tz + sz * 0.25f }, NO_ROT, { 0.05f, th - 0.04f, 0.05f }, { 0.55f, 0.36f, 0.20f });
+        resetMaterialGloss();
+        const float top = TY + th;
+        // round lacquered tray
+        setMaterialGloss(0.8f, 0.6f, 0.5f, 70.0f);
+        drawCylinder({ tx - 0.18f, top, tz + 0.02f }, NO_ROT, { 0.34f, 0.012f, 0.34f }, { 0.45f, 0.10f, 0.08f });
+        // kyusu teapot: dark clay body, spout and side handle
+        drawSphere({ tx - 0.22f, top + 0.065f, tz + 0.02f }, NO_ROT, { 0.13f, 0.11f, 0.13f }, { 0.36f, 0.16f, 0.10f });
+        drawCylinder({ tx - 0.22f, top + 0.11f, tz + 0.02f }, NO_ROT, { 0.07f, 0.02f, 0.07f }, { 0.32f, 0.14f, 0.09f });
+        drawSphere({ tx - 0.22f, top + 0.135f, tz + 0.02f }, NO_ROT, { 0.02f, 0.02f, 0.02f }, { 0.32f, 0.14f, 0.09f });
+        limb({ tx - 0.16f, top + 0.06f, tz + 0.02f }, { tx - 0.08f, top + 0.10f, tz + 0.02f }, 0.012f, { 0.36f, 0.16f, 0.10f });
+        limb({ tx - 0.22f, top + 0.06f, tz - 0.04f }, { tx - 0.22f, top + 0.07f, tz - 0.16f }, 0.014f, { 0.36f, 0.16f, 0.10f });
+        // two yunomi tea cups (glazed)
+        setMaterialDielectric(90.0f);
+        drawCylinderCustom({ tx + 0.10f, top, tz - 0.10f }, NO_ROT, ONE, { 0.30f, 0.45f, 0.32f }, 0.032f, 0.036f, 0.085f);
+        drawCylinderCustom({ tx + 0.24f, top, tz + 0.12f }, NO_ROT, ONE, { 0.82f, 0.80f, 0.72f }, 0.032f, 0.036f, 0.085f);
+        // vacuum pot (thermos): enamel body with a flower band, dark lid and handle
+        drawCylinderCustom({ tx + 0.36f, top, tz - 0.08f }, NO_ROT, ONE, { 0.93f, 0.90f, 0.88f }, 0.075f, 0.070f, 0.24f);
+        drawCylinderCustom({ tx + 0.36f, top + 0.09f, tz - 0.08f }, NO_ROT, ONE, { 0.88f, 0.55f, 0.60f }, 0.077f, 0.076f, 0.06f);
+        drawCylinderCustom({ tx + 0.36f, top + 0.24f, tz - 0.08f }, NO_ROT, ONE, { 0.20f, 0.18f, 0.18f }, 0.060f, 0.045f, 0.05f);
+        limb({ tx + 0.29f, top + 0.27f, tz - 0.08f }, { tx + 0.43f, top + 0.27f, tz - 0.08f }, 0.008f, { 0.30f, 0.30f, 0.32f });
+        resetMaterialGloss();
+    }
+
+    // ── Zabuton floor cushions around the table (soft, with a centre tuft) ──
+    {
+        const Color ZAB = { 0.50f, 0.56f, 0.44f }, ZAB2 = { 0.58f, 0.22f, 0.18f };
+        const float zx[3] = { -0.6f, -0.6f, -1.55f }, zz[3] = { 1.45f, -0.05f, 0.7f }, zr[3] = { 4.0f, -6.0f, 88.0f };
         for (int i = 0; i < 3; i++) {
-            if (!isDayTime)
-                setEmission(0.05f, 0.04f, 0.02f);
-            else
-                setEmission(0.02f, 0.02f, 0.01f);
-            drawCube({ px[i], scY, pz[i] }, { 0, pa[i], 0 },
-                     { scW, scH, 0.03f }, SCREEN_GOLD);
-            clearEmission();
-            drawCube({ px[i], scY + scH * 0.5f + 0.02f, pz[i] }, { 0, pa[i], 0 },
-                     { scW + 0.04f, 0.04f, 0.05f }, DARK_WOOD);
-            drawCube({ px[i], scY - scH * 0.5f - 0.02f, pz[i] }, { 0, pa[i], 0 },
-                     { scW + 0.04f, 0.04f, 0.05f }, DARK_WOOD);
+            Color cc = (i == 2) ? ZAB2 : ZAB;
+            setMaterialGloss(0.05f, 0.05f, 0.05f, 10.0f);
+            drawCuboid({ zx[i], TY, zz[i] }, { 0, zr[i], 0 }, { 0.56f, 0.05f, 0.56f }, cc);
+            drawCuboid({ zx[i], TY + 0.05f, zz[i] }, { 0, zr[i], 0 }, { 0.50f, 0.025f, 0.50f }, cc);   // puffed centre
+            drawSphere({ zx[i], TY + 0.078f, zz[i] }, NO_ROT, { 0.03f, 0.015f, 0.03f }, { cc.r * 0.6f, cc.g * 0.6f, cc.b * 0.6f });   // tuft
+            resetMaterialGloss();
         }
     }
 
-    // ── Simple flush ceiling light (paper dome — no hanging cords) ──
-    //   The dome itself glows visibly, matching LIGHT7 color temperature
-    if (lightArea) {
-        float dayDome = isDayTime ? 0.20f : 1.0f;
-        float flickDome = 1.0f + 0.03f * sinf(animTime * 3.0f);
-        setEmission(0.80f * dayDome * flickDome,
-                    0.58f * dayDome * flickDome,
-                    0.20f * dayDome * flickDome);
+    // ── Tall tansu chest against the left wall, with books on top ──
+    {
+        const float cx = RX0 + 0.26f, cz = -0.2f, H = 1.45f, Wd = 1.05f, D = 0.45f;
+        const Color CH = { 0.30f, 0.20f, 0.12f }, CH2 = { 0.36f, 0.25f, 0.15f };
+        woodGlossLacquer();
+        drawTexturedBox({ cx, TY, cz }, NO_ROT, { D, H, Wd }, getTexID(TEX_DARK_WOOD), { 1.0f, 0.95f, 0.9f }, 1.0f);
+        // drawer fronts (face +x) and a two-door cupboard at the top
+        for (int r = 0; r < 4; r++) {
+            float y = TY + 0.06f + r * 0.24f;
+            drawCuboid({ cx + D * 0.5f + 0.008f, y, cz }, NO_ROT, { 0.016f, 0.21f, Wd - 0.08f }, CH2);
+            setMaterialConductive({ 0.20f, 0.18f, 0.15f }, 60.0f);
+            for (int k = -1; k <= 1; k += 2)
+                limb({ cx + D * 0.5f + 0.03f, y + 0.12f, cz + k * 0.22f - 0.06f }, { cx + D * 0.5f + 0.03f, y + 0.12f, cz + k * 0.22f + 0.06f }, 0.008f, { 0.18f, 0.16f, 0.14f });
+            woodGlossLacquer();
+        }
+        for (int k = -1; k <= 1; k += 2)
+            drawCuboid({ cx + D * 0.5f + 0.008f, TY + 1.03f, cz + k * (Wd * 0.25f - 0.01f) }, NO_ROT, { 0.016f, 0.38f, Wd * 0.5f - 0.06f }, CH2);
+        resetMaterialGloss();
+        // books and a box on top
+        const Color BK[4] = { { 0.70f, 0.15f, 0.12f }, { 0.85f, 0.68f, 0.20f }, { 0.20f, 0.30f, 0.50f }, { 0.90f, 0.88f, 0.82f } };
+        for (int i = 0; i < 4; i++)
+            drawCuboid({ cx, TY + H, cz - 0.35f + i * 0.055f }, NO_ROT, { 0.30f, 0.26f - 0.02f * (i & 1), 0.045f }, BK[i]);
+        drawCuboid({ cx, TY + H, cz + 0.20f }, { 0, 6, 0 }, { 0.32f, 0.20f, 0.30f }, { 0.25f, 0.32f, 0.36f });
+        drawCuboid({ cx - 0.02f, TY + H, cz + 0.40f }, NO_ROT, { 0.28f, 0.03f, 0.22f }, { 0.92f, 0.90f, 0.85f });   // magazine stack
     }
-    drawSphere({ 0.0f, GH + UH - 0.05f, 0.0f }, NO_ROT, { 0.30f, 0.10f, 0.30f }, PAPER);
-    if (lightArea) clearEmission();
 
-    // ── Tokonoma alcove shelf on the back wall ──
-    drawCuboid({ -3.5f, floorY2 + 0.50f, -3.55f }, NO_ROT, { 1.8f, 0.06f, 0.5f }, DARK_WOOD);
+    // ── Folded futons stacked beside the chest ──
+    {
+        const float fx = RX0 + 0.55f, fz = 1.55f;
+        const Color F1 = { 0.92f, 0.90f, 0.84f }, F2 = { 0.68f, 0.20f, 0.22f }, F3 = { 0.82f, 0.82f, 0.86f };
+        setMaterialGloss(0.05f, 0.05f, 0.05f, 10.0f);
+        drawCuboid({ fx, TY, fz }, NO_ROT, { 0.95f, 0.13f, 0.70f }, F3);
+        drawCuboid({ fx, TY + 0.13f, fz }, NO_ROT, { 0.93f, 0.12f, 0.69f }, F1);
+        drawCuboid({ fx, TY + 0.25f, fz }, NO_ROT, { 0.94f, 0.13f, 0.70f }, F2);
+        drawCuboid({ fx, TY + 0.38f, fz }, NO_ROT, { 0.90f, 0.10f, 0.66f }, F1);
+        for (int i = 0; i < 4; i++)                                                  // printed pattern on the red quilt
+            drawCuboid({ fx - 0.30f + i * 0.2f, TY + 0.381f + 0.10f, fz - 0.15f + (i & 1) * 0.2f }, NO_ROT, { 0.10f, 0.003f, 0.10f }, { 0.95f, 0.85f, 0.75f });
+        drawCuboid({ fx + 0.10f, TY + 0.48f, fz + 0.05f }, NO_ROT, { 0.42f, 0.10f, 0.26f }, { 0.94f, 0.92f, 0.86f });   // pillow
+        resetMaterialGloss();
+    }
 
-    // Scroll painting above the tokonoma shelf (kakejiku)
-    if (!isDayTime)
-        setEmission(0.06f, 0.04f, 0.02f);
-    else
-        setEmission(0.02f, 0.02f, 0.01f);
-    drawCuboid({ -3.5f, floorY2 + 1.20f, -3.72f }, NO_ROT, { 0.9f, 1.0f, 0.04f }, PAPER);
+    // ── Low sideboard (back wall, right) with a radio-cassette player and an uchiwa fan ──
+    {
+        const float sx = 2.25f, sz = RZ0 + 0.30f, H = 0.72f;
+        woodGlossLacquer();
+        drawTexturedBox({ sx, TY, sz }, NO_ROT, { 1.80f, H, 0.48f }, getTexID(TEX_DARK_WOOD), WHITE, 1.0f);
+        for (int i = 0; i < 3; i++)
+            drawCuboid({ sx - 0.60f + i * 0.60f, TY + 0.05f, sz + 0.245f }, NO_ROT, { 0.56f, H - 0.10f, 0.012f }, { 0.36f, 0.24f, 0.14f });
+        setMaterialConductive({ 0.25f, 0.22f, 0.18f }, 60.0f);
+        for (int i = 0; i < 3; i++)
+            drawCuboid({ sx - 0.60f + i * 0.60f, TY + H * 0.55f, sz + 0.26f }, NO_ROT, { 0.10f, 0.015f, 0.015f }, { 0.20f, 0.18f, 0.15f });
+        resetMaterialGloss();
+        const float top = TY + H;
+        // radio-cassette: silver body, two speaker grilles, cassette deck, handle, aerial
+        setMaterialConductive({ 0.70f, 0.70f, 0.72f }, 70.0f);
+        drawCuboid({ sx + 0.15f, top, sz + 0.02f }, NO_ROT, { 0.56f, 0.24f, 0.14f }, { 0.68f, 0.68f, 0.70f });
+        resetMaterialGloss();
+        for (int k = -1; k <= 1; k += 2) {
+            drawCylinder({ sx + 0.15f + k * 0.18f, top + 0.12f, sz + 0.09f }, { 90, 0, 0 }, { 0.15f, 0.01f, 0.15f }, { 0.10f, 0.10f, 0.11f });
+            drawCylinder({ sx + 0.15f + k * 0.18f, top + 0.12f, sz + 0.10f }, { 90, 0, 0 }, { 0.05f, 0.01f, 0.05f }, { 0.30f, 0.30f, 0.32f });
+        }
+        drawCuboid({ sx + 0.15f, top + 0.07f, sz + 0.09f }, NO_ROT, { 0.16f, 0.10f, 0.01f }, { 0.18f, 0.18f, 0.20f });   // cassette door
+        limb({ sx - 0.08f, top + 0.24f, sz + 0.02f }, { sx - 0.04f, top + 0.31f, sz + 0.02f }, 0.012f, { 0.15f, 0.15f, 0.16f });
+        limb({ sx + 0.34f, top + 0.31f, sz + 0.02f }, { sx + 0.38f, top + 0.24f, sz + 0.02f }, 0.012f, { 0.15f, 0.15f, 0.16f });
+        limb({ sx - 0.04f, top + 0.31f, sz + 0.02f }, { sx + 0.34f, top + 0.31f, sz + 0.02f }, 0.012f, { 0.15f, 0.15f, 0.16f });
+        limb({ sx + 0.40f, top + 0.24f, sz - 0.03f }, { sx + 0.55f, top + 0.62f, sz - 0.03f }, 0.004f, { 0.75f, 0.75f, 0.78f });   // aerial
+        // uchiwa (round paper fan) leaning on the wall
+        drawCylinder({ sx + 0.72f, top + 0.12f, sz - 0.15f }, { 75, 0, 0 }, { 0.30f, 0.008f, 0.30f }, { 0.85f, 0.18f, 0.15f });
+        limb({ sx + 0.72f, top, sz - 0.12f }, { sx + 0.72f, top + 0.12f, sz - 0.16f }, 0.008f, { 0.80f, 0.70f, 0.45f });
+        // a small potted plant at the other end
+        drawCylinderCustom({ sx - 0.62f, top, sz }, NO_ROT, ONE, { 0.55f, 0.30f, 0.20f }, 0.07f, 0.09f, 0.14f);
+        drawSphere({ sx - 0.62f, top + 0.22f, sz }, NO_ROT, { 0.22f, 0.20f, 0.22f }, LEAF);
+    }
+
+    // ── Wall things: calligraphy scroll, calendar, a handwritten notice ──
+    {
+        // calligraphy strip between the post and the fusuma
+        drawCuboid({ -2.62f, TY + 0.95f, RZ0 + 0.02f }, NO_ROT, { 0.26f, 0.72f, 0.01f }, { 0.94f, 0.92f, 0.86f });
+        for (int i = 0; i < 4; i++)
+            drawCuboid({ -2.62f + 0.02f * ((i & 1) ? 1 : -1), TY + 1.50f - i * 0.15f, RZ0 + 0.027f }, NO_ROT, { 0.10f - 0.02f * (i % 3), 0.08f, 0.004f }, { 0.08f, 0.08f, 0.08f });
+        drawCuboid({ -2.62f, TY + 1.67f, RZ0 + 0.03f }, NO_ROT, { 0.30f, 0.025f, 0.025f }, TIMBER);
+        // calendar above the sideboard: picture page on top, date grid below
+        drawCuboid({ 2.95f, TY + 1.05f, RZ0 + 0.02f }, NO_ROT, { 0.42f, 0.60f, 0.01f }, { 0.95f, 0.95f, 0.93f });
+        drawCuboid({ 2.95f, TY + 1.36f, RZ0 + 0.027f }, NO_ROT, { 0.38f, 0.26f, 0.004f }, { 0.20f, 0.36f, 0.48f });
+        for (int r = 0; r < 4; r++)
+            for (int k = 0; k < 7; k++)
+                drawCuboid({ 2.80f + k * 0.05f, TY + 1.10f + r * 0.055f, RZ0 + 0.027f }, NO_ROT, { 0.025f, 0.025f, 0.003f },
+                           (k == 0) ? Color{ 0.80f, 0.15f, 0.12f } : Color{ 0.35f, 0.35f, 0.38f });
+        // handwritten notice
+        drawCuboid({ 1.75f, TY + 1.15f, RZ0 + 0.02f }, NO_ROT, { 0.55f, 0.42f, 0.01f }, { 0.90f, 0.86f, 0.74f });
+        for (int i = 0; i < 6; i++)
+            drawCuboid({ 1.53f + i * 0.085f, TY + 1.20f, RZ0 + 0.027f }, NO_ROT, { 0.02f, 0.30f, 0.003f }, { 0.25f, 0.22f, 0.20f });
+    }
+
+    // ── Tokonoma alcove (left of the fusuma): shelf, hanging scroll and ikebana ──
+    drawCuboid({ -3.55f, floorY2 + 0.30f, -3.55f }, NO_ROT, { 2.0f, 0.10f, 0.45f }, TIMBER);   // raised alcove floor (toko-ita)
+    if (!isDayTime) setEmission(0.04f, 0.03f, 0.02f); else setEmission(0.02f, 0.02f, 0.01f);
+    drawCuboid({ -3.55f, floorY2 + 0.80f, -3.75f }, NO_ROT, { 0.6f, 1.05f, 0.02f }, PAPER);    // kakejiku
     clearEmission();
-    drawCuboid({ -3.5f, floorY2 + 1.74f, -3.71f }, NO_ROT, { 1.0f, 0.06f, 0.06f }, DARK_WOOD);  // top rod
-    drawCuboid({ -3.5f, floorY2 + 0.66f, -3.71f }, NO_ROT, { 1.0f, 0.06f, 0.06f }, DARK_WOOD);  // bottom rod
+    for (int i = 0; i < 3; i++)
+        drawCuboid({ -3.55f, floorY2 + 1.55f - i * 0.22f, -3.737f }, NO_ROT, { 0.18f, 0.12f, 0.004f }, { 0.08f, 0.08f, 0.08f });
+    drawCuboid({ -3.55f, floorY2 + 1.87f, -3.73f }, NO_ROT, { 0.68f, 0.04f, 0.04f }, TIMBER);
+    drawCuboid({ -3.55f, floorY2 + 0.78f, -3.73f }, NO_ROT, { 0.68f, 0.04f, 0.04f }, TIMBER);
+    {
+        const Color VASE_BLUE = { 0.20f, 0.25f, 0.55f };
+        setMaterialPBR(Materials::Ceramic, VASE_BLUE);
+        drawCylinderCustom({ -3.05f, floorY2 + 0.40f, -3.50f }, NO_ROT, ONE, VASE_BLUE, 0.07f, 0.05f, 0.24f);
+        resetMaterialGloss();
+        for (int i = 0; i < 3; i++)
+            limb({ -3.05f, floorY2 + 0.62f, -3.50f }, { -3.05f + (i - 1) * 0.12f, floorY2 + 0.95f + i * 0.04f, -3.48f }, 0.006f, { 0.25f, 0.40f, 0.18f });
+        drawSphere({ -3.17f, floorY2 + 0.96f, -3.48f }, NO_ROT, { 0.06f, 0.05f, 0.06f }, { 0.92f, 0.50f, 0.62f });
+        drawSphere({ -2.93f, floorY2 + 1.03f, -3.48f }, NO_ROT, { 0.05f, 0.05f, 0.05f }, { 0.95f, 0.88f, 0.90f });
+    }
 
-    // Small ikebana vase on the tokonoma shelf
-    const Color VASE_BLUE = { 0.20f, 0.25f, 0.55f };
-    setMaterialPBR(Materials::Ceramic, VASE_BLUE);
-    drawCylinder({ -3.5f, floorY2 + 0.56f, -3.45f }, NO_ROT, { 0.06f, 0.18f, 0.06f }, VASE_BLUE);
-    drawSphere({   -3.5f, floorY2 + 0.82f, -3.45f }, NO_ROT, { 0.04f, 0.06f, 0.04f }, LEAF);  // leaf
-    resetMaterialGloss();
+    // ── Electric stand fan: the head swings left and right, the blades spin ──
+    {
+        const float bx = -3.3f, bz = 2.6f;
+        const float swing = 35.0f * sinf(animTime * 0.6f);
+        setMaterialGloss(0.6f, 0.6f, 0.6f, 60.0f);
+        drawCylinderCustom({ bx, TY, bz }, NO_ROT, ONE, { 0.82f, 0.84f, 0.82f }, 0.20f, 0.17f, 0.05f);   // base
+        drawCylinder({ bx, TY + 0.05f, bz }, NO_ROT, { 0.05f, 0.80f, 0.05f }, { 0.75f, 0.78f, 0.76f });  // pole
+        glPushMatrix();
+        glTranslatef(bx, TY + 0.90f, bz);
+        glRotatef(30.0f + swing, 0, 1, 0);                          // oscillation (faces into the room, +x)
+        drawSphere({ -0.06f, 0, 0 }, NO_ROT, { 0.20f, 0.16f, 0.16f }, { 0.80f, 0.82f, 0.80f });   // motor housing
+        setMaterialConductive(STEEL, 70.0f);
+        // wire cage: rings and spokes, front faces +x
+        drawTorus({ 0.10f, 0, 0 }, { 0, 0, 90 }, ONE, { 0.70f, 0.72f, 0.74f }, 0.006f, 0.20f);
+        drawTorus({ 0.16f, 0, 0 }, { 0, 0, 90 }, ONE, { 0.70f, 0.72f, 0.74f }, 0.005f, 0.13f);
+        for (int k = 0; k < 10; k++) {
+            float a = k * 6.2832f / 10.0f;
+            limb({ 0.04f, 0, 0 }, { 0.10f, cosf(a) * 0.20f, sinf(a) * 0.20f }, 0.003f, { 0.70f, 0.72f, 0.74f });
+            limb({ 0.10f, cosf(a) * 0.20f, sinf(a) * 0.20f }, { 0.17f, cosf(a) * 0.05f, sinf(a) * 0.05f }, 0.003f, { 0.70f, 0.72f, 0.74f });
+        }
+        resetMaterialGloss();
+        // blades (translucent-looking pale blue plastic), spinning about the fan axis
+        glPushMatrix();
+        glTranslatef(0.09f, 0, 0);
+        glRotatef(animTime * 900.0f, 1, 0, 0);
+        setMaterialGloss(0.5f, 0.5f, 0.5f, 50.0f);
+        for (int k = 0; k < 3; k++) {
+            glPushMatrix();
+            glRotatef(k * 120.0f, 1, 0, 0);
+            drawSphere({ 0, 0.10f, 0 }, { 25, 0, 0 }, { 0.02f, 0.17f, 0.10f }, { 0.62f, 0.78f, 0.86f });
+            glPopMatrix();
+        }
+        drawSphere({ 0.02f, 0, 0 }, NO_ROT, { 0.05f, 0.05f, 0.05f }, { 0.80f, 0.82f, 0.80f });   // spinner cap
+        resetMaterialGloss();
+        glPopMatrix();
+        glPopMatrix();
+    }
 
-    // ── Wall decoration on the right-side inner wall ──
-    drawWallDecoration({ 2.5f, floorY2 + 1.0f, -3.72f }, NO_ROT);
+    // ── The two front windows seen from inside: deep wooden reveal, a pair of shoji
+    //    panels whose paper is lit by daylight (or glows warm from the room lamp at night) ──
+    {
+        const float wy0 = 3.65f, wy1 = 4.95f, zi = RZ1 + 0.005f;         // inner wall face
+        const bool lampOn = lightArea && fixtureOn[FX_DOME];
+        const float paperLit = isDayTime ? 0.62f : (lampOn ? 0.16f : 0.05f);
+        for (int w = -1; w <= 1; w += 2) {
+            const float x0 = w * 2.2f, x1 = w * 4.2f, cx = (x0 + x1) * 0.5f, ww = fabsf(x1 - x0);
+            // reveal: boards lining the wall opening (sill, head, jambs)
+            woodGlossTimber();
+            drawCuboid({ cx, wy0 - 0.03f, RZ1 + 0.10f }, NO_ROT, { ww + 0.10f, 0.05f, 0.30f }, { 0.36f, 0.24f, 0.14f });   // sill
+            drawCuboid({ cx, wy1 - 0.02f, RZ1 + 0.10f }, NO_ROT, { ww + 0.10f, 0.05f, 0.24f }, TIMBER);                    // head
+            drawCuboid({ x0, wy0, RZ1 + 0.10f }, NO_ROT, { 0.06f, wy1 - wy0, 0.24f }, TIMBER);
+            drawCuboid({ x1, wy0, RZ1 + 0.10f }, NO_ROT, { 0.06f, wy1 - wy0, 0.24f }, TIMBER);
+            resetMaterialGloss();
+            // two sliding shoji panels (the right one slightly open to show the overlap)
+            for (int p = 0; p < 2; p++) {
+                const float pw = ww * 0.5f + 0.03f;
+                const float pcx = fminf(x0, x1) + pw * 0.5f + p * (ww - pw);
+                const float pz = zi + 0.03f + p * 0.035f;
+                // washi paper: emissive by day (daylight shining through), soft warm at night
+                setEmission(paperLit, paperLit * 0.96f, paperLit * (isDayTime ? 0.90f : 0.70f));
+                setMaterialGloss(0.0f, 0.0f, 0.0f, 1.0f);
+                glBegin(GL_QUADS);
+                glNormal3f(0, 0, -1);
+                setColor(PAPER);
+                glVertex3f(pcx + pw * 0.5f, wy0 + 0.02f, pz); glVertex3f(pcx - pw * 0.5f, wy0 + 0.02f, pz);
+                glVertex3f(pcx - pw * 0.5f, wy1 - 0.02f, pz); glVertex3f(pcx + pw * 0.5f, wy1 - 0.02f, pz);
+                glEnd();
+                clearEmission();
+                resetMaterialGloss();
+                // panel frame and kumiko lattice on the room side of the paper
+                woodGlossTimber();
+                const float fz = pz - 0.018f;
+                drawCuboid({ pcx - pw * 0.5f + 0.02f, wy0, fz }, NO_ROT, { 0.04f, wy1 - wy0, 0.035f }, TIMBER);
+                drawCuboid({ pcx + pw * 0.5f - 0.02f, wy0, fz }, NO_ROT, { 0.04f, wy1 - wy0, 0.035f }, TIMBER);
+                drawCuboid({ pcx, wy1 - 0.04f, fz }, NO_ROT, { pw, 0.04f, 0.035f }, TIMBER);
+                drawCuboid({ pcx, wy0, fz }, NO_ROT, { pw, 0.05f, 0.035f }, TIMBER);
+                const int cols = 3, rows = 5;
+                for (int i = 1; i < cols; i++)
+                    drawCuboid({ pcx - pw * 0.5f + i * pw / cols, wy0, fz }, NO_ROT, { 0.016f, wy1 - wy0, 0.02f }, TIMBER);
+                for (int j = 1; j < rows; j++)
+                    drawCuboid({ pcx, wy0 + j * (wy1 - wy0) / rows, fz }, NO_ROT, { pw - 0.04f, 0.016f, 0.02f }, TIMBER);
+                resetMaterialGloss();
+            }
+        }
+    }
 
-    // ── Floor lamp in the far corner ──
-    drawJapaneseFloorLanternTower({ -4.1f, floorY2, -3.0f }, NO_ROT, { 0.7f, 0.7f, 0.7f }, lightPoint);
+    // ── Floor lantern tower in the front-left corner ──
+    drawJapaneseFloorLanternTower({ RX0 + 0.35f, floorY2, RZ1 - 0.40f }, NO_ROT, { 0.7f, 0.7f, 0.7f }, lightPoint && fixtureOn[FX_TOWER]);
 
     // ── Clickable sliding shoji door at the staircase entrance ──
     {
@@ -1179,8 +1899,8 @@ static void drawTransparentPass()
     }
 
     // Clear glass pendant lamps above the dining counter
-    drawPendantGlassLamp({ -1.2f, 2.85f, -0.2f }, NO_ROT, ONE, lightPoint);
-    drawPendantGlassLamp({  1.2f, 2.85f, -0.2f }, NO_ROT, ONE, lightPoint);
+    drawPendantGlassLamp({ -1.2f, 2.85f, -0.2f }, NO_ROT, ONE, lightPoint && fixtureOn[FX_PENDANTS]);
+    drawPendantGlassLamp({  1.2f, 2.85f, -0.2f }, NO_ROT, ONE, lightPoint && fixtureOn[FX_PENDANTS]);
 
     // Clear glass condiment jars, water pitcher and tumblers on the counter
     drawClearGlassJar({ 1.65f, counterTop + 0.004f, -0.36f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.85f, 0.20f, 0.10f }); // shichimi chili
@@ -1214,6 +1934,9 @@ void drawInterior()
 {
     float FY = FLOOR_Y;
 
+    setInteriorLightScope(true);          // interior is lit only by its own fixtures (+ sun / moon through the windows)
+    clearEmission();                      // nothing from the exterior pass may leak a glow into the interior
+    drawInteriorShadows();                // shadows on the floor first, the furniture on top
     drawCounter({ 0, FY, -0.5f });
     float counterTop = FY + 1.06f;
 
@@ -1229,6 +1952,14 @@ void drawInterior()
         } else {
             drawStool({ x, FY, 0.8f });
         }
+    }
+
+    // Two small wooden tables for customers, each with two wooden chairs facing each other
+    for (int t = 0; t < 2; t++) {
+        float tx = (t == 0) ? -2.4f : 2.4f;
+        drawTable({ tx, FY, 2.8f }, NO_ROT, { 0.8f, 0.9f, 0.8f });
+        drawChair({ tx, FY, 2.8f - 0.55f }, NO_ROT, { 0.85f, 0.85f, 0.85f });                 // facing the table (+z)
+        drawChair({ tx, FY, 2.8f + 0.55f }, { 0, 180, 0 }, { 0.85f, 0.85f, 0.85f });
     }
 
     // 4 ramen sets — first bowl + chopsticks selectable as OBJ_BOWL
@@ -1250,28 +1981,32 @@ void drawInterior()
 
     // ── Overhead Lighting Fixtures (Spotlight, Area Light, Pendant Glass Lamps) ──
     // Ceiling Track Spotlight aimed at the chef prep station
-    drawSpotlightFixture({ -1.5f, 3.25f, -0.3f }, NO_ROT, ONE, lightSpot);
-    if (lightSpot) {
-        drawSpotlightBeam({ -1.5f, 3.25f, -0.3f }, 2.05f, 0.08f, 0.85f);
+    // Ceiling spotlights over the two customer tables (key 2); they are real spot lights pointing down
+    {
+        bool tl = lightSpot && fixtureOn[FX_SPOT];
+        for (int t = 0; t < 2; t++) {
+            float tx = (t == 0) ? -2.4f : 2.4f;
+            drawSpotlightFixture({ tx, 3.25f, 2.8f }, NO_ROT, { 1.3f, 1.3f, 1.3f }, tl, true);
+            if (tl) drawSpotlightBeam({ tx, 2.60f, 2.8f }, 1.41f, 0.22f, 0.80f);
+        }
     }
 
     // Ceiling Rectangular Area Light Luminaire (Softbox) above kitchen and counter
-    drawAreaLightFixture({ 0.0f, 3.22f, -1.2f }, NO_ROT, ONE, lightArea);
+    drawAreaLightFixture({ 0.0f, 3.22f, -1.2f }, NO_ROT, ONE, lightArea && fixtureOn[FX_PANEL]);
 
     // Japanese Box Lantern Cluster — andon-style washi-paper lanterns above dining area
-    drawJapaneseBoxLanternCluster({ 0.5f, 3.30f, 0.55f }, NO_ROT, ONE, lightPoint);
+    drawJapaneseBoxLanternCluster({ 0.5f, 3.30f, 0.55f }, NO_ROT, ONE, lightPoint && fixtureOn[FX_BOX]);
 
     drawBottle({  2.7f, counterTop, -0.35f }, NO_ROT, { 0.3f, 0.3f, 0.3f }, SOY);
     drawBottle({  2.9f, counterTop, -0.25f }, NO_ROT, { 0.3f, 0.3f, 0.3f }, RED, GOLD);
     drawCup({ -2.7f, counterTop, -0.30f }, NO_ROT, { 0.1f, 0.1f, 0.1f }, CUP_GREEN);
 
-    // Cash register at the far-right end of the service counter
-    drawCashRegister({ 3.1f, counterTop, -0.38f }, { 0, 180, 0 });
+    // (cash register removed)
 
     drawKitchen({ 0, FY, -3.2f });
 
-    drawHangingLantern({ -1.8f, 3.1f, 0.0f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
-    drawHangingLantern({  1.8f, 3.1f, 0.0f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
+    drawHangingLantern({ -1.8f, 2.95f, 0.0f }, NO_ROT, { 0.8f, 0.8f, 0.8f });   // top ring just under the ceiling (3.30)
+    drawHangingLantern({  1.8f, 2.95f, 0.0f }, NO_ROT, { 0.8f, 0.8f, 0.8f });
 
     // Noren curtain — selectable as OBJ_NOREN
     glPushMatrix();
@@ -1289,28 +2024,9 @@ void drawInterior()
     drawCuboid({ -3.8f, FY, 0.5f },        NO_ROT, { 0.4f,  0.35f, 0.3f  }, WOOD);
     drawCuboid({ -3.8f, FY + 0.35f, 0.5f }, NO_ROT, { 0.45f, 0.04f, 0.35f }, LIGHT_WOOD);
 
-    drawPlant({ 4.3f, FY, 2.0f });
 
     // Japanese floor lantern tower — left-front corner of the dining area
-    drawJapaneseFloorLanternTower({ -4.1f, FY, 3.2f }, NO_ROT, ONE, lightPoint);
-
-    // Staircase — right side of dining area, 10 solid-block steps rising to second floor
-    {
-        const float SW  = 1.0f;    // stair width  (x)
-        const float SH  = 0.332f;  // riser height per step
-        const float SD  = 0.30f;   // tread depth  (z)
-        const float SX  = 4.0f;    // center X (near right wall)
-        const float SZ0 = 2.5f;    // Z of front face of first step
-        const int   NS  = 10;      // number of steps
-
-        setMaterialPBR(Materials::WoodPolished, DARK_WOOD);
-        for (int i = 0; i < NS; i++) {
-            // Each block fills from FY up to this step's tread level
-            drawCuboid({ SX, FY, SZ0 - i * SD - SD * 0.5f }, NO_ROT,
-                       { SW, (i + 1) * SH, SD }, DARK_WOOD);
-        }
-        resetMaterialGloss();
-    }
+    drawJapaneseFloorLanternTower({ -4.1f, FY, 3.2f }, NO_ROT, ONE, lightPoint && fixtureOn[FX_TOWER]);
 
     // Second floor: tatami room with low table and tea
     drawSecondFloor();
@@ -1320,4 +2036,5 @@ void drawInterior()
 
     // All glass and steam last (see drawTransparentPass)
     drawTransparentPass();
+    setInteriorLightScope(false);
 }

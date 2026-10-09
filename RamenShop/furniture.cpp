@@ -14,12 +14,12 @@ void drawTable(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
-    woodGloss(0.60f, 90.0f);   // lacquered tabletop
-    drawCuboid({ 0, 0.72f, 0 }, NO_ROT, { 1.2f, 0.06f, 0.8f }, LIGHT_WOOD);
-    woodGloss(0.25f, 45.0f);
+    woodGloss(1.00f, 55.0f);   // lacquered tabletop
+    drawTexturedBox({ 0, 0.69f, 0 }, NO_ROT, { 1.2f, 0.06f, 0.8f }, getTexID(TEX_WOOD), WHITE, 1.0f);
+    woodGloss(0.80f, 50.0f);
     for (int sx = -1; sx <= 1; sx += 2)
         for (int sz = -1; sz <= 1; sz += 2)
-            drawCuboid({ sx * 0.52f, 0, sz * 0.32f }, NO_ROT, { 0.07f, 0.72f, 0.07f }, DARK_WOOD);
+            drawCuboid({ sx * 0.52f, 0, sz * 0.32f }, NO_ROT, { 0.07f, 0.69f, 0.07f }, DARK_WOOD);
     resetMaterialGloss();
     glPopMatrix();
 }
@@ -28,10 +28,10 @@ void drawChair(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
-    woodGloss(0.50f, 70.0f);   // seat + backrest
-    drawCuboid({ 0, 0.42f, 0 }, NO_ROT, { 0.45f, 0.05f, 0.45f }, WOOD);
-    drawCube({ 0, 0.85f, -0.2f }, NO_ROT, { 0.45f, 0.15f, 0.04f }, WOOD);
-    woodGloss(0.25f, 45.0f);   // legs + back posts
+    woodGloss(0.95f, 50.0f);   // seat + backrest
+    drawTexturedBox({ 0, 0.42f, 0 }, NO_ROT, { 0.45f, 0.05f, 0.45f }, getTexID(TEX_WOOD), WHITE, 1.8f);
+    drawTexturedBox({ 0, 0.85f, -0.2f }, NO_ROT, { 0.45f, 0.15f, 0.04f }, getTexID(TEX_WOOD), WHITE, 1.8f);
+    woodGloss(0.80f, 50.0f);   // legs + back posts
     for (int sx = -1; sx <= 1; sx += 2)
         for (int sz = -1; sz <= 1; sz += 2)
             drawCuboid({ sx * 0.19f, 0, sz * 0.19f }, NO_ROT, { 0.05f, 0.42f, 0.05f }, DARK_WOOD);
@@ -47,11 +47,11 @@ void drawStool(Vec3 pos, Vec3 rot, Vec3 scale)
     applyTransform(pos, rot, scale);
 
     // Wide base disc
-    woodGloss(0.40f, 70.0f);
+    woodGloss(0.75f, 50.0f);
     drawCylinder({ 0, 0.02f, 0 }, NO_ROT, { 0.36f, 0.04f, 0.36f }, DARK_WOOD);
 
     // Thick central wooden pedestal post
-    woodGloss(0.30f, 55.0f);
+    woodGloss(0.70f, 45.0f);
     drawCylinderCustom({ 0, 0.06f, 0 }, NO_ROT, ONE, WOOD, 0.065f, 0.055f, 0.64f);
 
     // Decorative ring at mid-height
@@ -59,7 +59,7 @@ void drawStool(Vec3 pos, Vec3 rot, Vec3 scale)
     drawTorus({ 0, 0.36f, 0 }, NO_ROT, ONE, DARK_WOOD, 0.018f, 0.13f);
 
     // Round wooden seat
-    woodGloss(0.75f, 100.0f);   // glossy seat top catches the pendant light
+    woodGloss(1.00f, 55.0f);   // glossy lacquered seat top catches the pendant light
     drawCylinder({ 0, 0.70f, 0 }, NO_ROT, { 0.38f, 0.055f, 0.38f }, LIGHT_WOOD);
 
     resetMaterialGloss();
@@ -86,20 +86,19 @@ void drawCounter(Vec3 pos, Vec3 rot, Vec3 scale)
     applyTransform(pos, rot, scale);
 
     // Main counter body: polished wood with satin finish
-    woodGloss(0.40f, 60.0f);
+    woodGloss(0.65f, 40.0f);
     drawTexturedBox({ 0, 0, 0 }, NO_ROT, { 6, 1.0f, 0.6f },
                     getTexID(TEX_WOOD), WHITE, 1.0f);
 
     // Top surface: slightly more glossy, like finished lacquer
-    woodGloss(0.85f, 120.0f);   // lacquered counter top: bright, tight highlight
+    woodGloss(1.00f, 60.0f);   // lacquered counter top: bright, clearly visible highlight
     drawTexturedBox({ 0, 1.0f, 0.05f }, NO_ROT, { 6.2f, 0.06f, 0.8f },
                     getTexID(TEX_WOOD), WHITE, 0.5f);
 
     // Support braces: dark matte wood
     resetMaterialGloss();
     setMaterialPBR(Materials::WoodMatte, DARK_WOOD);
-    for (float x = -2.75f; x <= 2.76f; x += 0.5f)
-        drawCuboid({ x, 0.05f, 0.31f }, NO_ROT, { 0.05f, 0.9f, 0.02f }, DARK_WOOD);
+    // (vertical dark braces on the counter front removed)
 
     glPopMatrix();
 }
@@ -108,10 +107,12 @@ void drawShelf(Vec3 pos, Vec3 rot, Vec3 scale)
 {
     glPushMatrix();
     applyTransform(pos, rot, scale);
+    woodGloss(0.35f, 55.0f);   // satin varnished shelf
     drawCuboid({ -1.0f, 0, 0 }, NO_ROT, { 0.04f, 0.68f, 0.3f }, DARK_WOOD);
     drawCuboid({  1.0f, 0, 0 }, NO_ROT, { 0.04f, 0.68f, 0.3f }, DARK_WOOD);
     for (int i = 0; i < 2; i++)
         drawCuboid({ 0, i * 0.6f, 0 }, NO_ROT, { 2.04f, 0.04f, 0.3f }, WOOD);
+    resetMaterialGloss();
     glPopMatrix();
 }
 
@@ -596,10 +597,12 @@ void drawLargeRamenPot(Vec3 pos, Vec3 rot, Vec3 scale)
     glPushMatrix();
     applyTransform(pos, rot, scale);
 
-    // Main stainless steel vessel — highly polished
-    setMaterialPBRMetallic(Materials::Polished, STEEL);
+    // Main stainless steel vessel — real metal: dark diffuse body, strong bright specular
+    // (metals reflect most light as specular, very little as diffuse)
+    const Color POT_STEEL = { 0.42f, 0.43f, 0.46f };
+    setMaterialGloss(1.0f, 1.0f, 1.0f, 90.0f);
     beginSphereReflect();
-    drawCylinderCustom({ 0, 0, 0 }, NO_ROT, ONE, STEEL, 0.30f, 0.32f, 0.55f);
+    drawCylinderCustom({ 0, 0, 0 }, NO_ROT, ONE, POT_STEEL, 0.30f, 0.32f, 0.55f);
     endSphereReflect();
 
     // Broth liquid inside — glossy warm surface
@@ -612,10 +615,10 @@ void drawLargeRamenPot(Vec3 pos, Vec3 rot, Vec3 scale)
     drawTorus({ 0, 0.535f, 0 }, NO_ROT, ONE,
               { 0.95f, 0.90f, 0.75f }, 0.012f, 0.27f);
 
-    // Thick rolled rim — brushed stainless
-    setMaterialPBRMetallic(Materials::BrushedMetal, STEEL);
+    // Thick rolled rim — polished stainless
+    setMaterialGloss(1.0f, 1.0f, 1.0f, 120.0f);
     beginSphereReflect();
-    drawTorus({ 0, 0.55f, 0 }, NO_ROT, ONE, STEEL, 0.025f, 0.32f);
+    drawTorus({ 0, 0.55f, 0 }, NO_ROT, ONE, { 0.50f, 0.51f, 0.54f }, 0.025f, 0.32f);
     endSphereReflect();
 
     // Two welded handles with riveted mounting plates

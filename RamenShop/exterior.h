@@ -32,6 +32,7 @@ void drawFireflies(Vec3 pos, float radius, int count);
 void drawStoneLantern(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 void drawBridge(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);
 extern bool outdoorShadowDetail;  // true: shadow pass draws full-detail geometry, false: cheap crown shapes
+bool cameraInsideShop();                         // camera is inside the shop building
 void updateOutdoorView();                       // once per frame, after the camera is set (distance detail)
 extern bool outdoorShadowPass;   // true while the outdoor scene is drawn flattened into the shadow mask
 void drawDuck(Vec3 pos, Vec3 rot = NO_ROT, Vec3 scale = ONE);

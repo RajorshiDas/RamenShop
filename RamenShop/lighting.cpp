@@ -29,6 +29,101 @@ bool lightPoint       = true;
 bool lightSpot        = true;
 bool lightArea        = true;
 
+bool fixtureOn[FX_COUNT] = { true, true, true, true, true, true, true };
+
+float pointFixtureShare()
+{
+    return fixtureOn[FX_PENDANTS] ? 1.0f : 0.0f;      // box / hanging lanterns and the tower have their own lights now
+}
+
+bool anyInteriorLightOn()
+{
+    for (int i = 0; i < FX_COUNT; i++) {
+        bool grp = (i == FX_SPOT) ? lightSpot : ((i == FX_PANEL || i == FX_DOME) ? lightArea : lightPoint);
+        if (grp && fixtureOn[i]) return true;
+    }
+    return false;
+}
+
+// ─── Interior light slots ────────────────────────────────────────────────────
+// OpenGL has only 8 lights.  Inside the shop the four lights that normally serve the OUTSIDE
+// (entrance lanterns 2 and 3, street lamps 5, shop sign 6) are reused for the other interior
+// fixtures, so each interior fixture is a real light with its own ambient, diffuse and specular:
+//   LIGHT1 pendants   LIGHT4 kitchen spot   LIGHT7 second-floor dome   (as before)
+//   LIGHT2 hanging lanterns   LIGHT3 paper box lanterns   LIGHT5 ceiling panel   LIGHT6 floor tower
+struct InteriorSlot { int light; int fixture; bool* group; float x, y, z; float r, g, b; float lin, quad; };
+void applyInteriorFixtureLights()
+{
+    static const GLfloat ZERO4[] = { 0, 0, 0, 1 };
+    // Slot LIGHT2: light from the entrance lanterns that gets through the thin paper walls (weaker, from outside).
+    // Slot LIGHT3: the hanging lanterns and the paper box lanterns merged (they hang in the same area).
+    // (the ceiling panel is merged into the same slot as the lanterns: they all hang in the same area)
+    // Slot LIGHT5: the right customer-table lamp (the left one is LIGHT4).  Slot LIGHT6: floor lantern tower.
+    float wH = (lightPoint && fixtureOn[FX_HANGING]) ? 1.0f : 0.0f, wB = (lightPoint && fixtureOn[FX_BOX]) ? 1.0f : 0.0f;
+    float wP = (lightArea && fixtureOn[FX_PANEL]) ? 1.0f : 0.0f;
+    float wS = wH + wB + wP;
+    float bx = (wS > 0.0f) ? (0.0f * wH + 0.5f * wB + 0.0f * wP) / wS : 0.25f;
+    float bz = (wS > 0.0f) ? (0.1f * wH + 0.6f * wB - 1.2f * wP) / wS : 0.35f;
+    bool boxOn = wS > 0.0f;
+    bool paperOn = lightPoint;                                   // entrance lanterns (group switch)
+    static bool dummyOn = true;
+    InteriorSlot slots[4] = {
+        { GL_LIGHT2, -1,         &paperOn,     0.0f, 2.60f,  4.7f, 1.00f, 0.55f, 0.18f, 0.12f, 0.06f },   // through the paper
+        { GL_LIGHT3, -2,         &boxOn,       bx,   3.05f,  bz,   1.00f, 0.82f, 0.56f, 0.15f, 0.07f },
+        { GL_LIGHT5, FX_SPOT,    &lightSpot,   2.4f, 3.25f,  2.8f, 0.97f, 0.95f, 0.84f, 0.09f, 0.032f },  // right table spotlight
+        { GL_LIGHT6, FX_TOWER,   &lightPoint, -4.1f, 1.40f,  3.2f, 1.00f, 0.82f, 0.56f, 0.28f, 0.13f },
+    };
+    (void)dummyOn;
+    float day = isDayTime ? 0.40f : 1.0f;
+    for (auto& sl : slots) {
+        bool on = *sl.group && (sl.fixture >= 0 ? fixtureOn[sl.fixture] : true);
+        float k = on ? day : 0.0f;
+        if (sl.fixture == -1) k = on ? (isDayTime ? 0.12f : 0.34f) : 0.0f;                  // paper lets only some light through
+        if (sl.fixture == -2) k = on ? (isDayTime ? 0.40f : 1.0f) * ((wS > 2.5f) ? 1.5f : ((wS > 1.5f) ? 1.25f : 1.0f)) : 0.0f;
+        GLfloat pos[] = { sl.x, sl.y, sl.z, 1.0f };
+        glLightfv(sl.light, GL_POSITION, pos);
+        if (sl.light == GL_LIGHT5) {                       // the table spotlight: a real downward cone
+            GLfloat dn[] = { 0.0f, -1.0f, 0.0f };
+            glLightf(sl.light, GL_SPOT_CUTOFF, 28.0f);
+            glLightf(sl.light, GL_SPOT_EXPONENT, 35.0f);
+            glLightfv(sl.light, GL_SPOT_DIRECTION, dn);
+        } else glLightf(sl.light, GL_SPOT_CUTOFF, 180.0f);
+        glLightf(sl.light, GL_CONSTANT_ATTENUATION, 1.0f);
+        glLightf(sl.light, GL_LINEAR_ATTENUATION, sl.lin);
+        glLightf(sl.light, GL_QUADRATIC_ATTENUATION, sl.quad);
+        // Paper lanterns: a soft ambient glow (light scattered by the paper) plus normal
+        // diffuse and specular, kept moderate so pale surfaces do not wash out to white.
+        const bool lantern = (sl.light == GL_LIGHT3 || sl.light == GL_LIGHT6);
+        const float ak = lantern ? 0.16f : 0.05f, dk = lantern ? 0.55f : 0.78f, sk = lantern ? 0.75f : 1.00f;
+        GLfloat a[] = { ak * sl.r * k, ak * sl.g * k, ak * sl.b * k, 1.0f };
+        GLfloat d[] = { dk * sl.r * k, dk * sl.g * k, dk * sl.b * k, 1.0f };
+        GLfloat sp[] = { sk * sl.r * k, sk * sl.g * k, sk * sl.b * k, 1.0f };
+        glLightfv(sl.light, GL_AMBIENT,  lightAmbient  ? a  : ZERO4);
+        glLightfv(sl.light, GL_DIFFUSE,  lightDiffuse  ? d  : ZERO4);
+        glLightfv(sl.light, GL_SPECULAR, lightSpecular ? sp : ZERO4);
+        glEnable(sl.light);
+    }
+}
+
+// Back to the outdoor roles of lights 2, 3, 5, 6
+void restoreExteriorFixtureLights()
+{
+    for (int i = 2; i <= 3; i++) {
+        glLightf(GL_LIGHT0 + i, GL_CONSTANT_ATTENUATION,  1.0f);
+        glLightf(GL_LIGHT0 + i, GL_LINEAR_ATTENUATION,    0.22f);
+        glLightf(GL_LIGHT0 + i, GL_QUADRATIC_ATTENUATION, 0.20f);
+    }
+    glLightf(GL_LIGHT5, GL_SPOT_CUTOFF, 180.0f);                 // street lamps are ordinary point lights again
+    glLightf(GL_LIGHT5, GL_CONSTANT_ATTENUATION,  0.8f);
+    glLightf(GL_LIGHT5, GL_LINEAR_ATTENUATION,    0.045f);
+    glLightf(GL_LIGHT5, GL_QUADRATIC_ATTENUATION, 0.012f);
+    glLightf(GL_LIGHT6, GL_CONSTANT_ATTENUATION,  1.0f);
+    glLightf(GL_LIGHT6, GL_LINEAR_ATTENUATION,    0.18f);
+    glLightf(GL_LIGHT6, GL_QUADRATIC_ATTENUATION, 0.10f);
+    applyLightingParameters();          // colours + enables for the outdoor roles
+    placeLightsInWorldSpace();          // positions (current modelview = camera view)
+}
+
 // ─── Preset system ─────────────────────────────────────────────────────────
 static int currentPresetIdx = 0;
 
@@ -141,7 +236,7 @@ void initLighting()
     }
 
     // ── KITCHEN: Spotlight — focused beam ~2.5m, narrow cone ─────────
-    glLightf(GL_LIGHT4, GL_SPOT_CUTOFF,    28.0f);
+    glLightf(GL_LIGHT4, GL_SPOT_CUTOFF,    28.0f);           // table spotlights (left = LIGHT4, right = LIGHT5)
     glLightf(GL_LIGHT4, GL_SPOT_EXPONENT,  35.0f);
     glLightf(GL_LIGHT4, GL_CONSTANT_ATTENUATION,  1.0f);
     glLightf(GL_LIGHT4, GL_LINEAR_ATTENUATION,    0.09f);
@@ -213,7 +308,7 @@ void placeLightsInWorldSpace()
     // ── KITCHEN ──────────────────────────────────────────────────────────
 
     // LIGHT4: Kitchen ceiling spotlight — points straight down at prep area
-    GLfloat pos4[] = { -1.5f, 3.25f, -0.3f, 1.0f };
+    GLfloat pos4[] = { -2.4f, 3.25f, 2.8f, 1.0f };         // left table spotlight (the right one is LIGHT5)
     GLfloat dir4[] = { 0.0f, -1.0f, 0.0f };
     glLightfv(GL_LIGHT4, GL_POSITION, pos4);
     glLightfv(GL_LIGHT4, GL_SPOT_DIRECTION, dir4);
@@ -237,14 +332,10 @@ void applyLightingParameters()
     //  Night: very low → dark areas remain dark, pools of light stand out
     //  Day:   moderate → fills shadows naturally like diffused skylight
     // ════════════════════════════════════════════════════════════════════
-    if (isDayTime) {
-        GLfloat dayAmb[] = { 0.42f, 0.42f, 0.46f, 1.0f };
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lightAmbient ? dayAmb : ZERO4);
-    } else {
-        // Low but visible → dark areas maintain shape, pools of light stand out
-        GLfloat nightAmb[] = { 0.04f, 0.04f, 0.06f, 1.0f };
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lightAmbient ? nightAmb : ZERO4);
-    }
+    // No scene-wide ambient: in the Phong model every light source contributes its OWN
+    // ambient, diffuse and specular terms, so switching a light off removes all three.
+    // (A constant global ambient would keep lighting objects even with every light off.)
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ZERO4);
 
     // ════════════════════════════════════════════════════════════════════
     //  OUTDOOR LIGHTING
@@ -255,7 +346,7 @@ void applyLightingParameters()
         glEnable(GL_LIGHT0);
         if (isDayTime) {
             // Bright warm sunlight (~5500K warm gold)
-            GLfloat a0[] = { 0.10f, 0.10f, 0.08f, 1.0f };
+            GLfloat a0[] = { 0.38f, 0.38f, 0.42f, 1.0f };      // skylight ambient belongs to the sun
             GLfloat d0[] = { 0.85f, 0.78f, 0.55f, 1.0f };
             GLfloat s0[] = { 0.95f, 0.90f, 0.75f, 1.0f };
             glLightfv(GL_LIGHT0, GL_AMBIENT,  lightAmbient  ? a0 : ZERO4);
@@ -362,13 +453,13 @@ void applyLightingParameters()
     //   Primary interior light — warm amber pool over the counter area
     if (lightPoint) {
         glEnable(GL_LIGHT1);
-        float dayScale = isDayTime ? 0.30f : 1.0f;
+        float dayScale = (isDayTime ? 0.30f : 1.0f) * pointFixtureShare();
 
         GLfloat a1[] = { 0.03f * dayScale, 0.02f * dayScale, 0.01f * dayScale, 1.0f };
         GLfloat d1[] = { 0.70f * flickPendant * dayScale,
                          0.48f * flickPendant * dayScale,
                          0.18f * flickPendant * dayScale, 1.0f };
-        GLfloat s1[] = { 0.80f * dayScale, 0.65f * dayScale, 0.40f * dayScale, 1.0f };
+        GLfloat s1[] = { 1.00f * dayScale, 0.92f * dayScale, 0.76f * dayScale, 1.0f };
 
         glLightfv(GL_LIGHT1, GL_AMBIENT,  lightAmbient  ? a1 : ZERO4);
         glLightfv(GL_LIGHT1, GL_DIFFUSE,  lightDiffuse  ? d1 : ZERO4);
@@ -385,11 +476,11 @@ void applyLightingParameters()
     //   Functional task lighting — slightly warm neutral, focused cone
     if (lightSpot) {
         glEnable(GL_LIGHT4);
-        float daySpot = isDayTime ? 0.5f : 1.0f;
+        float daySpot = (isDayTime ? 0.5f : 1.0f) * (fixtureOn[FX_SPOT] ? 1.0f : 0.0f);
 
         GLfloat a4[] = { 0.01f * daySpot, 0.01f * daySpot, 0.01f * daySpot, 1.0f };
         GLfloat d4[] = { 0.90f * daySpot, 0.88f * daySpot, 0.78f * daySpot, 1.0f };
-        GLfloat s4[] = { 0.95f * daySpot, 0.93f * daySpot, 0.85f * daySpot, 1.0f };
+        GLfloat s4[] = { 1.00f * daySpot, 1.00f * daySpot, 0.95f * daySpot, 1.0f };
 
         glLightfv(GL_LIGHT4, GL_AMBIENT,  lightAmbient  ? a4 : ZERO4);
         glLightfv(GL_LIGHT4, GL_DIFFUSE,  lightDiffuse  ? d4 : ZERO4);
@@ -406,14 +497,14 @@ void applyLightingParameters()
     //   Gentle ambient for the tatami room — quiet, restful light
     if (lightArea) {
         glEnable(GL_LIGHT7);
-        float dayUp = isDayTime ? 0.25f : 1.0f;
+        float dayUp = (isDayTime ? 0.25f : 1.0f) * (fixtureOn[FX_DOME] ? 1.0f : 0.0f);
         float flickUp = 1.0f + 0.03f * sinf(animTime * 3.0f);
 
         GLfloat a7[] = { 0.02f * dayUp, 0.015f * dayUp, 0.008f * dayUp, 1.0f };
         GLfloat d7[] = { 0.40f * dayUp * flickUp,
                          0.30f * dayUp * flickUp,
                          0.14f * dayUp * flickUp, 1.0f };
-        GLfloat s7[] = { 0.25f * dayUp, 0.20f * dayUp, 0.10f * dayUp, 1.0f };
+        GLfloat s7[] = { 0.60f * dayUp, 0.52f * dayUp, 0.36f * dayUp, 1.0f };
 
         glLightfv(GL_LIGHT7, GL_AMBIENT,  lightAmbient  ? a7 : ZERO4);
         glLightfv(GL_LIGHT7, GL_DIFFUSE,  lightDiffuse  ? d7 : ZERO4);
