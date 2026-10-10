@@ -160,7 +160,7 @@ void rtBuildShopScene(rt::Scene& s, RtObjectBounds bounds[RTO_COUNT])
     int mGlaze   = reflective(s, rt::MAT_GLAZE, C(BOWL_RED), { 0.05f, 0.05f, 0.05f }, { 0.9f, 0.9f, 0.9f }, 110.0f);
     int mSoup    = reflective(s, rt::MAT_LIQUID, { 0.92f, 0.74f, 0.40f }, { 0.03f, 0.03f, 0.03f }, { 0.9f, 0.75f, 0.5f }, 85.0f);
     int mGlass   = reflective(s, rt::MAT_GLASS, { 0.97f, 0.99f, 0.98f }, { 0.04f, 0.04f, 0.04f }, { 1, 1, 1 }, 140.0f);
-    int mMirror  = reflective(s, rt::MAT_MIRROR, { 0.05f, 0.05f, 0.05f }, { 0.90f, 0.91f, 0.92f }, { 1, 1, 1 }, 120.0f);
+    int mMirror  = reflective(s, rt::MAT_MIRROR, { 0.0f, 0.0f, 0.0f }, { 0.96f, 0.96f, 0.96f }, { 1, 1, 1 }, 200.0f);
     int mHoodDuct= diffuse(s, C(DARK_GRAY));
     int mNoren   = diffuse(s, { 0.78f, 0.13f, 0.11f }, { 0.05f, 0.05f, 0.05f }, 8.0f);
 

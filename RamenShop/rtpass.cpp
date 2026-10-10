@@ -74,11 +74,22 @@ void main()
     if (info.g < 0.5) discard;
     float traced = linearDepth(info.r);
     float raster = linearDepth(texture2D(frameDepth, gl_FragCoord.xy / viewport).r);
-    float tol    = 0.004 + 0.003 * traced;
+    float tol    = 0.002 + 0.0015 * traced;
     if (info.g < 1.5) { if (abs(raster - traced) > tol) discard; }  // 1: the raster shows this same surface
     else if (raster < traced - tol) discard;                         // 2: clear glass, nothing opaque in front
     vec2 sc   = gl_FragCoord.xy / (cell * gridSize);                 // continuous UV for bilinear color
-    vec4 a = texture2D(rtAdd, sc);
+    vec2 ts   = 1.0 / gridSize;                                      // one texel in UV space
+    // 3x3 Gaussian-weighted blur (1-2-1 kernel) for smooth reflections
+    vec4 a  = texture2D(rtAdd, sc) * 4.0;
+    a += texture2D(rtAdd, sc + vec2(-ts.x, 0.0)) * 2.0;
+    a += texture2D(rtAdd, sc + vec2( ts.x, 0.0)) * 2.0;
+    a += texture2D(rtAdd, sc + vec2(0.0, -ts.y)) * 2.0;
+    a += texture2D(rtAdd, sc + vec2(0.0,  ts.y)) * 2.0;
+    a += texture2D(rtAdd, sc + vec2(-ts.x, -ts.y));
+    a += texture2D(rtAdd, sc + vec2( ts.x, -ts.y));
+    a += texture2D(rtAdd, sc + vec2(-ts.x,  ts.y));
+    a += texture2D(rtAdd, sc + vec2( ts.x,  ts.y));
+    a /= 16.0;
     gl_FragColor = vec4(a.rgb + a.a * texture2D(frameColor, gl_FragCoord.xy / viewport).rgb, 1.0);
 }
 )GLSL";
