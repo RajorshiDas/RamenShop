@@ -2,7 +2,7 @@
 
 #include "shapes.h"
 
-enum CameraMode { CAM_ORBIT, CAM_FPS, CAM_FOCUSED, CAM_UPPER, CAM_LIGHT, CAM_POND };
+enum CameraMode { CAM_ORBIT, CAM_FPS, CAM_FOCUSED, CAM_UPPER, CAM_LIGHT, CAM_POND, CAM_BOWL };   // CAM_BOWL: key B
 extern CameraMode currentCamMode;
 
 // Orbit Camera parameters (exterior overview)

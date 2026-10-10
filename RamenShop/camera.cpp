@@ -2,7 +2,9 @@
 #include "scene.h"
 #include "objects.h"
 #include "shader.h"
-#include "raytracer.h"
+#include "shadowmap.h"
+#include "refraction.h"
+#include "rtpass.h"
 #include "game.h"
 #include "lighting.h"
 #include <cstdio>
@@ -38,6 +40,14 @@ float counterAngle    = 16.0f;     // slightly off-axis: shows the counter, kitc
 float counterDistance  = 4.6f;
 float counterHeight   = 1.75f;     // roughly seated-guest eye height
 float counterLookAtY  = 1.30f;
+
+// Bowl close-up (key B): orbits the second ramen bowl on the counter, which stands between the
+// glass ball, a water glass and the jug - a good spot to see the ray-traced reflections (R)
+static const float BOWL_X = -0.70f, BOWL_Y = FLOOR_Y + 1.06f + 0.08f, BOWL_Z = -0.30f;
+float bowlAngle    = 20.0f;        // degrees around the bowl, 0 = from the dining side
+float bowlDistance = 0.70f;        // horizontal distance from the bowl
+float bowlHeight   = 0.32f;        // eye height above the bowl
+static CameraMode camBeforeBowl = CAM_ORBIT;
 
 // Key states
 bool keyStates[256]        = { false };
@@ -90,7 +100,8 @@ void updateWindowTitle()
         (currentCamMode == CAM_FPS)     ? "Walkthrough" :
         (currentCamMode == CAM_UPPER)   ? "Upper Room" :
         (currentCamMode == CAM_POND)    ? "Pond View" :
-        (currentCamMode == CAM_LIGHT)   ? "Light Tour" : "Counter View";
+        (currentCamMode == CAM_LIGHT)   ? "Light Tour" :
+        (currentCamMode == CAM_BOWL)    ? "Bowl Close-up[B]" : "Counter View";
     char tourBuf[96];
     if (currentCamMode == CAM_LIGHT) {
         sprintf_s(tourBuf, sizeof(tourBuf), "Light: %s %s [8 next, 9 toggle]", getLightTourName(), (lightStop >= 0 && fixtureOn[lightStop]) ? "ON" : "OFF");
@@ -101,14 +112,15 @@ void updateWindowTitle()
         (selectedObj == OBJ_NONE) ? "none" : sceneObjects[selectedObj].name;
 
     sprintf_s(buf, sizeof(buf),
-        "3D Ramen Shop | %s | Cam:%s[C] | Sun/Moon[0]:%s | Lights 1-7: %c %c %c %c %c %c %c | [-] Amb:%s [=] Dif:%s [Bksl] Spec:%s | [8] tour",
+        "3D Ramen Shop | %s | Cam:%s[C] | Sun/Moon[0]:%s | Lights 1-7: %c %c %c %c %c %c %c | [-] Amb:%s [=] Dif:%s [Bksl] Spec:%s | [8] tour | Shadow[Y]:%s Glass[Z]:%s RT[R]:%s",
         getDayNightModeName(),
         camName,
         lightDirectional ? "ON" : "off",
         (lightPoint && fixtureOn[0]) ? '1' : '-', (lightSpot && fixtureOn[1]) ? '2' : '-', (lightArea && fixtureOn[2]) ? '3' : '-',
         (lightPoint && fixtureOn[3]) ? '4' : '-', (lightPoint && fixtureOn[4]) ? '5' : '-', (lightPoint && fixtureOn[5]) ? '6' : '-',
         (lightArea && fixtureOn[6]) ? '7' : '-',
-        lightAmbient ? "ON" : "off", lightDiffuse ? "ON" : "off", lightSpecular ? "ON" : "off");
+        lightAmbient ? "ON" : "off", lightDiffuse ? "ON" : "off", lightSpecular ? "ON" : "off",
+        getShadowStatus(), getGlassStatus(), getRayTracingStatus());
     glutSetWindowTitle(buf);
 }
 
@@ -148,6 +160,13 @@ void applyCameraView()
         float a = upperAngle * PI / 180.0f;
         gluLookAt(upperDistance * sin(a), upperHeight, upperDistance * cos(a),
                   0, upperLookAtY, 0,
+                  0, 1, 0);
+    }
+    else if (currentCamMode == CAM_BOWL) {
+        // Close look at a ramen bowl (and the glass ball, glass and jug beside it)
+        float a = bowlAngle * PI / 180.0f;
+        gluLookAt(BOWL_X + bowlDistance * sin(a), BOWL_Y + bowlHeight, BOWL_Z + bowlDistance * cos(a),
+                  BOWL_X, BOWL_Y, BOWL_Z,
                   0, 1, 0);
     }
     else {   // CAM_FOCUSED — orbit around the counter area
@@ -339,10 +358,17 @@ void handleKeyboardDown(unsigned char key, int, int)
         if (key == '.')  objScaleMul(ds);           // grow
     }
 
-    // ── Ray Tracing Toggles ──
-    if (key == 'r' || key == 'R') { toggleRayTracing(); updateWindowTitle(); }
-    if (key == 'b' || key == 'B') { cycleRayBounces();  updateWindowTitle(); }
-    if (key == 'y' || key == 'Y') { toggleRayShadows(); updateWindowTitle(); }
+    // ── B: bowl close-up camera on / back to the previous camera (not during the cooking game) ──
+    if ((key == 'b' || key == 'B') && !gameActive) {
+        if (currentCamMode != CAM_BOWL) { camBeforeBowl = currentCamMode; currentCamMode = CAM_BOWL; }
+        else                              currentCamMode = camBeforeBowl;
+        updateWindowTitle();
+    }
+
+    // ── Effect toggles: Y soft shadow mapping, Z glass refraction ──
+    if (key == 'y' || key == 'Y') { toggleShadowMapping();   updateWindowTitle(); }
+    if (key == 'z' || key == 'Z') { toggleGlassRefraction(); updateWindowTitle(); }
+    if (key == 'r' || key == 'R') { toggleRayTracing();      updateWindowTitle(); }   // CPU ray tracer
 
     if (key == 'g' || key == 'G') { usePhongShading = !usePhongShading; updateWindowTitle(); }
     if (key == 'p' || key == 'P') { cycleLightingPreset(); updateWindowTitle(); }
@@ -387,6 +413,13 @@ void handleSpecialDown(int key, int, int)
         if (key == GLUT_KEY_DOWN)                           counterDistance += 0.5f;
         if (key == GLUT_KEY_PAGE_UP)   { counterHeight += 0.3f; counterLookAtY += 0.2f; }
         if (key == GLUT_KEY_PAGE_DOWN) { counterHeight -= 0.3f; counterLookAtY -= 0.2f; }
+    } else if (currentCamMode == CAM_BOWL) {
+        if (key == GLUT_KEY_LEFT)                          bowlAngle    -= 5;
+        if (key == GLUT_KEY_RIGHT)                         bowlAngle    += 5;
+        if (key == GLUT_KEY_UP && bowlDistance > 0.45f)    bowlDistance -= 0.05f;
+        if (key == GLUT_KEY_DOWN && bowlDistance < 2.5f)   bowlDistance += 0.05f;
+        if (key == GLUT_KEY_PAGE_UP && bowlHeight < 1.5f)  bowlHeight   += 0.05f;
+        if (key == GLUT_KEY_PAGE_DOWN && bowlHeight > 0.06f) bowlHeight -= 0.05f;
     } else if (currentCamMode == CAM_FPS) {
         if (key == GLUT_KEY_PAGE_UP)              fpsPos.y += 0.3f;
         if (key == GLUT_KEY_PAGE_DOWN && fpsPos.y > 0.8f) fpsPos.y -= 0.3f;
@@ -476,6 +509,8 @@ void handleMouseClick(int button, int state, int x, int y)
             upperDistance -= 0.5f;
         else if (currentCamMode == CAM_POND && pondDistance > 3)
             pondDistance -= 0.5f;
+        else if (currentCamMode == CAM_BOWL && bowlDistance > 0.45f)
+            bowlDistance -= 0.05f;
         else if (currentCamMode == CAM_FOCUSED && counterDistance > 1.5f)
             counterDistance -= 0.5f;
         else if (currentCamMode == CAM_FPS)
@@ -489,6 +524,8 @@ void handleMouseClick(int button, int state, int x, int y)
             upperDistance += 0.5f;
         else if (currentCamMode == CAM_POND && pondDistance < 25)
             pondDistance += 0.5f;
+        else if (currentCamMode == CAM_BOWL && bowlDistance < 2.5f)
+            bowlDistance += 0.05f;
         else if (currentCamMode == CAM_FOCUSED)
             counterDistance += 0.5f;
         else if (currentCamMode == CAM_FPS && fpsPos.y > 0.8f)
@@ -519,6 +556,11 @@ void handleMouseMotion(int x, int y)
         upperAngle  += dx * 0.35f;
         upperHeight += dy * 0.04f;
         if (upperHeight < 3.8f) upperHeight = 3.8f;
+    } else if (currentCamMode == CAM_BOWL) {
+        bowlAngle  += dx * 0.35f;
+        bowlHeight += dy * 0.005f;
+        if (bowlHeight < 0.06f) bowlHeight = 0.06f;
+        if (bowlHeight > 1.5f)  bowlHeight = 1.5f;
     } else if (currentCamMode == CAM_FOCUSED) {
         counterAngle  += dx * 0.35f;
         counterHeight += dy * 0.04f;

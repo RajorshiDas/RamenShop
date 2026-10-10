@@ -1,6 +1,7 @@
 #include "shader.h"
 #include "scene.h"
 #include "lighting.h"
+#include "shadowmap.h"
 #include <cstdio>
 #include <cstdlib>
 
@@ -19,6 +20,10 @@ static GLint uFogOn      = -1;
 static GLint uFogDensity = -1;
 static GLint uFogColor   = -1;
 static GLint uLightOn    = -1;   // float[8]
+static GLint uShadowOn     = -1;   // soft shadow mapping (shadowmap.cpp)
+static GLint uShadowMap    = -1;
+static GLint uShadowMatrix = -1;
+static GLint uShadowTexel  = -1;
 
 // ─── GLSL source ───────────────────────────────────────────────────────────
 
@@ -30,10 +35,14 @@ varying vec3  vPos;
 varying vec4  vColor;
 varying vec2  vTexCoord;
 varying float vFogDist;
+varying vec4  vShadowCoord;
+
+uniform mat4  shadowMatrix;     // camera eye space -> shadow-map texture space
 
 void main()
 {
     vec4 eyePos = gl_ModelViewMatrix * gl_Vertex;
+    vShadowCoord = shadowMatrix * eyePos;
     vPos        = eyePos.xyz;
     vNormal     = normalize(gl_NormalMatrix * gl_Normal);
     vColor      = gl_Color;
@@ -59,6 +68,26 @@ uniform bool      fogOn;
 uniform float     fogDensity;
 uniform vec4      fogColor;
 uniform float     lightOn[8];   // 1.0 = enabled, 0.0 = disabled
+
+// Soft shadows of light 1 (dining pendants): shadow map + percentage-closer filtering
+uniform bool            shadowOn;
+uniform sampler2DShadow shadowMap;
+uniform float           shadowTexel;   // 1 / shadow-map size
+varying vec4            vShadowCoord;
+
+// Share of light 1 that reaches this pixel: 3 x 3 depth comparisons (each one also filtered
+// 2 x 2 by the hardware), 1.5 texels apart, averaged -> a soft shadow edge
+float pendantShadow()
+{
+    if (vShadowCoord.w <= 0.0) return 1.0;
+    vec3 c = vShadowCoord.xyz / vShadowCoord.w;
+    if (c.x <= 0.0 || c.x >= 1.0 || c.y <= 0.0 || c.y >= 1.0 || c.z >= 1.0) return 1.0;
+    float lit = 0.0;
+    for (int y = -1; y <= 1; y++)
+        for (int x = -1; x <= 1; x++)
+            lit += shadow2D(shadowMap, vec3(c.xy + vec2(float(x), float(y)) * (1.5 * shadowTexel), c.z - 0.0005)).r;
+    return lit / 9.0;
+}
 
 void main()
 {
@@ -118,6 +147,10 @@ void main()
 
             // Diffuse (Lambertian)
             float NdotL = max(dot(N, L), 0.0);
+
+            // Soft shadow-map shadow (light 1 only; ambient stays)
+            if (i == 1 && shadowOn && NdotL > 0.0 && atten > 0.0) atten *= pendantShadow();
+
             result += gl_LightSource[i].diffuse * baseColor * NdotL * atten;
 
             // Specular (Blinn-Phong: half vector H between light and view, as in OpenGL's
@@ -202,7 +235,10 @@ void initPhongShader()
     uFogDensity = glGetUniformLocation(phongProgram, "fogDensity");
     uFogColor   = glGetUniformLocation(phongProgram, "fogColor");
     uLightOn    = glGetUniformLocation(phongProgram, "lightOn");
-
+    uShadowOn     = glGetUniformLocation(phongProgram, "shadowOn");
+    uShadowMap    = glGetUniformLocation(phongProgram, "shadowMap");
+    uShadowMatrix = glGetUniformLocation(phongProgram, "shadowMatrix");
+    uShadowTexel  = glGetUniformLocation(phongProgram, "shadowTexel");
     shaderReady = true;
     fprintf(stderr, "[Phong] Shader compiled & linked OK.  Press G to toggle.\n");
 }
@@ -217,6 +253,18 @@ void enablePhongShader()
     glUniform1i(uLightingOn, 1);
     glUniform1i(uTexEnabled, 0);
     glUniform1i(uTex0, 0);        // texture unit 0
+
+    // Soft shadow mapping: depth texture on unit 1 (the scene's textures use unit 0)
+    bool shadows = shadowMapActive();
+    glUniform1i(uShadowOn, shadows ? 1 : 0);
+    glUniform1i(uShadowMap, 1);
+    if (shadows) {
+        glUniformMatrix4fv(uShadowMatrix, 1, GL_FALSE, shadowMapMatrix());
+        glUniform1f(uShadowTexel, shadowMapTexel());
+    }
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, shadowMapTexture());
+    glActiveTexture(GL_TEXTURE0);
 }
 
 void disablePhongShader()
@@ -247,6 +295,7 @@ void setInteriorLightScope(bool interior)
 void updatePhongUniforms()
 {
     if (!shaderActive) return;
+
 
     // Light enable mask — matches the glEnable/glDisable state in scene.cpp
     //   LIGHT0 = Moon/Sun (directional)

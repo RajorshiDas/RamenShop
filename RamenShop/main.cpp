@@ -12,6 +12,11 @@
  *      exterior.h/.cpp     - Shop structure, roof, windows, street, sidewalk, trees
  *      scene.h/.cpp        - High-level drawGround(), drawExterior(), drawInterior(), light toggles
  *      camera.h/.cpp       - Orbit, FPS Walkthrough, and Focused counter cameras
+ *      shadowmap.h/.cpp    - Soft shadows: shadow map + PCF for the dining pendant light
+ *      refraction.h/.cpp   - Screen-space glass refraction for the tumbler on the left table
+ *      rtcore.h/.cpp       - CPU ray tracer: analytic shapes + BVH, reflections, Snell refraction, Blinn-Phong
+ *      rtscene.h/.cpp      - The shop for the ray tracer (pots, bowls, glass ball, mirror and their surroundings)
+ *      rtpass.h/.cpp       - Traces the screen regions of those objects on all CPU threads and composites them
  *      main.cpp            - Application entry point, window, GL init, FreeGLUT loop
  *
  *  Camera Controls:
@@ -25,9 +30,9 @@
  *      Q / E               : fly down / up (Walkthrough)
  *
  *  Scene Controls:
- *      R                   : toggle Real-Time Ray Tracing ON / OFF
- *      B                   : cycle Ray Tracing bounce depth (1 to 5 bounces)
- *      Y                   : toggle Ray Traced soft shadows on / off
+ *      Y                   : soft shadows (shadow mapping + PCF from the dining pendants) on / off
+ *      Z                   : glass refraction (screen-space) on the table tumbler on / off
+ *      R                   : CPU ray tracing on / off (pots, ramen bowls, glass ball, upper-room mirror)
  *      G                   : toggle Phong / Gouraud shading
  *      T                   : toggle Day / Night (sun ↔ moon)
  *      H                   : hide / show the roof
@@ -65,7 +70,9 @@
 #include "camera.h"
 #include "texture.h"
 #include "shader.h"
-#include "raytracer.h"
+#include "shadowmap.h"
+#include "refraction.h"
+#include "rtpass.h"
 #include "game.h"
 #include <cstdio>
 
@@ -91,18 +98,11 @@ void display()
     // Dynamically apply all light components & flicker parameters
     applyLightingParameters();
 
-    // If Ray Tracing mode is active, render via real-time Ray Tracing engine
-    if (useRayTracing) {
-        int w = glutGet(GLUT_WINDOW_WIDTH);
-        int h = glutGet(GLUT_WINDOW_HEIGHT);
-        renderRayTracedFrame(w, h);
-        drawGameHUD(w, h);
-        glutSwapBuffers();
-        return;
-    }
-
     // Place all lights in world space (positions defined in lighting.cpp)
     placeLightsInWorldSpace();
+
+    // Soft shadows (Y): depth of the dining-area furniture as seen from the pendant light
+    renderShadowMap();
 
     drawSky();
 
@@ -120,6 +120,12 @@ void display()
     if (usePhongShading) {
         disablePhongShader();
     }
+
+    // Glass refraction (Z): the table tumbler, drawn last over the finished scene
+    drawRefractiveTumbler();
+
+    // Ray tracing (R): real rays for the pots, bowls, glass ball and mirror, composited over the frame
+    renderRayTracing();
 
     // 2D game overlay (order board, prompts, results) - drawn last
     drawGameHUD(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
@@ -215,8 +221,12 @@ void init()
     // Compile Phong GLSL shader (press G to toggle)
     initPhongShader();
 
-    // Initialise Real-Time GPU Ray Tracer (press R to toggle)
-    initRayTracer();
+    // Soft shadow mapping (Y) and screen-space glass refraction (Z)
+    initShadowMap();
+    initGlassRefraction();
+
+    // CPU ray tracer for the pots, bowls, glass ball and upper-room mirror (press R)
+    initRayTracing();
 }
 
 int main(int argc, char** argv)

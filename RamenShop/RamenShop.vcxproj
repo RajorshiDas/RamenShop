@@ -100,7 +100,11 @@ exit /b 0</Command>
     <ClCompile Include="scene.cpp" />
     <ClCompile Include="lighting.cpp" />
     <ClCompile Include="shader.cpp" />
-    <ClCompile Include="raytracer.cpp" />
+    <ClCompile Include="shadowmap.cpp" />
+    <ClCompile Include="refraction.cpp" />
+    <ClCompile Include="rtcore.cpp" />
+    <ClCompile Include="rtscene.cpp" />
+    <ClCompile Include="rtpass.cpp" />
     <ClCompile Include="game.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -115,7 +119,11 @@ exit /b 0</Command>
     <ClInclude Include="scene.h" />
     <ClInclude Include="lighting.h" />
     <ClInclude Include="shader.h" />
-    <ClInclude Include="raytracer.h" />
+    <ClInclude Include="shadowmap.h" />
+    <ClInclude Include="refraction.h" />
+    <ClInclude Include="rtcore.h" />
+    <ClInclude Include="rtscene.h" />
+    <ClInclude Include="rtpass.h" />
     <ClInclude Include="game.h" />
   </ItemGroup>
   <ItemGroup>

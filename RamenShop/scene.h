@@ -29,3 +29,7 @@ void drawSky();       // Sky dome with sun (day) or moon (night)
 void drawGround();
 void drawExterior();
 void drawInterior();
+
+// Objects that cast shadow-map shadows from the dining pendant light (shadowmap.cpp):
+// counter, stools, tables, chairs and ramen bowls, placed exactly as in drawInterior()
+void drawShadowMapCasters();
