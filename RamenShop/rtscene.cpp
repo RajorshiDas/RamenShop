@@ -16,9 +16,10 @@ static const V3    BALL_C = { BALL_STAND.x, COUNTER_TOP + STAND_H + 0.0663f, BAL
 
 // Upper tatami room (drawSecondFloor): floor TY, interior x RX0..RX1, z RZ0..RZ1, ceiling CY
 static const float TY = 3.3f + 0.12f + 0.06f, RX0 = -4.8f, RX1 = 3.45f, RZ0 = -3.8f, RZ1 = 3.8f, CY = 3.3f + 2.0f - 0.03f;
-// Mirror on the back wall, left of the fusuma doors (between the posts at x -4.74 and -2.35)
-static const float MIR_X0 = -3.90f, MIR_X1 = -3.10f, MIR_Y0 = TY + 0.30f, MIR_Y1 = TY + 1.60f;
-static const float MIR_Z  = RZ0 + 0.035f;                         // glass surface (wall plaster ends at RZ0 + 0.01)
+// Mirror on the front wall (faces -z), in the free gap between the poster (x -0.3..0.5) and the shoji window (x from 2.2)
+static const float MIR_X0 = 1.25f, MIR_X1 = 2.05f, MIR_Y0 = TY + 0.30f, MIR_Y1 = TY + 1.60f;
+static const float MIR_WALL = RZ1 - 0.01f;                        // inner face of the front wall plaster
+static const float MIR_Z  = RZ1 - 0.035f;                         // glass surface
 static const float FRAME  = 0.05f;
 static const Color TIMBER = { 0.24f, 0.15f, 0.09f };
 
@@ -297,17 +298,7 @@ void rtBuildShopScene(rt::Scene& s, RtObjectBounds bounds[RTO_COUNT])
     bounds[RTO_GLASS_BALL] = { true, { BALL_C.x - BALL_R, BALL_C.y - BALL_R, BALL_C.z - BALL_R },
                                      { BALL_C.x + BALL_R, BALL_C.y + BALL_R, BALL_C.z + BALL_R } };
 
-    // ── Featured: clear glassware (glass n = 1.5, water n = 1.33) ──
-    int mClear = reflective(s, rt::MAT_GLASS, { 0.985f, 0.995f, 0.99f }, { 0.04f, 0.04f, 0.04f }, { 1, 1, 1 }, 140.0f);
-    int mWater = reflective(s, rt::MAT_GLASS, { 0.96f, 0.985f, 0.995f }, { 0.02f, 0.02f, 0.02f }, { 1, 1, 1 }, 120.0f);
-    s.materials[mWater].ior = 1.33f;
-    addTumbler(b, { TABLE_TUMBLER_POS.x, TABLE_TUMBLER_POS.y, TABLE_TUMBLER_POS.z }, TABLE_TUMBLER_SCALE, false,
-               mClear, mWater, RTO_TABLE_GLASS, bounds[RTO_TABLE_GLASS]);                   // empty glass on the left table
-    const float glassX[4] = { -1.85f, -0.35f, 1.15f, 2.65f };                                  // as in drawTransparentPass()
-    for (int i = 0; i < 4; i++)
-        addTumbler(b, { glassX[i], COUNTER_TOP + 0.004f, -0.22f }, 0.22f, true, mClear, mWater,
-                   RTO_COUNTER_GLASS_0 + i, bounds[RTO_COUNTER_GLASS_0 + i]);                 // water glasses on the counter
-    addJug(b, { 0.35f, COUNTER_TOP + 0.004f, -0.36f }, 0.30f, mClear, mWater, RTO_JUG, bounds[RTO_JUG]);
+    // (the tumblers and the water jug are no longer ray traced; they are drawn by OpenGL, see scene.cpp)
 
     // ══ Upper tatami room (drawSecondFloor) ══
     int mTatami  = diffuse(s, W1, { 0.10f, 0.10f, 0.08f }, 12.0f, &g_tatami, rt::MAP_TATAMI, 1.0f, RX0, RZ0);
@@ -381,12 +372,13 @@ void rtBuildShopScene(rt::Scene& s, RtObjectBounds bounds[RTO_COUNT])
     }
 
     // ── Featured: the mirror (glass with silver backing) in its timber frame ──
-    b.box({ MIR_X0, MIR_Y0, RZ0 + 0.01f }, { MIR_X1, MIR_Y1, MIR_Z }, mMirror, RTO_MIRROR);
-    b.box({ MIR_X0 - FRAME, MIR_Y0 - FRAME, RZ0 + 0.01f }, { MIR_X0, MIR_Y1 + FRAME, MIR_Z + 0.025f }, mTimber);
-    b.box({ MIR_X1, MIR_Y0 - FRAME, RZ0 + 0.01f }, { MIR_X1 + FRAME, MIR_Y1 + FRAME, MIR_Z + 0.025f }, mTimber);
-    b.box({ MIR_X0, MIR_Y1, RZ0 + 0.01f }, { MIR_X1, MIR_Y1 + FRAME, MIR_Z + 0.025f }, mTimber);
-    b.box({ MIR_X0, MIR_Y0 - FRAME, RZ0 + 0.01f }, { MIR_X1, MIR_Y0, MIR_Z + 0.025f }, mTimber);
-    bounds[RTO_MIRROR] = { true, { MIR_X0, MIR_Y0, RZ0 }, { MIR_X1, MIR_Y1, MIR_Z } };
+    b.box({ MIR_X0, MIR_Y0, MIR_Z }, { MIR_X1, MIR_Y1, MIR_WALL }, mMirror, RTO_MIRROR);
+    const float FZ0 = MIR_Z - 0.025f;
+    b.box({ MIR_X0 - FRAME, MIR_Y0 - FRAME, FZ0 }, { MIR_X0, MIR_Y1 + FRAME, MIR_WALL }, mTimber);
+    b.box({ MIR_X1, MIR_Y0 - FRAME, FZ0 }, { MIR_X1 + FRAME, MIR_Y1 + FRAME, MIR_WALL }, mTimber);
+    b.box({ MIR_X0, MIR_Y1, FZ0 }, { MIR_X1, MIR_Y1 + FRAME, MIR_WALL }, mTimber);
+    b.box({ MIR_X0, MIR_Y0 - FRAME, FZ0 }, { MIR_X1, MIR_Y0, MIR_WALL }, mTimber);
+    bounds[RTO_MIRROR] = { true, { MIR_X0, MIR_Y0, MIR_Z }, { MIR_X1, MIR_Y1, MIR_WALL } };
 
     s.build();
 }
@@ -414,22 +406,19 @@ void drawCounterGlassBall()
 void drawRoomMirror()
 {
     // timber frame
-    drawCuboid({ MIR_X0 - FRAME * 0.5f, MIR_Y0 - FRAME, (RZ0 + 0.01f + MIR_Z + 0.025f) * 0.5f }, NO_ROT,
-               { FRAME, MIR_Y1 - MIR_Y0 + 2 * FRAME, MIR_Z + 0.015f - RZ0 }, TIMBER);
-    drawCuboid({ MIR_X1 + FRAME * 0.5f, MIR_Y0 - FRAME, (RZ0 + 0.01f + MIR_Z + 0.025f) * 0.5f }, NO_ROT,
-               { FRAME, MIR_Y1 - MIR_Y0 + 2 * FRAME, MIR_Z + 0.015f - RZ0 }, TIMBER);
-    drawCuboid({ (MIR_X0 + MIR_X1) * 0.5f, MIR_Y1, (RZ0 + 0.01f + MIR_Z + 0.025f) * 0.5f }, NO_ROT,
-               { MIR_X1 - MIR_X0, FRAME, MIR_Z + 0.015f - RZ0 }, TIMBER);
-    drawCuboid({ (MIR_X0 + MIR_X1) * 0.5f, MIR_Y0 - FRAME, (RZ0 + 0.01f + MIR_Z + 0.025f) * 0.5f }, NO_ROT,
-               { MIR_X1 - MIR_X0, FRAME, MIR_Z + 0.015f - RZ0 }, TIMBER);
+    const float fz0 = MIR_Z - 0.025f, fzc = (fz0 + MIR_WALL) * 0.5f, fd = MIR_WALL - fz0;
+    drawCuboid({ MIR_X0 - FRAME * 0.5f, MIR_Y0 - FRAME, fzc }, NO_ROT, { FRAME, MIR_Y1 - MIR_Y0 + 2 * FRAME, fd }, TIMBER);
+    drawCuboid({ MIR_X1 + FRAME * 0.5f, MIR_Y0 - FRAME, fzc }, NO_ROT, { FRAME, MIR_Y1 - MIR_Y0 + 2 * FRAME, fd }, TIMBER);
+    drawCuboid({ (MIR_X0 + MIR_X1) * 0.5f, MIR_Y1, fzc }, NO_ROT, { MIR_X1 - MIR_X0, FRAME, fd }, TIMBER);
+    drawCuboid({ (MIR_X0 + MIR_X1) * 0.5f, MIR_Y0 - FRAME, fzc }, NO_ROT, { MIR_X1 - MIR_X0, FRAME, fd }, TIMBER);
 
     // silvered glass: without ray tracing just a bright, glossy grey surface
     setMaterialGloss(1.0f, 1.0f, 1.0f, 120.0f);
     glColor3f(0.70f, 0.74f, 0.78f);
     glBegin(GL_QUADS);
-    glNormal3f(0, 0, 1);
-    glVertex3f(MIR_X0, MIR_Y0, MIR_Z); glVertex3f(MIR_X1, MIR_Y0, MIR_Z);
-    glVertex3f(MIR_X1, MIR_Y1, MIR_Z); glVertex3f(MIR_X0, MIR_Y1, MIR_Z);
+    glNormal3f(0, 0, -1);
+    glVertex3f(MIR_X1, MIR_Y0, MIR_Z); glVertex3f(MIR_X0, MIR_Y0, MIR_Z);
+    glVertex3f(MIR_X0, MIR_Y1, MIR_Z); glVertex3f(MIR_X1, MIR_Y1, MIR_Z);
     glEnd();
     resetMaterialGloss();
 }
