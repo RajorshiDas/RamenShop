@@ -104,7 +104,7 @@ A small, real CPU ray tracer (`rtcore`, `rtscene`, `rtpass`) renders a few featu
 |---|---|
 | Two steel stock pots | Mirror-like reflections of counter, bowls, stools and lamps |
 | Four ramen bowls | Subtle reflections on glaze and soup |
-| Glass ball, drinking glasses, water jug | Refraction through glass and water (Snell's law, total internal reflection), Fresnel reflection |
+| Glass ball | Refraction through glass (Snell's law, total internal reflection), Fresnel reflection |
 | Mirror in the upstairs room | A clear reflection of the room |
 
 - **Scene:** `rtscene.cpp` rebuilds the shop for the rays from the same positions and sizes as the OpenGL models (boxes, truncated cones, disks, spheres), with the same textures. Lights come from the shop's own OpenGL lights every frame.

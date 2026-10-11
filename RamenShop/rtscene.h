@@ -10,8 +10,6 @@
 //    - the two steel stock pots on the stove      reflections (metal)
 //    - the four ramen bowls on the counter         reflections on the glaze and the soup
 //    - a glass ball on the counter (new)           refraction + reflection
-//    - the drinking glasses (left table, counter)  refraction through glass and water
-//    - the glass water jug on the counter          refraction through glass and water
 //    - a mirror in the upper tatami room (new)     reflection of the room
 //  Everything around them that the rays can hit (counter, kitchen, hood, stools, tables,
 //  noren, lamps, walls, floors; in the upper room the tatami, walls, tea table, chest,

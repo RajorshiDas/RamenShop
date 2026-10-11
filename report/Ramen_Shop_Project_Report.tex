@@ -14,9 +14,10 @@
 \usepackage{enumitem}
 \usepackage{tocloft}
 \usepackage{float}
-\usepackage[a4paper,left=2.0cm,right=2.0cm,top=2.1cm,bottom=2.0cm,headheight=14pt]{geometry}
+\usepackage{fancyvrb}
+\usepackage[a4paper,left=1.8cm,right=1.8cm,top=1.9cm,bottom=1.7cm,headheight=14pt]{geometry}
 \usepackage[colorlinks=true,linkcolor=ramen,urlcolor=ramen,citecolor=ramen]{hyperref}
-\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit,backgrounds,patterns}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit,backgrounds}
 
 \definecolor{ramen}{HTML}{8B2A1A}
 \definecolor{ramenlt}{HTML}{F6E9E2}
@@ -24,23 +25,22 @@
 \definecolor{okgreen}{HTML}{2E7D32}
 \graphicspath{{figs/}}
 
-% ---------- text and headings ----------
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{3.5pt}
-\renewcommand{\arraystretch}{1.12}
+\setlength{\parskip}{3pt}
+\renewcommand{\arraystretch}{1.1}
 \titleformat{\section}{\Large\bfseries\color{ramen}}{\thesection}{0.6em}{}
 \titleformat{\subsection}{\large\bfseries\color{ink}}{\thesubsection}{0.5em}{}
-\titlespacing*{\section}{0pt}{9pt}{4pt}
-\titlespacing*{\subsection}{0pt}{7pt}{2pt}
+\titlespacing*{\section}{0pt}{8pt}{3pt}
+\titlespacing*{\subsection}{0pt}{6pt}{2pt}
 \setlist[itemize]{noitemsep,topsep=2pt,leftmargin=1.3em}
 \setlist[enumerate]{noitemsep,topsep=2pt,leftmargin=1.5em}
 \captionsetup[figure]{aboveskip=3pt,belowskip=0pt}
 \captionsetup[subfigure]{font=footnotesize,labelfont=bf,skip=1pt}
-\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
-\setlength{\floatsep}{6pt plus 2pt minus 2pt}
-\setlength{\intextsep}{6pt plus 2pt minus 2pt}
+\setlength{\textfloatsep}{7pt plus 2pt minus 2pt}
+\setlength{\floatsep}{5pt plus 2pt minus 2pt}
+\setlength{\intextsep}{5pt plus 2pt minus 2pt}
+\fvset{fontsize=\scriptsize,frame=lines,framesep=1.5mm,rulecolor=\color{ramen!50}}
 
-% ---------- header / footer ----------
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\small\color{gray}3D Ramen Shop: A Japanese Ramen Restaurant in OpenGL}
@@ -48,811 +48,485 @@
 \fancyfoot[C]{\small\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 
-% ---------- tocloft: compact lists ----------
 \renewcommand{\cftsecfont}{\bfseries\footnotesize}
 \renewcommand{\cftsecpagefont}{\bfseries\footnotesize}
 \renewcommand{\cftsubsecfont}{\scriptsize}
 \renewcommand{\cftsubsecpagefont}{\scriptsize}
-\renewcommand{\cftfigfont}{\scriptsize}
-\renewcommand{\cftfigpagefont}{\scriptsize}
-\renewcommand{\cfttabfont}{\scriptsize}
-\renewcommand{\cfttabpagefont}{\scriptsize}
 \setlength{\cftbeforesecskip}{2pt}
 \setlength{\cftbeforesubsecskip}{0pt}
-\setlength{\cftbeforefigskip}{0pt}
-\setlength{\cftbeforetabskip}{0pt}
-\renewcommand{\cftdotsep}{2}
-\renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}}
-\setlength{\cftfigindent}{0pt}
-\setlength{\cfttabindent}{0pt}
-\setlength{\cftfignumwidth}{1.6em}
-\setlength{\cfttabnumwidth}{1.6em}
-\renewcommand{\cftloftitlefont}{\large\bfseries\color{ramen}}
-\renewcommand{\cftlottitlefont}{\large\bfseries\color{ramen}}
 \renewcommand{\cfttoctitlefont}{\Large\bfseries\color{ramen}}
-\setlength{\cftbeforeloftitleskip}{2pt}
-\setlength{\cftafterloftitleskip}{3pt}
-\setlength{\cftbeforelottitleskip}{2pt}
-\setlength{\cftafterlottitleskip}{3pt}
 \setlength{\cftaftertoctitleskip}{3pt}
 
-% ---------- tikz styles ----------
 \tikzset{
   box/.style={draw=ramen!70,fill=ramenlt,rounded corners=2pt,align=center,font=\scriptsize,inner sep=3pt,minimum height=0.55cm},
-  boxw/.style={draw=ramen!70,fill=white,rounded corners=2pt,align=center,font=\scriptsize,inner sep=3pt,minimum height=0.55cm},
-  bluebox/.style={draw=blue!50!black!60,fill=blue!6,rounded corners=2pt,align=center,font=\scriptsize,inner sep=3pt,minimum height=0.55cm},
   arr/.style={-{Stealth[length=4pt]},draw=ramen!80!black,thick},
   lab/.style={font=\tiny,inner sep=1pt}
 }
-
-\newcommand{\todo}[1]{\textcolor{red}{#1}}
 \newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\fig}[2]{\includegraphics[width=#1\linewidth]{#2}}
+\newcommand{\yes}{\textcolor{okgreen}{\textbf{Implemented}}}
+\newcommand{\no}{\textcolor{red!70!black}{\textbf{Not implemented}}}
+\newcommand{\adapt}{\textcolor{orange!80!black}{\textbf{Adapted}}}
 
 \begin{document}
 
-% =====================================================================
-%                              COVER
-% =====================================================================
+% ===================== COVER =====================
 \thispagestyle{empty}
 \begin{center}
 {\large\bfseries Khulna University of Engineering \& Technology (KUET)}\\[1pt]
-Department of Computer Science and Engineering\\[6pt]
-{\small\color{gray} CSE 4102 \,$\cdot$\, Computer Graphics and Image Processing Laboratory\\ 4th Year, 1st Term}\\[18pt]
-{\fontsize{34}{40}\selectfont\bfseries\color{ramen} The Ramen Shop}\\[6pt]
-{\large A Cozy Japanese Ramen Restaurant in OpenGL}\\[12pt]
-\includegraphics[width=0.93\textwidth]{fig_ext_night.jpg}\\[2pt]
+Department of Computer Science and Engineering\\[4pt]
+{\small\color{gray} CSE 4102 \,$\cdot$\, Computer Graphics and Image Processing Laboratory \,$\cdot$\, 4th Year, 1st Term}\\[8pt]
+{\fontsize{30}{36}\selectfont\bfseries\color{ramen} The Ramen Shop}\\[2pt]
+{\large Project Report: A Japanese Ramen Village in OpenGL}\\[6pt]
+\includegraphics[width=0.74\textwidth]{fig_ext_night.jpg}\\[1pt]
 {\small\color{gray} The shop at night, rendered in real time by the project.}
 \end{center}
-\vspace{10pt}
+\vspace{4pt}
 \begin{minipage}[t]{0.46\textwidth}
-{\bfseries\color{ramen} Submitted by}\\[2pt]
-\textbf{Rajorshi Das}\\
-Roll: 2107060\\
-Department of Computer Science\\and Engineering, KUET
+{\bfseries\color{ramen} Submitted by}\\[1pt]
+\textbf{Rajorshi Das}\\ Roll: 2107060\\ Dept.\ of CSE, KUET
 \end{minipage}\hfill
-\begin{minipage}[t]{0.46\textwidth}
-{\bfseries\color{ramen} Submitted to}\\[2pt]
-\textbf{Md Tajmilur Rahman}\\
-Lecturer\\
-Department of Computer Science\\and Engineering, KUET\\[5pt]
-\textbf{Md. Mubtashim Abrar Nihal}\\
-Lecturer\\
-Department of Computer Science\\and Engineering, KUET
+\begin{minipage}[t]{0.50\textwidth}
+{\bfseries\color{ramen} Submitted to}\\[1pt]
+\textbf{Md Tajmilur Rahman}, Lecturer, Dept.\ of CSE, KUET\\
+\textbf{Md. Mubtashim Abrar Nihal}, Lecturer, Dept.\ of CSE, KUET
 \end{minipage}
-\vfill
+\vspace{4pt}
 \begin{center}
-{\small\color{gray} Built with C++17 \,$\cdot$\, OpenGL (fixed function + GLSL 1.20) \,$\cdot$\, FreeGLUT \,$\cdot$\, GLEW\\ October 2026}
+{\small\color{gray} C++17 \,$\cdot$\, OpenGL (fixed function + GLSL 1.20) \,$\cdot$\, FreeGLUT \,$\cdot$\, GLEW \,$\cdot$\, October 2026}
 \end{center}
+\vspace{2pt}
+{\small\setcounter{tocdepth}{1}\tableofcontents}
 \newpage
 
-% =====================================================================
-%                         CONTENTS / LISTS
-% =====================================================================
-{\small\tableofcontents}
-\listoffigures
-\listoftables
-\newpage
-\setcounter{page}{1}
-
-% =====================================================================
-%                          1 INTRODUCTION
-% =====================================================================
+% ===================== 1 INTRODUCTION =====================
 \section{Introduction}
-A small ramen-ya sits on a quiet Japanese street. Its two-storey wooden shop has a dining counter with an open kitchen, two small tables, a cosy tatami room upstairs, a street with a sidewalk, cherry and maple trees, and a lake with ducks behind it. This project builds that whole place as an interactive, real-time \textbf{OpenGL} program. You can fly around it with seven different cameras, switch every lamp on and off one by one, change between day and night, click the doors open, and play a small ramen-cooking game.
+\textbf{The Ramen Shop} is an interactive 3D Japanese village written from scratch in C++ and OpenGL. A two-storey ramen shop (dining counter, open kitchen, two tables, an upstairs tatami room) stands on a cobblestone street with ten neighbouring houses, street lamps, many trees, a lawn and a lake with ducks. The sky has a sun, moon, stars and clouds and changes between day and night; a cyclist, a walking person and a cat move in the street, and a small ramen-cooking game can be played in the shop. All objects are built from basic shapes and all textures are generated by the program, so no model or image file is used.
 
-Everything is made in code. Every object is built from a few basic shapes (cube, cylinder/cone, sphere, torus, a few lathed and swept surfaces), and every texture is painted by the program itself at start-up, so there are no model or image files to load. Lighting is done with the ambient, diffuse and specular terms of the Phong model, with per-vertex (Gouraud) and per-pixel (Phong) shading. On top of that there are shadows, a refractive glass, a small CPU ray tracer, and many moving things: a cyclist, a person, a cat, a rippling banner, a glass wind chime that swings as a real pendulum, and fans.
+This report explains \emph{what was proposed, what was implemented, how each feature was implemented, and which theory, formula or equation it uses}, so that the implementation can be explained from the report alone. Screenshots from the running program are given as results of each feature.
 
-\subsection{Objectives}
-\begin{enumerate}
-\item Model a believable multi-part scene (shop, upstairs room, street, nature) only from basic shapes and 3D transformations.
-\item Light it with the ambient, diffuse and specular terms of the illumination model, with several point, spot and directional lights that can each be switched on and off.
-\item Apply procedurally generated textures with correct mapping, and shade with both Gouraud and Phong shading.
-\item Add advanced effects: shadows (projected and shadow-mapped), screen-space refraction, and real ray tracing.
-\item Make the scene alive and explorable: animation, a free and several fixed cameras, mouse and keyboard interaction, and a small game.
-\end{enumerate}
+\textbf{Objectives.} (1)~Model a believable multi-part scene from basic shapes using 3D transformations. (2)~Light it with the ambient, diffuse and specular terms, with several lights that can be switched. (3)~Apply procedurally generated textures, and shade with Gouraud and Phong shading. (4)~Add shadows, glass refraction and ray tracing. (5)~Make the scene alive and explorable: animation, several cameras, mouse and keyboard interaction, and a small game.
 
-\subsection{Tools}
-\begin{table}[H]
+% ===================== 2 PROPOSAL vs IMPLEMENTATION =====================
+\section{Proposed Features and What Was Implemented}
+Table~\ref{tab:map} compares the features of the proposal with the final project, and gives the section where each is explained.
+\begin{table}[htbp]
 \centering\small
-\begin{tabular}{@{}p{3.4cm}p{12.9cm}@{}}
+\begin{tabular}{@{}p{3.6cm}p{2.6cm}p{8.3cm}c@{}}
 \toprule
-Language and build & C++17, Visual Studio (MSBuild), x64 Debug and Release\\
-Graphics API & OpenGL fixed-function pipeline plus GLSL 1.20 shaders (Phong, glass refraction, ray-trace compositing); framebuffer objects and float textures (OpenGL 3.0)\\
-Libraries & FreeGLUT (window, input), GLEW (extensions), GLU (quadrics, matrices); NuGet package \code{nupengl.core}\\
-Size & about 15,000 lines of our own code in 18 source files and 17 headers; no model, image or sound files\\
+\textbf{Proposed feature} & \textbf{Status} & \textbf{How it appears in the final project} & \textbf{Sec.}\\
+\midrule
+Translation & \yes & cyclist, person, cat, ducks, sliding doors, steam, falling petals & \ref{sec:xf}\\
+Rotation & \yes & wheels, cranks, fan blades, hinged door, chime pendulums, pivot sway of trees & \ref{sec:xf}\\
+Scaling & \yes & boards from cubes, ellipsoids, cat $\times1.8$, user scaling of objects (keys \code{,} \code{.}) & \ref{sec:xf}\\
+Perspective camera & \yes & 45$^\circ$ (62$^\circ$ in game); seven cameras & \ref{sec:view}\\
+Orthographic view & \adapt & used for the game HUD, order board and title screen, not for inspecting the scene & \ref{sec:view}\\
+Hierarchical modelling & \yes & cyclist, person, cat, wind chime, trees, lanterns & \ref{sec:xf}\\
+Lighting: ambient, diffuse, specular & \yes & 8 lights (directional, point, spot), each term switchable & \ref{sec:light}\\
+Flat shading & \no & only smooth shading is used (Gouraud or Phong) & \ref{sec:shade}\\
+Gouraud shading & \yes & fixed-function path, key \code{G} & \ref{sec:shade}\\
+Phong shading & \yes & own GLSL fragment shader, per-pixel, 8 lights & \ref{sec:shade}\\
+Skybox & \yes & gradient dome, sun, moon, stars, clouds, day / night & \ref{sec:sky}\\
+Textures & \yes & 13 procedural textures (grass, wood, tile, tatami, \ldots), mipmaps & \ref{sec:tex}\\
+\midrule
+\multicolumn{4}{@{}l}{\textbf{Features added beyond the proposal}}\\
+\midrule
+Shadows & \yes & stencil projected shadows, soft shadow map with PCF & \ref{sec:shadow}\\
+Glass refraction & \yes & screen-space refraction of the tumbler & \ref{sec:glass}\\
+Ray tracing & \yes & CPU ray tracer with BVH: reflection, refraction (pots, bowls, ball, mirror) & \ref{sec:rt}\\
+Animated characters & \yes & cyclist with inverse kinematics, walking person, cat state machine & \ref{sec:anim}\\
+Environment & \yes & trees by recursion, flowers, lake, ducks, 10 houses, street, fireflies & \ref{sec:env}\\
+Cooking game & \yes & state machine, scoring, HUD & \ref{sec:game}\\
 \bottomrule
 \end{tabular}
-\caption{Tools and size of the project.}
+\caption{Proposed features and their final status.}\label{tab:map}
 \end{table}
 
-\subsection{Features implemented}
-\begin{table}[H]
+% ===================== 3 TOOLS AND SOURCES =====================
+\section{Tools, Libraries and Sources Followed}
+\begin{table}[htbp]
 \centering\small
-\begin{tabular}{@{}p{8.6cm}p{5.0cm}c@{}}
+\begin{tabular}{@{}p{3.0cm}p{13.3cm}@{}}
 \toprule
-\textbf{Feature} & \textbf{Where it is shown} & \textbf{Section}\\
-\midrule
-Modelling from basic shapes (cube, cylinder, cone, sphere, torus, lathe, grid) & shop, furniture, trees, props & \ref{sec:prim}\\
-3D transformations: translation, rotation, scaling, pivot rotation, hierarchies & cyclist, person, cat, doors, trees & \ref{sec:xform}\\
-Procedural textures, mipmaps, anisotropic filtering & wood, tile, plaster, tatami, grass, water & \ref{sec:tex}\\
-Ambient, diffuse, specular light; point, spot and directional lights; attenuation; sky, day and night (\S\ref{sec:sky}) & 8 lights, keys \code{1--7}, \code{-}, \code{=}, \code{\textbackslash} & \ref{sec:illum}\\
-Gouraud and Phong shading & key \code{G} & \ref{sec:gouraud}\\
-Shadows: projected (stencil) and soft shadow mapping with PCF & sun, lamps, key \code{Y} & \ref{sec:shadow}\\
-Glass refraction (screen space) & tumbler on a table, key \code{Z} & \ref{sec:glass}\\
-Ray tracing (CPU): reflection, refraction, BVH & pots, bowls, glass, mirror, key \code{R} & \ref{sec:rt}\\
-Animation, perspective cameras, mouse and keyboard interaction & everywhere & \ref{sec:anim}\\
-Ramen cooking game (state machine, HUD with orthographic projection) & key \code{Enter} & \ref{sec:game}\\
+Language, build & C++17, Visual Studio (MSBuild), x64 Release / Debug; about 15\,000 lines in 18 source files and 17 headers\\
+Graphics API & OpenGL fixed-function pipeline plus GLSL 1.20 shaders (Phong lighting, glass refraction, ray-trace compositing); framebuffer objects and float textures (OpenGL 3.0)\\
+Libraries & FreeGLUT (window, input), GLEW (extensions), GLU (quadrics, \code{gluLookAt}, \code{gluPerspective}, \code{gluUnProject}); NuGet package \code{nupengl.core}\\
+Assets & none: no model, texture, image or sound file is loaded; all geometry is generated in code and all textures are painted by the program at start-up\\
 \bottomrule
 \end{tabular}
-\caption{Features of the project and where each one is explained.}
+\caption{Tools and libraries.}
 \end{table}
+\textbf{Sources and references followed.} The algorithms follow the standard references: the Phong reflection model~[1], Blinn's half-vector specular term~[2], Gouraud interpolation~[3], Whitted's recursive ray tracing~[4], Williams' shadow maps and percentage-closer filtering~[5,6], Schlick's Fresnel approximation~[7], the Sutherland--Hodgman polygon clipping algorithm~[8] and the OpenGL specification and programming guide~[9]. Value noise and fractal Brownian motion for the textures follow the usual procedural-texture technique~[10]. The Beach Day project report was used only as a guide to the layout of a report. Library functions are used as documented; the scene, the shaders, the textures, the ray tracer and the animation code are implemented in the project itself.
 
-% =====================================================================
-%                          2 LAYOUT
-% =====================================================================
-\section{The Shop and Its Surroundings}
-One world coordinate system is used: $x$ runs to the right, $y$ points up and $z$ points toward the street (the front of the shop). One unit is about one metre. The ground floor is $9.8 \times 7.8$ units ($x\in[-4.9,4.9]$, $z\in[-3.9,3.9]$) and $3.3$ high; the upper floor adds $2.0$, and the gable roof rises another $2.2$ above that. Behind the shop the ground is a large lawn (the ground plane is 240 units wide) with a lake at $(0,-24)$; in front of it the road and two sidewalks run along $x$ at $z\approx 12$, $z\approx 7$ and $z\approx 17$. Figure~\ref{fig:plan} shows the floor plans of the two storeys.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[x=0.74cm,y=-0.74cm,font=\tiny]
-% ---------------- ground floor ----------------
-\begin{scope}
-\fill[ramenlt] (-4.9,-3.9) rectangle (4.9,3.9);
-\draw[very thick,ramen!60!black] (-4.9,-3.9) rectangle (4.9,3.9);
-\fill[brown!30!white,draw=brown!70] (-3.5,-3.5) rectangle (3.5,-2.9);
-\foreach \x in {-0.55,0.55} {\fill[gray!55,draw=black!60] (\x,-3.2) circle (0.3);}
-\fill[white,draw=black!50] (3.4,-3.8) rectangle (4.2,-2.9);
-\fill[brown!55,draw=brown!80!black] (-3,-0.8) rectangle (3,-0.2);
-\foreach \i in {0,...,5} {\fill[orange!60!brown,draw=brown!80!black] ({-2.8+1.12*\i},0.8) circle (0.19);}
-\foreach \t in {-2.4,2.4}{
-  \fill[brown!35,draw=brown!80!black] (\t-0.48,2.48) rectangle (\t+0.48,3.12);
-  \fill[brown!60,draw=brown!80!black] (\t-0.19,2.06) rectangle (\t+0.19,2.44);
-  \fill[brown!60,draw=brown!80!black] (\t-0.19,3.16) rectangle (\t+0.19,3.54);
-  \fill[yellow!70,draw=orange!80!black] (\t,2.8) circle (0.12);}
-\fill[pattern=north east lines,pattern color=gray] (3.5,-0.5) rectangle (4.5,2.5);
-\fill[yellow!70,draw=orange] (-4.45,3.4) circle (0.22);
-\draw[line width=2.4pt,ramen!70] (-1.75,3.9) -- (1.75,3.9);
-\node[below] at (0,3.95) {entrance (sliding doors)};
-\node at (0,-2.45) {kitchen: stove, two stock pots, hood};
-\node at (3.8,-3.35) {fridge};
-\node at (0,-1.6) {kitchen aisle};
-\node at (0,-0.5) {dining counter};
-\node at (0,1.35) {6 stools};
-\node at (-2.4,1.75) {table 1};
-\node at (2.4,1.75) {table 2};
-\node[rotate=90] at (4.0,1.0) {stairs};
-\node[above] at (0,-3.95) {\bfseries GROUND FLOOR};
-\end{scope}
-% ---------------- upper floor ----------------
-\begin{scope}[xshift=10.4cm]
-\fill[green!10!yellow!15] (-4.8,-3.8) rectangle (3.45,3.8);
-\foreach \r in {1,...,7}{ \draw[gray!60] (-4.8,{-3.8+0.95*\r}) -- (3.45,{-3.8+0.95*\r}); }
-\draw[gray!60] (-2.0,-3.8) -- (-2.0,-2.85); \draw[gray!60] (-1.0,-2.85) -- (-1.0,-1.9);
-\draw[very thick,ramen!60!black] (-4.8,-3.8) rectangle (3.45,3.8);
-\fill[pattern=north east lines,pattern color=gray] (3.55,-0.5) rectangle (4.5,2.5);
-\node[rotate=90] at (4.0,1.0) {stairs};
-\draw[ramen!70,line width=2pt] (-2.3,-3.8) -- (1.0,-3.8);
-\node at (-0.65,-3.45) {fusuma};
-\fill[brown!55,draw=brown!80!black] (1.35,-3.74) rectangle (3.15,-3.26);
-\node at (2.25,-3.0) {sideboard};
-\fill[brown!55,draw=brown!80!black] (-4.76,-0.72) rectangle (-4.32,0.33);
-\node[rotate=90] at (-4.05,-0.2) {tansu};
-\fill[red!50!white,draw=red!60!black] (1.625,1.55) rectangle (2.675,3.5);
-\node at (2.15,2.5) {futon};
-\fill[yellow!70,draw=orange!80!black] (3.0,2.2) rectangle (3.24,2.44);
-\fill[brown!40,draw=brown!80!black] (-1.15,0.36) rectangle (-0.05,1.04);
-\node at (-0.6,0.7) {tea table};
-\fill[green!40!gray,draw=black!40] (-0.6,1.45) circle (0.25) (-0.6,-0.05) circle (0.25) (-1.55,0.7) circle (0.25);
-\fill[white,draw=gray] (-4.5,1.2) rectangle (-4.0,1.9);
-\node at (-3.55,1.9) {futons};
-\fill[blue!25,draw=blue!50] (-3.3,2.6) circle (0.2);
-\node at (-3.3,3.1) {fan};
-\draw[blue!50!black,line width=2pt] (-4.2,3.8) -- (-2.2,3.8);
-\draw[blue!50!black,line width=2pt] (2.2,3.8) -- (3.45,3.8);
-\node[above] at (-3.2,3.7) {windows};
-\node[above,xshift=-0.35cm] at (2.55,3.7) {window};
-\node[above] at (-0.65,-3.9) {\bfseries UPPER FLOOR: TATAMI ROOM};
-\end{scope}
-\draw[-,gray] (-4.9,4.9) -- ++(2,0) node[right,font=\tiny,gray] {2 m};
-\end{tikzpicture}
-\caption[Floor plans of the two storeys]{Floor plans (the street side of the shop is at the bottom). The tatami room is covered by 8 rows of mats in a staggered pattern.}
-\label{fig:plan}
-\end{figure}
-
-\begin{table}[H]
+% ===================== 4 ARCHITECTURE =====================
+\section{Program Structure}
+One world coordinate system: $x$ right, $y$ up, $z$ toward the street, one unit about one metre. The ground floor is $9.8\times7.8$ and $3.3$ high, the upper floor $2.0$, the lawn 240 units wide, the road and sidewalks at $z\approx7$--$17$, and the lake behind the shop at $(0,-24)$.
+\begin{table}[htbp]
 \centering\small
-\begin{tabular}{@{}p{3.2cm}p{13.1cm}@{}}
+\begin{tabular}{@{}p{4.3cm}p{12.0cm}@{}}
 \toprule
-\textbf{Zone} & \textbf{Contents}\\
+\textbf{Files} & \textbf{Responsibility}\\
 \midrule
-Ground floor & Dining counter with 6 stools and a lacquered top; four ramen bowls with steam; open kitchen (two steel stock pots, hood, shelves, fridge, sink); two customer tables with two chairs each and a table lamp over each; paper box lanterns, hanging lanterns, a floor lantern tower, pendant glass lamps, an area-light panel; noren curtain, wall clock, shoji doors and windows\\
-Upper floor & Tatami floor with cloth borders, plaster walls with timber frame, fusuma doors, board ceiling; futon bed, chabudai tea table and tea set, cushions, tansu chest, sideboard with radio, mirror, six wall pictures, windows, ceiling fan and stand fan\\
-Outdoors & Street and two flagstone sidewalks, street lamps, cherry, maple, pine and broadleaf trees, bamboo, bushes, flowers, a neighbouring house, stone lanterns, lake with bridge, torii gate and two ducks\\
+\code{main}, \code{camera} & window, frame loop, 16\,ms timer, seven cameras, keyboard and mouse\\
+\code{shapes}, \code{texture} & primitives and materials; all 13 procedural textures\\
+\code{scene}, \code{exterior} & sky, ground, shop, upstairs room, cyclist, person, cat, chime, houses, trees, lake, props\\
+\code{furniture}, \code{food}, \code{decorations} & counter, kitchen, tables, bowls and food, lanterns, noren, clock\\
+\code{lighting}, \code{shader} & the 8 lights, day / night, Phong shader, fog\\
+\code{shadowmap}, \code{refraction} & soft shadow mapping, screen-space glass\\
+\code{rtcore}, \code{rtscene}, \code{rtpass} & ray tracer, the shop as the rays see it, threaded pass and compositing\\
+\code{objects}, \code{game} & selectable / movable objects, the ramen game\\
 \bottomrule
 \end{tabular}
-\caption{What is in each zone of the scene.}
+\caption{Modules of the program.}
 \end{table}
+At start-up the program opens the window (double buffer, depth, stencil), paints the 13 textures and builds mipmaps, sets up the lights and fog, compiles the shaders and creates the shadow-map and glass framebuffers. Every frame it (1)~reads input and advances the animation clock \code{animTime}; (2)~sets the camera and the 45$^\circ$ projection and updates light positions and colours; (3)~renders the shadow map; (4)~draws the sky, lawn and street, the sun shadows, the exterior and then the interior; (5)~applies glass refraction, then the ray-tracing pass; (6)~draws the HUD with an orthographic projection and swaps buffers.
 
-% =====================================================================
-%                          3 METHODOLOGY
-% =====================================================================
-\section{Methodology}
+% ===================== 5 IMPLEMENTATION =====================
+\section{Implementation of Each Feature}
 
-\subsection{Implementation overview}
-The program is split into small modules (Table~\ref{tab:modules}). \code{main.cpp} owns the window and the frame loop, \code{scene.cpp} and \code{exterior.cpp} draw the world, \code{shapes.cpp} holds the primitives and materials, and the effects each have their own file. At start-up the program builds everything it needs once; every frame it then reads input, updates the animation, and draws the world (Figure~\ref{fig:pipeline}).
-
-\begin{table}[H]
-\centering\small
-\begin{tabular}{@{}p{4.6cm}p{11.7cm}@{}}
-\toprule
-\textbf{Files} & \textbf{Role}\\
-\midrule
-\code{main}, \code{camera} & window, frame loop, timers, the seven cameras, keyboard and mouse input\\
-\code{shapes}, \code{texture} & primitives, materials (gloss, emission), procedural textures\\
-\code{scene}, \code{exterior} & ground, sky, shop, upstairs room, trees, props, wind chime, shadows\\
-\code{furniture}, \code{food}, \code{decorations} & counter, kitchen, tables, bowls, lanterns, noren, clock\\
-\code{lighting}, \code{shader} & the 8 lights, day/night, Phong shader, fog, interior light scope\\
-\code{shadowmap}, \code{refraction} & soft shadow mapping, screen-space glass refraction\\
-\code{rtcore}, \code{rtscene}, \code{rtpass} & CPU ray tracer, the shop as the rays see it, threaded pass and compositing\\
-\code{objects}, \code{game} & selectable and movable objects, the ramen cooking game\\
-\bottomrule
-\end{tabular}
-\caption{Modules of the program.}\label{tab:modules}
-\end{table}
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[node distance=0.16cm,every node/.style={font=\scriptsize}]
-\node[font=\scriptsize\bfseries,color=blue!50!black] (h1) {ONCE, AT START-UP};
-\node[bluebox,below=0.18cm of h1,text width=6.3cm] (a1) {Open the window (double buffer, depth, stencil); load extensions with GLEW};
-\node[bluebox,below=of a1,text width=6.3cm] (a2) {Paint 13 procedural textures on the CPU; build mipmaps};
-\node[bluebox,below=of a2,text width=6.3cm] (a3) {Set up 8 lights, fog, quadrics, normalisation};
-\node[bluebox,below=of a3,text width=6.3cm] (a4) {Compile the Phong shader; create the shadow-map FBO, the glass shader and the ray-trace compositor};
-\node[bluebox,below=of a4,text width=6.3cm] (a5) {Reset the game state; build tree display lists on first use};
-\foreach \a/\b in {a1/a2,a2/a3,a3/a4,a4/a5}{\draw[arr] (\a) -- (\b);}
-\node[font=\scriptsize\bfseries,color=ramen,right=7.2cm of h1] (h2) {EVERY FRAME};
-\node[box,below=0.18cm of h2,text width=6.6cm] (b1) {Timer (16 ms): clock, doors, game, WASD movement};
-\node[box,below=of b1,text width=6.6cm] (b2) {Camera, 45$^\circ$ projection, light colours (flicker), light positions};
-\node[box,below=of b2,text width=6.6cm] (b3) {Shadow-map pass from the pendant light (512$\times$512 depth)};
-\node[box,below=of b3,text width=6.6cm] (b4) {Sky dome, lawn, sun / simple night shadows in the stencil buffer};
-\node[box,below=of b4,text width=6.6cm] (b5) {Exterior (trees, houses, lake, props), then interior with its shadows};
-\node[box,below=of b5,text width=6.6cm] (b6) {Glass refraction pass, then the CPU ray-tracing pass and compositing};
-\node[box,below=of b6,text width=6.6cm] (b7) {HUD (orthographic) and swap buffers};
-\foreach \a/\b in {b1/b2,b2/b3,b3/b4,b4/b5,b5/b6,b6/b7}{\draw[arr] (\a) -- (\b);}
-\draw[arr] (a5.east) -- ++(0.55,0) |- ([yshift=0.0cm]b1.west);
-\draw[arr] (b7.east) -- ++(0.28,0) |- ($(b1.north east)+(0.28,0.12)$) -- (b1.north east);
-\end{tikzpicture}
-\caption{The rendering pipeline: work done once at start-up (left) and in every frame (right).}
-\label{fig:pipeline}
-\end{figure}
-
-\subsection{Modelling from basic shapes}\label{sec:prim}
-Every object is assembled from a handful of primitives in \code{shapes.cpp}: a cube (\code{glutSolidCube}), a cylinder and cone made by one routine with a bottom and a top radius (a frustum when both are different), a sphere (\code{gluSphere}), a torus, and planes and wedges. Boxes of other sizes are cubes scaled by non-uniform factors, ellipsoids are scaled spheres, and a tube between two points is a cylinder rotated to point from one end to the other. Three more constructions are used for special shapes:
-\begin{itemize}
-\item \textbf{Lathe (surface of revolution).} A profile of $(r_i,y_i)$ pairs is swept about the $y$ axis: $(r_i\cos\theta,\;y_i,\;r_i\sin\theta)$ with outward normal proportional to $(\Delta y\cos\theta,\,-\Delta r,\,\Delta y\sin\theta)$ from the profile tangent. The bell-shaped table lamps, the wind-chime bell and the paper lanterns are made this way.
-\item \textbf{Grid surface.} The nobori banner is a $12\times28$ grid of quads whose depth is $z(u,v,t)=\big(0.09\sin(3.2t-4u+1.5v)+0.015\sin(5.1t+3v)\big)u$ (see §\ref{sec:anim}); the normal comes from the slope $\partial z/\partial u$, so the folds are shaded correctly.
-\item \textbf{Recursive trees.} A branch is two tapered tubes; each branch spawns 3 (first level) or 2 (later levels) child branches at random angles $\theta\in[0.45,0.90]$ rad, and the tips carry leaf or blossom clusters. The result is compiled into OpenGL display lists once, and only the swaying transform is applied per frame.
-\end{itemize}
-Details such as the ramen toppings, the cat, the cyclist and the pictures on the wall are all made from the same primitives: for example every wall picture is drawn from rectangles, ellipses, triangles and thick lines, and shapes that would spill out of a frame are cut with the Sutherland--Hodgman clipping algorithm.
-
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[scale=0.92,font=\scriptsize,line cap=round]
-\tikzset{sh/.style={draw=ramen!70!black,thick}}
-% cube
-\fill[ramenlt] (0,0) rectangle (1,1); \fill[ramen!35] (0,1) -- (0.4,1.35) -- (1.4,1.35) -- (1,1) -- cycle; \fill[ramen!55] (1,0) -- (1.4,0.35) -- (1.4,1.35) -- (1,1) -- cycle;
-\draw[sh] (0,0) rectangle (1,1); \draw[sh] (0,1) -- (0.4,1.35) -- (1.4,1.35) -- (1,1); \draw[sh] (1,0) -- (1.4,0.35) -- (1.4,1.35);
-\node at (0.7,-0.3) {cube};
-% cylinder
-\begin{scope}[xshift=2.2cm]
-\fill[ramen!45] (0,1) -- (0,0.15) arc (180:360:0.5 and 0.16) -- (1,1) -- cycle; \fill[ramenlt] (0.5,1) ellipse (0.5 and 0.16);
-\draw[sh] (0,1) -- (0,0.15) arc (180:360:0.5 and 0.16) -- (1,1); \draw[sh] (0.5,1) ellipse (0.5 and 0.16);
-\node at (0.5,-0.3) {cylinder};
-\end{scope}
-% cone / frustum
-\begin{scope}[xshift=4.5cm]
-\fill[ramen!45] (0.28,1) -- (-0.05,0.15) arc (180:360:0.55 and 0.16) -- (0.72,1) -- cycle; \fill[ramenlt] (0.5,1) ellipse (0.22 and 0.08);
-\draw[sh] (0.28,1) -- (-0.05,0.15) arc (180:360:0.55 and 0.16) -- (0.72,1); \draw[sh] (0.5,1) ellipse (0.22 and 0.08);
-\node at (0.5,-0.3) {cone / frustum};
-\end{scope}
-% sphere
-\begin{scope}[xshift=6.9cm]
-\shade[ball color=ramen!30] (0.5,0.55) circle (0.55);
-\draw[sh] (0.5,0.55) circle (0.55); \draw[sh,dashed] (-0.05,0.55) arc (180:360:0.55 and 0.15); \draw[sh] (-0.05,0.55) arc (180:0:0.55 and 0.15);
-\node at (0.5,-0.3) {sphere};
-\end{scope}
-% torus
-\begin{scope}[xshift=8.85cm]
-\fill[ramen!35] (0.5,0.55) ellipse (0.62 and 0.36); \fill[white] (0.5,0.55) ellipse (0.24 and 0.1);
-\draw[sh] (0.5,0.55) ellipse (0.62 and 0.36); \draw[sh] (0.5,0.55) ellipse (0.24 and 0.1);
-\node at (0.5,-0.3) {torus};
-\end{scope}
-% lathe
-\begin{scope}[xshift=10.7cm]
-\draw[->,gray] (0.0,-0.05) -- (0.0,1.25); \node[gray,font=\tiny] at (-0.0,1.4) {axis};
-\draw[sh] (0.0,1.1) -- (0.14,1.1) .. controls (0.2,0.7) and (0.3,0.4) .. (0.62,0.08);
-\draw[->,gray] (0.7,0.7) arc (-30:40:0.3 and 0.15);
-\begin{scope}[xshift=1.55cm]
-\fill[ramen!35] (0,1.1) -- (0.14,1.1) .. controls (0.2,0.7) and (0.3,0.4) .. (0.62,0.08) arc (0:-180:0.62 and 0.14) .. controls (-0.3,0.4) and (-0.2,0.7) .. (-0.14,1.1) -- cycle;
-\draw[sh] (0.14,1.1) .. controls (0.2,0.7) and (0.3,0.4) .. (0.62,0.08) arc (0:-180:0.62 and 0.14) .. controls (-0.3,0.4) and (-0.2,0.7) .. (-0.14,1.1);
-\draw[sh] (0,1.1) ellipse (0.14 and 0.05);
-\end{scope}
-\node at (1.0,-0.3) {lathe (lamps, bell)};
-\end{scope}
-% wavy grid
-\begin{scope}[xshift=13.75cm]
-\foreach \j in {0,...,5} {\draw[sh,thin] plot[domain=0:1.2,samples=24] (\x,{0.1+0.18*\j+0.13*sin(\x*360*1.3+\j*35)});}
-\foreach \i in {0,...,6} {\draw[sh,thin] plot[domain=0:5,samples=6] ({0.2*\i},{0.1+0.18*\x+0.13*sin(0.2*\i*360*1.3+\x*35)});}
-\node at (0.6,-0.3) {grid (banner)};
-\end{scope}
-% tree
-\begin{scope}[xshift=16.05cm]
-\draw[brown!70!black,very thick] (0.5,0) -- (0.5,0.45); \draw[brown!70!black,thick] (0.5,0.45) -- (0.15,0.85) (0.5,0.45) -- (0.5,0.95) (0.5,0.45) -- (0.85,0.85);
-\foreach \x/\y in {0.15/0.85,0.5/0.95,0.85/0.85} {\fill[green!55!black!70] (\x,\y) circle (0.2);}
-\node at (0.5,-0.3) {tree};
-\end{scope}
-\end{tikzpicture}
-\caption{The construction primitives: every object in the shop is some combination of these.}
-\label{fig:prim}
-\end{figure}
-\subsection{3D transformations}\label{sec:xform}
-All placement goes through one function that applies the standard composite transform to the modelview matrix:
+\subsection{3D modelling from basic shapes}\label{sec:model}
+\textbf{Theory.} Complex objects are unions of simple solids. A cylinder/cone with radii $r_0,r_1$ and height $h$ is a frustum; a \emph{surface of revolution} (lathe) turns a profile $(r(s),y(s))$ about the $y$ axis:
 \begin{equation}
-M = T(\mathbf p)\,R_x(\alpha)\,R_y(\beta)\,R_z(\gamma)\,S(s_x,s_y,s_z),
+\mathbf p(s,\theta)=\big(r(s)\cos\theta,\ y(s),\ r(s)\sin\theta\big),\qquad \mathbf n\propto\big(y'\cos\theta,\ -r',\ y'\sin\theta\big).
 \end{equation}
-so a part is scaled first, then rotated, then moved. Nesting objects with \code{glPushMatrix/glPopMatrix} gives hierarchical models: a child inherits everything its parent does. Table~\ref{tab:xform} lists where each kind of transformation is used, and Figure~\ref{fig:hier} shows the joint hierarchies of the three articulated characters.
+A grid surface samples a height function $z=f(u,v,t)$ on a mesh of quads; a tree is a recursive (self-similar) structure.\\
+\textbf{Implementation.} \code{shapes.cpp} provides \code{drawCube}, \code{drawCuboid}, \code{drawCylinder}, \code{drawCone}, \code{drawSphere}, \code{drawTorus}, \code{drawPlane}, \code{drawWedge} and textured boxes. Bowls, lamp shades, bottles and the wind-chime bell are lathes; the nobori banner is a $12\times28$ grid with $z(u,v,t)=(0.09\sin(3.2t-4u+1.5v)+0.015\sin(5.1t+3v))\,u$ and the normal from $\partial z/\partial u$. A tree is built by \code{growBranch}:
+\begin{Verbatim}
+growBranch(base, dir, len, r, level):
+    p1 = base + 0.55*len*dir;  p2 = p1 + 0.45*len*dir2        // two tapered tubes
+    tube(base,p1,r,0.72r);  tube(p1,p2,0.72r,0.48r)
+    if level < maxLevel:
+        for k in 1..(level==1 ? 3 : 2):                       // children at random angle
+            theta = 0.45+0.45*rnd();  phi = 2*pi*rnd()
+            growBranch(start_k, rotate(dir,theta,phi), 0.6*len, 0.55r, level+1)
+        growBranch(p2, dir2, 0.55*len, 0.45r, level+1)        // the branch continues
+    leafOrBlossomCluster(p2)                                  // leaves at the tips
+\end{Verbatim}
+The result is compiled into OpenGL display lists once (trunk plus seven swaying branch groups, three variants plus a lighter distance version).
 
-\begin{table}[H]
-\centering\small
-\begin{tabular}{@{}p{3.1cm}p{13.2cm}@{}}
-\toprule
-\textbf{Transformation} & \textbf{Used for}\\
-\midrule
-Translation & cyclist $x(t)=x_0+vt \bmod L$, walking person and cat, sliding shoji doors, rising steam, ducks on a circle $(3.5\cos 0.4t,\,3.5\sin 0.4t)$\\
-Rotation & wheels $\theta_w=-d/(rS)$ (rolling without slipping), pedals and cranks, fan blades, hinged entrance door, wind-chime pendulums, head of the stand fan swinging $\pm35^\circ$\\
-Scaling & stretching cubes into planks and counters; cat $\times1.8$, bicycle $\times1.4$; user scaling of selected objects (keys \code{,} and \code{.}); breathing of the noodle steam\\
-Rotation about a pivot & $T(\mathbf c)R(\theta)T(-\mathbf c)$ for swaying tree branch groups, noren curtains, hanging lanterns, the banner's top bar\\
-Projection (shear) & flattening the scene onto the ground for shadows (§\ref{sec:shadow})\\
-\bottomrule
-\end{tabular}
-\caption{Where each 3D transformation is used.}\label{tab:xform}
-\end{table}
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[font=\scriptsize,scale=0.94,transform shape]
-\node[box,text width=3.3cm] (p0) at (0,0) {Person root\\$T(x(t),\,0.115,\,6.85)$};
-\node[box,text width=3.0cm] (p1) at (-1.7,-1.35) {Hip joint: thigh\\$R_z(28^\circ\sin\varphi)$};
-\node[box,text width=3.0cm] (p2) at (-1.7,-2.65) {Knee joint: shin\\$R_z(-35^\circ\,k(\varphi))$};
-\node[box,text width=3.0cm] (p3) at (-1.7,-3.8) {Foot (shoe)};
-\node[box,text width=3.0cm] (p4) at (1.75,-1.35) {Shoulder: upper arm\\$R_z(-0.8\cdot$leg angle$)$};
-\node[box,text width=3.0cm] (p5) at (1.75,-2.65) {Elbow: forearm, hand};
-\draw[arr] (p0) -- (p1); \draw[arr] (p1) -- (p2); \draw[arr] (p2) -- (p3);
-\draw[arr] (p0) -- (p4); \draw[arr] (p4) -- (p5);
-\node[box,text width=3.6cm] (c0) at (8.0,0) {Cyclist root\\$T(x(t),0.03,10.6)\,S(1.4)$};
-\node[box,text width=2.2cm] (c1) at (5.55,-1.35) {Wheels (two)\\$T\,R_z(-d/r)$};
-\node[box,text width=2.2cm] (c1b) at (5.55,-2.65) {Spokes, hub, tyre};
-\node[box,text width=2.2cm] (c2) at (8.0,-1.35) {Frame, bar, saddle};
-\node[box,text width=2.2cm] (c3) at (8.0,-2.65) {Cranks, pedals\\$R_z(-0.55\,d/r)$};
-\node[box,text width=2.2cm] (c4) at (10.45,-1.35) {Rider: torso, head};
-\node[box,text width=2.2cm] (c5) at (10.45,-2.65) {Legs: two-bone IK\\arms to the bar};
-\draw[arr] (c0) -- (c1); \draw[arr] (c1) -- (c1b); \draw[arr] (c0) -- (c2); \draw[arr] (c2) -- (c3); \draw[arr] (c0) -- (c4); \draw[arr] (c4) -- (c5);
-\draw[arr,dashed] (c3.east) -- (c5.west);
-\node[box,text width=2.5cm] (w0) at (13.6,0) {Wind chime\\hook at the awning};
-\node[box,text width=2.5cm] (w1) at (13.6,-1.35) {Bell $R_x(\theta_1)$\\glass dome};
-\node[box,text width=2.5cm] (w2) at (13.6,-2.65) {Clapper\\$R_x(\theta_2-\theta_1)$};
-\node[box,text width=2.5cm] (w3) at (13.6,-3.8) {Paper strip (flutter)};
-\draw[arr] (w0) -- (w1); \draw[arr] (w1) -- (w2); \draw[arr] (w2) -- (w3);
-\end{tikzpicture}
-\caption[Parent--child transformations]{Parent--child transformations of the walking person, the cyclist and the wind chime. A joint moves everything below it; the dashed arrow means the rider's feet follow the pedals.}
-\label{fig:hier}
-\end{figure}
-
-\textbf{Two-bone legs.} For the cyclist the knee position is found from the hip $\mathbf h$, the pedal $\mathbf f$ and the bone lengths $L_1,L_2$ with the law of cosines. With $d=|\mathbf f-\mathbf h|$ clamped to $L_1+L_2$,
+\subsection{Transformations and hierarchical modelling}\label{sec:xf}
+\textbf{Theory.} Points are homogeneous 4-vectors, so translation, scaling and rotation are matrices:
 \begin{equation}
-a=\frac{L_1^2-L_2^2+d^2}{2d},\qquad h=\sqrt{L_1^2-a^2},\qquad \mathbf k=\mathbf h+a\,\hat{\mathbf u}+h\,\hat{\mathbf u}^{\perp},
+T(\mathbf p)=\begin{pmatrix}1&0&0&p_x\\0&1&0&p_y\\0&0&1&p_z\\0&0&0&1\end{pmatrix},\
+S=\mathrm{diag}(s_x,s_y,s_z,1),\
+R_z(\theta)=\begin{pmatrix}\cos\theta&-\sin\theta&0&0\\\sin\theta&\cos\theta&0&0\\0&0&1&0\\0&0&0&1\end{pmatrix}.
 \end{equation}
-so the knee always bends forward and the shin follows the pedal exactly. The cat's step uses a simple swing: each paw moves $0.06\sin(\varphi+\varphi_i)$ with diagonal pairs in anti-phase and is lifted by $0.025\max(0,\cos(\varphi+\varphi_i))$.
-
-\subsection{Textures and texture mapping}\label{sec:tex}
-There are 13 procedural textures, each painted in a function when the program starts: wood planks, dark wood, glazed floor tile, lime plaster, asphalt, concrete, roof tile, a lawn (with a large-scale mottling map that hides the tiling), a water ripple, a soft cloud sprite, the sphere-mapped environment of the room, and the woven tatami. Most use value noise summed over several octaves (fractional Brownian motion) built on an integer hash, made tileable by wrapping the lattice. For example the tatami reeds use a rounded profile across the rows, $k=0.78+0.22\sin(\pi f)+\text{row tone}+\text{fibre}+\text{mottling}$, where $f$ is the fractional row coordinate. Textures use \code{GL\_MODULATE} so the lighting still darkens and tints them, mipmaps with trilinear filtering, and anisotropic filtering where the GPU offers it. Boxes are mapped planarly: the texture coordinates of each face are its size divided by a scale, so one repeat always covers the same real-world length (a plank is always the same width whatever the box). Sphere-mapped texture coordinates (\code{GL\_SPHERE\_MAP}) give the pots and glass a faint reflection of the room. Figure~\ref{fig:tex} shows four of them in the scene.
-
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.24\textwidth}\includegraphics[width=\linewidth,trim=60 20 640 250,clip]{fig_bowlcam.jpg}\caption{Wood planks}\end{subfigure}\hfill
-\begin{subfigure}{0.24\textwidth}\includegraphics[width=\linewidth,trim=620 0 130 250,clip]{fig_stool_on.jpg}\caption{Glazed floor tile}\end{subfigure}\hfill
-\begin{subfigure}{0.24\textwidth}\includegraphics[width=\linewidth,trim=10 200 640 20,clip]{fig_up_orbit.jpg}\caption{Tatami, cloth border}\end{subfigure}\hfill
-\begin{subfigure}{0.24\textwidth}\includegraphics[width=\linewidth,trim=200 0 450 280,clip]{fig_up_windows.jpg}\caption{Board ceiling, beams}\end{subfigure}
-\caption{Procedural textures as they appear in the shop (crops of real screenshots).}
-\label{fig:tex}
-\end{figure}
-
-\subsection{Illumination: ambient, diffuse and specular light}\label{sec:illum}
-OpenGL gives 8 lights, and each light $i$ has its own ambient, diffuse and specular colour. The colour of a surface point with unit normal $\mathbf N$, light direction $\mathbf L$ and half vector $\mathbf H=\widehat{\mathbf L+\mathbf V}$ is
-\begin{equation}
-I=\mathbf e+\sum_i a_i\!\left[\mathbf c_a\mathbf l_{a,i}+\mathbf c_d\mathbf l_{d,i}\max(\mathbf N\!\cdot\!\mathbf L_i,0)+\mathbf c_s\mathbf l_{s,i}\max(\mathbf N\!\cdot\!\mathbf H_i,0)^{n}\right],\qquad a_i=\frac{\sigma_i}{k_c+k_l d+k_q d^2},
-\end{equation}
-where $\mathbf e$ is the material's emission (glowing lantern paper, bulbs), $\mathbf c_{a,d,s}$ are the material colours (the specular colour and the shininess $n$ are set per material: matte plaster $n\!=\!8$, lacquered wood $n\!\approx\!55$, glass $n\!=\!140$), and $a_i$ is the attenuation. For a spot light $\sigma_i=(\cos\alpha)^{e}$ inside the cone ($\alpha\le$ cut-off, here $28^\circ$, $e=35$) and $0$ outside. The global ambient light is zero, so a lamp that is off really lights nothing.
-
-Table~\ref{tab:lights} lists the lights. Only 8 exist, but the shop needs more, so the four lights that normally serve the outside (entrance lanterns, street lamps, sign) are re-assigned to interior roles while the inside is drawn, and put back afterwards; the shader only sees the interior set for interior objects. Keys \code{1}--\code{7} switch each fixture on its own, \code{0} the sun/moon, and \code{-}, \code{=}, \code{\textbackslash} remove just the ambient, diffuse or specular term from every light at once. Figure~\ref{fig:lighting} shows the effect of each term.
-
-\begin{table}[H]
-\centering\footnotesize
-\begin{tabular}{@{}clp{4.5cm}p{6.2cm}@{}}
-\toprule
-\textbf{Light} & \textbf{Type} & \textbf{Position} & \textbf{Role (outside / inside the shop)}\\
-\midrule
-0 & directional & $(0.45,0.70,-0.45)$ & sun (warm white) or moon (blue-silver)\\
-1 & point, $k_{l,q}=0.14,0.07$ & $(0,2.85,0)$ & dining pendant lamps (key \code{1})\\
-2 & point & $(-3.8,2.5,4.5)$ / $(0,2.6,4.7)$ & left entrance lantern / light leaking through the paper wall\\
-3 & point & $(3.8,2.5,4.5)$ / merged & right lantern / box lanterns, hanging lanterns and ceiling panel (keys \code{3--5})\\
-4 & spot $28^\circ$, $e=35$ & $(-2.4,3.25,2.8)$ & left table lamp (key \code{2})\\
-5 & point & $(0,3.4,7)$ / $(2.4,3.25,2.8)$ & street lamps / right table lamp, spot (key \code{2})\\
-6 & point & $(0,4.5,4.2)$ / $(-4.1,1.4,3.2)$ & shop-sign glow / floor lantern tower (key \code{6})\\
-7 & point & $(0,5.15,0)$ & upstairs paper lamp (key \code{7})\\
-\bottomrule
-\end{tabular}
-\caption{The eight lights. At night all fixtures glow in their own warm colour; they flicker slowly.}\label{tab:lights}
-\end{table}
-
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_l_all.jpg}\caption{All terms on}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_l_noamb.jpg}\caption{No ambient}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_l_nodif.jpg}\caption{No diffuse}\end{subfigure}\\[3pt]
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_l_nospec.jpg}\caption{No specular}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_l_off.jpg}\caption{All lights off}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_gouraud.jpg}\caption{Gouraud shading}\end{subfigure}
-\caption[Illumination terms and Gouraud shading]{(a)--(e) The illumination terms switched off one at a time, at night. Without ambient the shadows are slightly deeper; without diffuse only the glow and highlights remain; without specular the shiny counter and pots go flat; with every light off only self-lit surfaces remain. (f) The same view with per-vertex Gouraud shading.}
-\label{fig:lighting}
-\end{figure}
-
-
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.245\textwidth}\includegraphics[width=\linewidth]{fig_tour0.jpg}\caption{Pendant lamps (\code{1})}\end{subfigure}\hfill
-\begin{subfigure}{0.245\textwidth}\includegraphics[width=\linewidth]{fig_dining_b.jpg}\caption{Table lamp and chairs (\code{2})}\end{subfigure}\hfill
-\begin{subfigure}{0.245\textwidth}\includegraphics[width=\linewidth]{fig_tour3.jpg}\caption{Box lanterns (\code{4})}\end{subfigure}\hfill
-\begin{subfigure}{0.245\textwidth}\includegraphics[width=\linewidth]{fig_tour5.jpg}\caption{Lantern tower (\code{6})}\end{subfigure}
-\caption[The light tour]{The light tour (key \code{8}) flies the camera to each fixture and switches it on, so every lamp can be seen with its own glow and light pool.}
-\label{fig:tour}
-\end{figure}
-\subsection{Materials, sky, day and night}\label{sec:sky}
-\textbf{Materials.} Besides colour, each surface has an emission, a specular colour and a shininess. For ordinary dielectrics (wood, ceramic, cloth) the specular colour is white and its strength and sharpness follow the roughness $r\in[0,1]$:
-\begin{equation}
-n = 4+124(1-r)^2,\qquad \rho_s = 0.08+0.55(1-r),
-\end{equation}
-so lacquer ($r\approx0.1$, $n\approx105$) has a tight, bright highlight and cloth ($r\approx0.9$, $n\approx5$) only a faint broad one. For metals the highlight is tinted by the metal colour, which is why gold knobs look gold and steel looks grey. Most surfaces get a small default sheen ($\rho_s=0.14$, $n=24$) so nothing looks flat.
-
-\textbf{Sky.} The sky is a half sphere of 14 rings drawn first, with depth writes off and the camera translation removed from the modelview matrix, so it stays infinitely far away (the skybox technique) and the scene is drawn over it. The colour of ring $k$ blends from the horizon colour to the zenith colour with $t=(e/90^\circ)^{0.55}$, where $e$ is its elevation; by day the horizon equals the fog colour so that far ground melts into the sky. The sun and moon are camera-facing discs with additive halos; at night 132 stars and a cratered moon are added, and soft cloud sprites drift by day.
-
-\textbf{Day and night (key \code{T}).} One switch changes the sky, the sun/moon light (warm gold $0.85,0.78,0.55$ by day; cool blue $0.14,0.16,0.25$ at night), the strength of every lantern and window glow (dimmed to about 15--20\% by day), the street lamps, fog density ($0.012$ or $0.022$), the fireflies and the sun shadows (day only).
-
-\subsection{Gouraud and Phong shading}\label{sec:gouraud}
-With key \code{G} the whole scene switches between two shading models.
-\begin{itemize}
-\item \textbf{Gouraud shading} (fixed function): the lighting equation is evaluated at each vertex and the colour is interpolated across the polygon. It is fast, but a highlight that falls between vertices disappears, which is visible on the large lacquered counter and floor (Figure~\ref{fig:lighting}f).
-\item \textbf{Phong shading} (GLSL 1.20, \code{shader.cpp}): the normal is interpolated and the same equation is evaluated for every pixel, for all 8 lights, with spot cones, attenuation, a per-light enable mask and fog. The specular term uses the Blinn half vector, which gives the broad glossy streaks seen on lacquered wood and steel.
-\end{itemize}
-The vertex shader passes the eye-space position, normal, colour and texture coordinate; the fragment shader multiplies the interpolated colour with the texture, applies the lighting, then mixes in exponential-squared fog $f=e^{-(\rho\,z)^2}$. Unlit things (steam, text, outlines) go through the same program with lighting turned off.
-
-\subsection{Shadows}\label{sec:shadow}
-Three kinds of shadow are used (Figure~\ref{fig:shadow}).
-
-\textbf{Outdoor sun shadows.} The whole outdoor scene is drawn a second time, flattened onto the ground along the sun direction $\mathbf s=(s_x,s_y,s_z)$ with a shear matrix that sends every point to
-\begin{equation}
-x'=x-\frac{s_x}{s_y}\,y,\qquad y'=h,\qquad z'=z-\frac{s_z}{s_y}\,y .
-\end{equation}
-The flattened drawing goes only into the \textbf{stencil buffer} (colour and depth writes off, the stencil value is inverted for the first fragment that covers a pixel and the test then fails for later ones). One soft dark layer is then blended over the marked pixels, so overlapping branches never darken twice and every shadow has exactly the outline of its object. Trees near the shop use their real leaf geometry; trees far away use cheap solid crown shapes. Depth testing is turned off for this pass, because the shadow plane lies a few millimetres above the paving and would otherwise z-fight. At night only a few simple, fixed soft shadows (under the cherry tree and the posts by the shop) are drawn, because moving shadows from the street lamps looked noisy.
-
-\textbf{Interior shadows.} The furniture is projected onto the tiled floor from the pendant and table lamps with the \emph{point-light} version of the same matrix, $x'=\dfrac{l_y x-l_x y}{l_y-y}$, and a stencil counter ($1\to2\to1$) makes each layer darken once.
-
-\textbf{Soft shadows (key \code{Y}).} The counter, stools, tables, chairs and bowls are drawn from the dining pendant light into a $512\times512$ depth texture (FOV $120^\circ$, polygon offset against acne). In the Phong shader every pixel is transformed into the light's clip space and compared to the map with hardware depth compare, using $3\times3$ taps spaced $1.5$ texels apart, each already a bilinear $2\times2$ compare, a percentage-closer filter (PCF). The result is a smooth penumbra instead of a hard edge.
-
-\begin{figure}[!t]
-\centering
-\begin{tikzpicture}[scale=0.88,font=\scriptsize]
-\draw[thick,gray] (-3.4,0) -- (3.4,0);
-\fill[gray!30] (-3.4,-0.15) rectangle (3.4,0);
-\node[circle,fill=yellow!80,draw=orange,inner sep=2pt] (sun) at (-2.3,2.5) {};
-\node[above] at (sun.north) {sun $\mathbf s$};
-\fill[green!50!black] (-0.4,0) rectangle (-0.3,1.0);
-\fill[green!60!black!80] (-0.35,1.35) ellipse (0.55 and 0.4);
-\draw[orange!80!black,dashed] (sun) -- (-0.35,1.35);
-\draw[orange!80!black,dashed] (sun) -- (-0.9,1.35);
-\draw[orange!80!black,dashed,-{Stealth}] (-0.35,1.35) -- (0.95,-0.0);
-\fill[black!55,rounded corners=1pt] (0.75,0) -- (1.55,0) -- (1.55,0.07) -- (0.75,0.07) -- cycle;
-\node[below] at (1.15,-0.02) {shadow = projected copy};
-\node at (0,-0.65) {each tree point $(x,y,z)\mapsto(x-\tfrac{s_x}{s_y}y,\;h,\;z-\tfrac{s_z}{s_y}y)$};
-\end{tikzpicture}\hfill
-\begin{tikzpicture}[scale=0.88,font=\scriptsize]
-\node[boxw,text width=2.3cm] (a) {1. Draw the shop from the lamp: depth map};
-\node[boxw,text width=2.3cm,right=0.45cm of a] (b) {2. Draw the scene; per pixel transform to light space};
-\node[boxw,text width=2.3cm,right=0.45cm of b] (c) {3. $3{\times}3$ compare taps = PCF, soft edge};
-\draw[arr] (a) -- (b); \draw[arr] (b) -- (c);
-\node[below=0.35cm of b,align=center] {soft shadow\\ $s=\tfrac1{9}\sum_{k}\,[z_k\ge z_{\text{pixel}}]$};
-\end{tikzpicture}
-\\[4pt]
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_ext_day.jpg}\caption{Sun shadows (day)}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_sh_off.jpg}\caption{Projected only (\code{Y} off)}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_sh_on.jpg}\caption{Shadow map + PCF (\code{Y} on)}\end{subfigure}
-\caption[Shadow methods]{Top: how a tree is projected onto the ground, and the steps of soft shadow mapping. Bottom: (a) projected tree, bicycle and person shadows; (b), (c) the same view of the dining area without and with the shadow map, which adds soft shadows of the stools, bowls and counter.}
-\label{fig:shadow}
-\end{figure}
-
-\subsection{Glass refraction (screen space)}\label{sec:glass}
-The empty tumbler on the left table is drawn last, over the finished picture. The screen area behind it is copied into a texture, and the tumbler is drawn with a shader that moves the lookup into that texture by the amount \code{refract()} bends the view ray at the glass normal (index $1/1.5$), so the table and floor behind it appear shifted and distorted. A Fresnel reflection $F=0.04+0.96(1-\cos\theta)^5$ (Schlick's approximation) adds the shine of the warm room at grazing angles, and the lamps leave sharp highlights ($n=140$). This is an approximation: only what is already on the screen can be seen through the glass (Figure~\ref{fig:refr}).
-
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.35\textwidth}\includegraphics[width=\linewidth,trim=300 0 300 250,clip]{fig_refr_off.jpg}\caption{\code{Z} off: plain blended glass}\end{subfigure}\hspace{0.04\textwidth}
-\begin{subfigure}{0.35\textwidth}\includegraphics[width=\linewidth,trim=300 0 300 250,clip]{fig_refr_on.jpg}\caption{\code{Z} on: refraction}\end{subfigure}
-\caption[Glass refraction]{The tumbler on the left table without and with screen-space refraction: the floor and table edge behind it are bent and the wall of the glass reflects the room.}
-\label{fig:refr}
-\end{figure}
-
-\subsection{Ray tracing}\label{sec:rt}
-Key \code{R} adds a real ray tracer that runs on the CPU for a few featured objects: the two steel stock pots, the four ramen bowls, a glass ball, the drinking glasses and water jug, and a mirror in the upper room. The rest of the scene is still drawn by OpenGL; the ray tracer only decides the pixels of these objects (Figures~\ref{fig:rtflow2} and~\ref{fig:rtflow}).
-\begin{itemize}
-\item \textbf{Scene.} \code{rtscene.cpp} rebuilds the shop for the rays from the same positions and sizes as the OpenGL models, with boxes, truncated cones, disks and spheres, the same textures, and the live OpenGL lights. Lamps are light-emitting shapes, so they show in reflections.
-\item \textbf{Intersection.} Exact formulas: slab test for boxes, quadratic equations for spheres and cones, plane test for disks. A \textbf{bounding volume hierarchy} (BVH) over the small shapes (median split along the longest axis, at most 2 shapes per leaf) is traversed for every ray; the large floors and walls are tested directly.
-\item \textbf{Shading.} Surfaces reached are lit with the same Blinn--Phong model. Metals, glaze, soup and the mirror spawn a reflection ray weighted by Schlick's Fresnel term, up to three bounces. In glass and water every surface applies \textbf{Snell's law} $n_1\sin\theta_1=n_2\sin\theta_2$ (glass $n=1.5$, water $n=1.33$), with the refracted direction
-\begin{equation}
-\mathbf t=\eta\,\mathbf d+\big(\eta\cos\theta_1-\sqrt{1-\eta^2(1-\cos^2\theta_1)}\big)\mathbf n,\qquad \eta=n_1/n_2,
-\end{equation}
-and total internal reflection when the root is imaginary.
-\item \textbf{Speed.} Only the screen rectangles of the featured objects are traced, the rows are shared by all CPU threads (up to 8), and a ray budget adapts to keep the pass near 25 ms: when a large area is in view, one ray is traced per $2\times2$ or larger block of pixels.
-\item \textbf{Compositing.} The result is drawn over the OpenGL frame in a small shader only where the OpenGL depth buffer shows the same surface, so a nearer object still hides a pot or glass.
-\end{itemize}
-
-\begin{figure}[H]
-\centering
-\resizebox{\textwidth}{!}{\begin{tikzpicture}[font=\scriptsize]
-\node[boxw,text width=2.9cm] (e) at (0,0) {eye ray for every pixel of the object's screen rectangle};
-\node[boxw,text width=2.9cm] (b) at (3.7,0) {BVH traversal: nearest shape hit};
-\node[boxw,text width=3.3cm] (s) at (7.7,0) {metal, glaze, mirror: reflect;\\ glass, water: Snell + Fresnel};
-\node[boxw,text width=3.0cm] (l) at (11.7,0) {Blinn--Phong with the scene lights};
-\node[boxw,text width=3.1cm] (c) at (15.1,0) {composite where the depth matches};
-\foreach \a/\b in {e/b,b/s,s/l,l/c}{\draw[arr] (\a) -- (\b);}
-\draw[arr] (s.south) -- ++(0,-0.55) -| node[below,lab,pos=0.25]{reflected or refracted ray} (b.south);
-\end{tikzpicture}}
-\caption[Ray tracing steps]{The steps taken for every eye ray of a ray-traced object.}
-\label{fig:rtflow2}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_rtc_off.jpg}\caption{OpenGL only (\code{R} off)}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_rtc_on.jpg}\caption{Ray tracing on}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_rt_on.jpg}\caption{Pots and glasses, wider view}\end{subfigure}
-\caption[Ray tracing]{(a), (b) Close view of a bowl without and with ray tracing: the glaze mirrors the light, the glass ball refracts the counter and the water glass bends what is behind it. (c) A wider view with the pots reflecting the room. At this distance one ray covers several pixels, so ray-traced objects look slightly blocky.}
-\label{fig:rtflow}
-\end{figure}
-The cost depends on the build: measured in a close view with 6--7 featured objects on screen (about $7{,}000$ eye rays) on 8 threads, the ray-tracing pass takes about \textbf{13 ms in a Release build} and about 80 ms in Debug, so Release is recommended with \code{R} on.
-
-\subsection{Animation and interaction}\label{sec:anim}
-All motion runs from one clock, \code{animTime}, advanced by a 16 ms timer, so the space bar pauses everything at once.
-\begin{table}[H]
+They compose by multiplication, applied right to left, so $M=T\,R\,S$ scales first and moves last. Rotation about a pivot $\mathbf c$ is $T(\mathbf c)R(\theta)T(-\mathbf c)$. A matrix stack (\code{glPushMatrix}/\code{glPopMatrix}) lets a child part be drawn in the frame of its parent.\\
+\textbf{Implementation.} Every object is placed by one function, \code{applyTransform(pos, rot, scale)} $=T\,R_xR_yR_z\,S$. Table~\ref{tab:xf} shows where each transformation is used.
+\begin{table}[htbp]
 \centering\small
 \begin{tabular}{@{}p{2.6cm}p{13.7cm}@{}}
 \toprule
-\textbf{Object} & \textbf{Motion}\\
+\textbf{Transformation} & \textbf{Used for}\\
 \midrule
-Cyclist & rides from $x=-16$ to $16$ at 7 units/s and restarts; wheels turn by $d/r$ (no slipping), cranks by $0.55\,d/r$, legs follow the pedals by two-bone IK; the headlight glows and throws a beam at night\\
-Person & walks right to left at 1.8 units/s with 28$^\circ$ hip swing, knees that bend while the leg swings forward, arms swinging against the legs, and a $|{\cos}|$ body bob\\
-Cat & walks left to right at 3 units/s; every third lap it stops in front of the shop, turns, sits and washes its face (paw lick, wipe over the ear, head tilt) before walking on\\
-Nobori banner & grid of quads displaced by a travelling wave, calm at the pole and stronger at the free edge (the wave of \S\ref{sec:prim})\\
-Wind chime & two coupled pendulums with real physics (below)\\
-Fans & ceiling fan blades at $160^\circ$/s; stand fan blades at $900^\circ$/s, head swinging $35^\circ\sin(0.6t)$\\
-Nature & wind sway of every tree branch group $A\!\left[\sin(1.1t+\phi)+0.45\sin(2.3t+1.7\phi)+0.25\sin(0.37t+0.5\phi)\right]$, falling petals, ducks on circles, fireflies, ripples\\
-Doors & entrance door hinge 2.5$^\circ$/frame, sliding doors 2.5\%/frame, opened by a mouse click\\
+Translation & cyclist $x(t)=x_0+(vt\bmod L)$; person and cat walking; sliding shoji doors; rising steam; ducks on the circle $(3.5\cos0.4t,\,3.5\sin0.4t)$\\
+Rotation & wheels $\theta=d/r$ (rolling without slipping), cranks, fan blades, hinged door, pendulums of the wind chime, swinging stand-fan head $35^\circ\sin0.6t$\\
+Scaling & stretching cubes into planks and counters, ellipsoids from spheres, cat $\times1.8$, bicycle $\times1.4$, user scaling of selected objects\\
+Pivot rotation & swaying tree branch groups, noren curtain, hanging lanterns, banner\\
+Hierarchy & person (hip $\to$ knee $\to$ foot, shoulder $\to$ elbow), bicycle (wheels, frame, cranks, rider), chime (bell $\to$ clapper $\to$ strip)\\
 \bottomrule
 \end{tabular}
-\caption{The moving objects of the scene.}\label{tab:motion}
+\caption{Where each 3D transformation is used.}\label{tab:xf}
 \end{table}
 
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}
-\node[anchor=south west,inner sep=0] (img) at (0,0) {\includegraphics[width=0.67\textwidth]{fig_street_all.jpg}};
-\begin{scope}[x={(img.south east)},y={(img.north west)},font=\scriptsize]
-\node[fill=white,fill opacity=0.85,text opacity=1,rounded corners=2pt,inner sep=1.5pt] (l1) at (0.15,0.93) {cyclist};
-\draw[-{Stealth},thick,ramen] (l1.south) -- (0.095,0.42);
-\node[fill=white,fill opacity=0.85,text opacity=1,rounded corners=2pt,inner sep=1.5pt] (l2) at (0.60,0.93) {walking person};
-\draw[-{Stealth},thick,ramen] (l2.south) -- (0.745,0.55);
-\node[fill=white,fill opacity=0.85,text opacity=1,rounded corners=2pt,inner sep=1.5pt] (l3) at (0.90,0.72) {cat};
-\draw[-{Stealth},thick,ramen] (l3.south) -- (0.915,0.30);
-\end{scope}
-\node[anchor=south west,inner sep=0] (ch) at ([xshift=0.2cm]img.south east) {\includegraphics[width=0.285\textwidth,trim=330 267 330 0,clip]{fig_chime5.jpg}};
-\node[font=\tiny,anchor=north] at (ch.south) {wind chime (bell, clapper, strip)};
-\end{tikzpicture}
-\caption[Moving things in the street]{Moving things in the street: the cyclist, the person and the cat (day view), and the glass wind chime under the awning of the shop.}
-\label{fig:moving}
-\end{figure}
-\textbf{Wind chime physics.} The bell (angle $\theta_1$, length $L_1=0.12$ m) and the clapper with its paper strip ($\theta_2$, $L_2=0.20$ m) are pendulums driven by a gusty wind $w(t)$ and integrated with 8 semi-implicit Euler sub-steps per frame:
+\subsection{Camera, projection and picking}\label{sec:view}
+\textbf{Theory.} \code{gluLookAt(eye, centre, up)} builds the view matrix from the frame $\mathbf f=\widehat{\mathbf c-\mathbf e}$, $\mathbf s=\widehat{\mathbf f\times\mathbf u}$, $\mathbf u'=\mathbf s\times\mathbf f$. The perspective matrix for vertical field of view $\phi$, aspect $a$ and planes $n,f$ is
 \begin{equation}
-\ddot\theta_1=-\tfrac{g}{L_1}\sin\theta_1-c_1\dot\theta_1+k_1 w(t),\qquad
-\ddot\theta_2=-\tfrac{g}{L_2}\sin\theta_2-c_2\dot\theta_2+k_2 w(t).
+P=\begin{pmatrix}\frac{1}{a\tan(\phi/2)}&0&0&0\\0&\frac{1}{\tan(\phi/2)}&0&0\\0&0&\frac{f+n}{n-f}&\frac{2fn}{n-f}\\0&0&-1&0\end{pmatrix},
 \end{equation}
-The paper strip catches far more wind than the glass ($k_2=22$ against $k_1=3$), so the clapper swings further; when the relative angle $\theta_2-\theta_1$ reaches $0.42$ rad it hits the glass, bounces back with $-0.45$ of the relative velocity, and a star-shaped glint flashes on the rim and fades.
+so after the division by $w=-z_e$ far things are smaller. An orthographic projection has no division by depth.\\
+\textbf{Implementation.} \code{gluPerspective(45, aspect, 0.5, 200)} for the world (62$^\circ$ in game mode); \code{glOrtho} for the HUD, the order board and the title screen so the 2D overlay keeps its pixel size. Seven cameras: Orbit, Walkthrough (\code{WASD} and mouse look), Counter, Upper Room, Pond, Bowl close-up and Light tour. \textbf{Picking:} a click is turned into a world ray with \code{gluUnProject} at depth 0 and 1, $\mathbf r(t)=\mathbf p_{near}+t(\mathbf p_{far}-\mathbf p_{near})$, intersected with the plane of each door, $t=(z_0-p_z)/d_z$, and the hit is tested against the door's rectangle.
 
-\textbf{Interaction.} A click is turned into a world ray with \code{gluUnProject} at the near and far plane, intersected with the plane of each door ($t=(z_0-n_z)/d_z$), and the hit point is tested against the door's rectangle. Keys select an object (Tab) and move, rotate and scale it with the delta-transform system. The cameras are listed in Table~\ref{tab:cam}; the controls are in the project's \code{README}.
-
-\begin{table}[H]
-\centering\small
-\begin{tabular}{@{}p{3.6cm}p{12.7cm}@{}}
-\toprule
-\textbf{Camera} & \textbf{Behaviour}\\
-\midrule
-Orbit (default) & orbits the shop; arrows, wheel and mouse drag change angle, distance and height\\
-Walkthrough (\code{C}) & first person; \code{WASD} to move, mouse to look, stairs followed automatically, clamped in game mode\\
-Counter, Upper Room, Pond (\code{C}) & orbit inside the counter area, the tatami room, and around the lake with the ducks\\
-Bowl close-up (\code{B}) & orbits a ramen bowl at 0.7 m, a good place to see steam and glass\\
-Light tour (\code{8}) & flies to the next lamp, switches it on; \code{9} toggles it\\
-\bottomrule
-\end{tabular}
-\caption[The camera modes]{The seven camera modes. Perspective projection (45$^\circ$, 62$^\circ$ in game mode) is used for the world and an orthographic projection for the HUD.}\label{tab:cam}
-\end{table}
-
-
-\begin{table}[H]
+\subsection{Illumination: ambient, diffuse and specular light}\label{sec:light}
+\textbf{Theory.} The light reaching the eye from a point with unit normal $\mathbf N$, unit light direction $\mathbf L$ and unit view direction $\mathbf V$ is the sum of three terms (Phong reflection model~[1], with Blinn's half vector~[2], $\mathbf H=\widehat{\mathbf L+\mathbf V}$):
+\begin{align}
+I &= \mathbf e+\sum_i a_i\Big[\underbrace{\mathbf c_a\mathbf l_{a,i}}_{\text{ambient}}+\underbrace{\mathbf c_d\mathbf l_{d,i}\max(\mathbf N\!\cdot\!\mathbf L_i,0)}_{\text{diffuse (Lambert)}}+\underbrace{\mathbf c_s\mathbf l_{s,i}\max(\mathbf N\!\cdot\!\mathbf H_i,0)^{n}}_{\text{specular}}\Big],\\
+a_i &= \frac{\sigma_i}{k_c+k_l d+k_q d^2},\qquad \sigma_i=\begin{cases}1&\text{point}\\(\cos\alpha)^{e}\ (\alpha\le\text{cut-off})\ \text{else }0&\text{spot}\end{cases}
+\end{align}
+where $\mathbf e$ is the material's emission (lantern paper, bulbs), $\mathbf c_{a,d,s}$ the material colours, $\mathbf l_{a,d,s,i}$ the colours of light $i$, $n$ the shininess and $a_i$ the attenuation. A directional light (sun, moon) has $a_i=1$. Ambient light gives a constant glow, diffuse depends on the angle to the light only (matte look), specular gives the bright highlight whose sharpness is $n$.\\
+\textbf{Implementation.} OpenGL's 8 lights are set up in \code{lighting.cpp}, each with its own ambient, diffuse and specular colour (Table~\ref{tab:lights}). Material shininess is set per material: plaster $n=8$, lacquered wood $\approx55$, glass $140$; for non-metals $n=4+124(1-r)^2$ from the roughness $r$. The global ambient is zero, so a lamp that is off lights nothing. Only 8 lights exist, so the four outdoor lights (lanterns, street lamps, sign) are re-assigned to interior fixtures while the inside is drawn and put back afterwards. Keys \code{1--7} switch each fixture, \code{0} the sun/moon, and \code{-}, \code{=}, \code{\textbackslash} remove only the ambient, diffuse or specular term from all lights.
+\begin{table}[htbp]
 \centering\footnotesize
-\begin{tabular}{@{}p{2.3cm}p{5.6cm}p{2.3cm}p{5.8cm}@{}}
+\begin{tabular}{@{}clp{11.4cm}@{}}
 \toprule
-\textbf{Key} & \textbf{Action} & \textbf{Key} & \textbf{Action}\\
+\textbf{Light} & \textbf{Type} & \textbf{Role (outside / inside the shop)}\\
 \midrule
-\code{C}, \code{B}, \code{8}, \code{9} & next camera, bowl close-up, light tour, toggle tour lamp & \code{T} & day / night\\
-Mouse drag, wheel & orbit or look; zoom or height & \code{0} & sun / moon on / off\\
-Arrows, PgUp/PgDn & orbit, zoom, higher / lower & \code{1}--\code{7} & each lamp on / off\\
-\code{W A S D}, \code{Q E} & walk; fly down / up & \code{-}, \code{=}, \code{\textbackslash} & ambient / diffuse / specular\\
-Left click & open or close a door & \code{P} & lighting presets\\
-\code{Tab}, \code{I J K L U N} & select; move an object & \code{G}, \code{Y}, \code{Z}, \code{R} & Phong / Gouraud, soft shadows, refraction, ray tracing\\
-\code{[ ] ; ' , .} & rotate, tilt, scale it & \code{H}, \code{O}, \code{F}, \code{X} & roof, outlines, fog, steam\\
-\code{Space}, \code{Esc} & pause, quit & \code{Enter}, \code{M} & start the game, back to exploring\\
+0 & directional & sun (warm white) or moon (blue-silver)\\
+1 & point, $k_{l,q}=0.14,0.07$ & dining pendant lamps (key \code{1})\\
+2, 3 & point & entrance lanterns / light through the paper wall; box lanterns, hanging lanterns, ceiling panel (keys \code{3--5})\\
+4, 5 & spot $28^\circ$, $e=35$ / point & left and right table lamps (key \code{2}) / street lamps\\
+6 & point & shop-sign glow / floor lantern tower (key \code{6})\\
+7 & point & upstairs paper lamp (key \code{7})\\
 \bottomrule
 \end{tabular}
-\caption{The keyboard and mouse controls.}\label{tab:controls}
+\caption{The eight lights.}\label{tab:lights}
 \end{table}
-\subsection{The ramen cooking game}\label{sec:game}
-A thin game layer on top of the shop (\code{game.cpp}); it is opt-in, so the program starts in explore mode and \code{Enter} opens it. A state machine drives it (Figure~\ref{fig:game}): a customer walks in and sits down and an order appears; the player takes raw noodles (1) to the noodle pot, takes a bowl (2), scoops the noodles when they look perfectly boiled, ladles broth, adds toppings (3--6) at the prep area, and serves the bowl. The noodle colour changes with the boiling time, and the result is graded:
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_l_all.jpg}\caption{All terms on}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_l_nodif.jpg}\caption{No diffuse}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_l_nospec.jpg}\caption{No specular}\end{subfigure}\\[2pt]
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_l_noamb.jpg}\caption{No ambient}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_l_off.jpg}\caption{All lights off}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_gouraud.jpg}\caption{Gouraud shading}\end{subfigure}
+\caption{Result: the lighting terms switched off one at a time, and the same view with Gouraud shading.}\label{fig:light}
+\end{figure}
+
+\subsection{Shading: Gouraud and Phong}\label{sec:shade}
+\textbf{Theory.} \emph{Flat} shading gives one colour per polygon. \emph{Gouraud} shading evaluates the illumination equation at the vertices and interpolates the colours across the triangle with barycentric coordinates, $C=\lambda_1C_1+\lambda_2C_2+\lambda_3C_3$; a highlight lying inside a polygon is lost. \emph{Phong} shading interpolates the \emph{normal}, $\mathbf N=\widehat{\lambda_1\mathbf N_1+\lambda_2\mathbf N_2+\lambda_3\mathbf N_3}$, and evaluates the illumination equation at every pixel, so highlights are round and accurate.\\
+\textbf{Implementation.} Key \code{G} switches between the two. Gouraud is the fixed-function path (\code{glShadeModel(GL\_SMOOTH)}). Phong is my GLSL 1.20 program in \code{shader.cpp}: the vertex shader passes the eye-space position, normal, colour, texture coordinate and fog distance; the fragment shader multiplies the colour by the texture, loops over the 8 lights (skipping those whose \code{lightOn[i]} is 0), computes $\mathbf L$, the attenuation, the spot cone and the three terms, then mixes the fog. Flat shading was not implemented. The core of the fragment shader:
+\begin{Verbatim}
+vec3 N = normalize(vNormal), V = normalize(-vPos);
+vec4 result = lightModelAmbient*base + material.emission;
+for (int i = 0; i < 8; i++) { if (lightOn[i] < 0.5) continue;
+    L = directional ? normalize(pos) : normalize(pos - vPos);   // atten = 1/(kc+kl d+kq d^2), spot: pow(cos,e)
+    result += light[i].ambient * base * atten;
+    float NdotL = max(dot(N,L),0.0);
+    if (i==1 && shadowOn) atten *= pendantShadow();             // soft shadow of light 1
+    result += light[i].diffuse * base * NdotL * atten;
+    if (NdotL > 0.0) { vec3 H = normalize(L+V);
+        result += light[i].specular * material.specular * pow(max(dot(N,H),0.0), shininess) * atten; } }
+\end{Verbatim}
+
+\subsection{Textures and texture mapping}\label{sec:tex}
+\textbf{Theory.} A texture is a function $(u,v)\mapsto$ colour. Planar mapping of a box face uses $u=x/s$, $v=z/s$ with a world scale $s$, so one repeat always covers the same length. \emph{Mipmaps} (pre-averaged half-size copies, level $\lambda=\log_2$ texels-per-pixel) with trilinear filtering remove shimmering, and anisotropic filtering keeps floors sharp at grazing angles. Procedural textures use \emph{value noise}: random values $h(i,j)$ on an integer lattice, smoothly interpolated with $s(t)=3t^2-2t^3$,
 \begin{equation}
-Q = 0.5\,\text{accuracy}+0.35\,\text{cook}+0.15\,\text{time},\qquad \text{stars}=\operatorname{round}(5Q),
+n(x,y)=\operatorname{lerp}\big(\operatorname{lerp}(h_{00},h_{10},s(f_x)),\ \operatorname{lerp}(h_{01},h_{11},s(f_x)),\ s(f_y)\big),\qquad \text{fBm}(x,y)=\sum_{k=0}^{m-1}2^{-(k+1)}\,n(2^kx,2^ky),
 \end{equation}
-where accuracy is the matched share of required items minus extras, \emph{cook} is $0.15,0.60,1.00,0.60,0.10$ for raw ($<3$ s), undercooked, perfect (6--9 s), overcooked and ruined ($>12$ s), and \emph{time} is the patience left (from $105-14(\text{level}-1)$ s, at least 50 s). Money is $\lfloor 10\,Q\,(1+0.1(\text{level}-1))+0.5\,\text{stars}\rfloor\times 10$ yen, plus 20 yen for a five-star bowl; a new level (up to 4) starts every two customers and adds toppings and harder orders.
+made tileable by wrapping the lattice index (\code{ix mod period}).\\
+\textbf{Implementation.} \code{texture.cpp} paints 13 textures at start-up: wood planks, dark wood, glazed floor tile, lime plaster, asphalt, concrete, roof tile, grass, grass macro layer, water, tatami, sphere-map environment and a cloud sprite. Textures use \code{GL\_MODULATE} so lighting still shades them.
 
-\begin{figure}[!t]
+\paragraph{Grass (my own texture).} The lawn is one $240\times240$ quad drawn unlit. (1)~A base colour field mixes four greens $G_0=(0.12,0.24,0.08)$, $G_1=(0.22,0.36,0.11)$, $G_2=(0.33,0.46,0.15)$, $G_3=(0.45,0.53,0.21)$ with three noise octaves using the smooth step: $c=\operatorname{mix}(G_1,G_2,0.55\,\text{sstep}(0.3,0.7,n_2))\to\operatorname{mix}(\cdot,G_2,0.35\,\text{sstep}(0.45,0.75,n_1))\to\operatorname{mix}(\cdot,G_3,0.12\,\text{sstep}(0.6,0.85,n_3))$, times a $\pm6\%$ mottling. (2)~Then $WH/40$ short \textbf{blade strokes} are painted: random start, direction near vertical ($90^\circ\pm35^\circ$) 80\% of the time, length 3.5--10 texels, alpha $0.22$ tapering to half at the tip, colour from the greens (45\% dark, 30\% mid, 13\% light, 7\% sun-bleached, 5\% dead brown). (3)~$\pm3\%$ grain is added. The $512\times512$ result repeats every 14 units; a second low-contrast \textbf{macro} texture repeated every 90 units is multiplied in with $C=2C_{dst}C_{src}$ (neutral at $0.5$) to hide the repeat; at night a dark green tint is used. Real 3D \textbf{tufts} (30 arching blades, $y=Ht(1-0.3t)$, width $0.03(1-t)^{0.8}$, on a golden-angle spiral, three variants, about 500 placed, swaying $2.5\sin(1.5t+0.6x+0.4z)$ degrees) stand on it.
+
+\paragraph{Cobblestone street and sidewalk (my own).} \code{drawStreet}: a road bed 8 wide and 240 long with $1.2\times0.8$ stones separated by $0.06$ grout in a brick pattern (every second row offset by half a stone); each stone is light, base or dark by $h=\tfrac12\sin(13.7x+29.3z)+\tfrac12$ (light for $h>0.6$, dark for $h<0.3$); raised curbs and a darker centre line. \code{drawSidewalk}: $1.4\times1.4$ flagstones in two tones, chosen by $\tfrac12\sin(17.3x+41.7z)+\tfrac12$, with a stone border.
+\begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[font=\scriptsize]
-\node[box,minimum width=1.7cm] (m) at (0,0) {MENU};
-\node[box,minimum width=2.4cm] (o) at (3.4,0) {TAKING\_ORDER};
-\node[box,minimum width=1.9cm] (c) at (6.9,0) {COOKING};
-\node[box,minimum width=1.9cm] (s) at (10.0,0) {SERVING};
-\node[box,minimum width=1.9cm] (r) at (13.0,0) {RESULT};
-\draw[arr] (m) -- node[above,lab]{Enter} (o);
-\draw[arr] (o) -- node[above,lab]{customer seated} (c);
-\draw[arr] (c) -- node[above,lab]{bowl ready} (s);
-\draw[arr] (s) -- node[above,lab]{serve} (r);
-\draw[arr] (r.north) -- ++(0,0.55) -| node[above,lab,pos=0.25]{next customer (a new level every 2)} (o.north);
-\node[box,fill=gray!15,minimum width=1.9cm] (p) at (8.4,-1.1) {PAUSED};
-\draw[arr,dashed] (c.south) |- node[left,lab,pos=0.25]{Esc} (p.west);
-\draw[arr,dashed] (r.south) |- node[right,lab,pos=0.25]{customer leaves: failed} (p.east);
-\end{tikzpicture}\\[3pt]
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_game_menu.jpg}\caption{Title screen}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_game_order.jpg}\caption{Order board and prompts}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_game_cust.jpg}\caption{A customer at the counter}\end{subfigure}
-\caption{The game: its state machine and three screens (HUD drawn with an orthographic projection).}
-\label{fig:game}
+\begin{subfigure}{0.49\textwidth}\fig{1}{r_grass.jpg}\caption{Grass texture, 3D tufts and flowers}\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}\fig{1}{r_street.jpg}\caption{Cobblestone street texture}\end{subfigure}\\[2pt]
+\begin{subfigure}{0.24\textwidth}\includegraphics[width=\linewidth,trim=60 20 640 250,clip]{fig_bowlcam.jpg}\caption{Wood}\end{subfigure}\hfill
+\begin{subfigure}{0.24\textwidth}\includegraphics[width=\linewidth,trim=620 0 130 250,clip]{fig_stool_on.jpg}\caption{Floor tile}\end{subfigure}\hfill
+\begin{subfigure}{0.24\textwidth}\includegraphics[width=\linewidth,trim=10 200 640 20,clip]{fig_up_orbit.jpg}\caption{Tatami}\end{subfigure}\hfill
+\begin{subfigure}{0.24\textwidth}\includegraphics[width=\linewidth,trim=200 0 450 280,clip]{fig_up_windows.jpg}\caption{Ceiling boards}\end{subfigure}
+\caption{Result: the procedural textures. Tatami uses a rounded reed profile $k=0.78+0.22\sin\pi f+\text{row tone}+\text{fibre}$.}\label{fig:tex}
 \end{figure}
 
-% =====================================================================
-%                          4 RESULTS
-% =====================================================================
-\section{Results}
-\subsection{Outdoors}
-Figure~\ref{fig:out} shows the shop by day and at night. By day the sun and sky light fill the scene and trees cast shadows on the lawn, sidewalk and street; at night the street lamps and lanterns glow, the shop windows shine through the paper, and fireflies drift over the grass. The street is alive with the cyclist, the person and the cat, and the pond behind the shop has two ducks swimming around the lily pads.
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_ext_day2.jpg}\caption{Day}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_ext_night.jpg}\caption{Night}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_pond.jpg}\caption{Pond view with ducks}\end{subfigure}
-\caption{The shop from outside and the lake behind it.}
-\label{fig:out}
-\end{figure}
-
-\subsection{Ground floor}
-Inside, the counter, kitchen, tables and lamps show most of the lighting and material work (Figure~\ref{fig:in}): the lacquered counter top and the steel pots catch bright highlights, the pendant and paper lanterns warm the wood, the table lamps (bell-shaped glass-and-wood pendants) cast cones of light onto the tables, and the stools throw soft shadows.
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_counter.jpg}\caption{Counter and stools}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_kitchen.jpg}\caption{Kitchen and counter top}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_dining_a.jpg}\caption{Customer table}\end{subfigure}
-\caption{The ground floor.}
-\label{fig:in}
-\end{figure}
-
-\subsection{Upstairs tatami room and details}
-The upper room (Figure~\ref{fig:up}) is a cosy Japanese bedroom: woven tatami, plaster walls with a timber frame, fusuma doors with a checker band, a board ceiling with a square paper lamp, a futon with a flower quilt, a tea set on the chabudai, framed pictures drawn in code (Mt.~Fuji, lucky cat, onigiri, koi, a great wave and a ramen poster), windows that let the daylight in, and two fans. The wind chime under the porch awning and the nobori banner by the door complete the front.
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_up_orbit.jpg}\caption{Room view}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_up_windows.jpg}\caption{Windows, lamp and fan}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_up_bed.jpg}\caption{Futon and andon lamp}\end{subfigure}\\[3pt]
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_up_pics.jpg}\caption{Wall pictures}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth]{fig_porch.jpg}\caption{Porch with banner and chime}\end{subfigure}\hfill
-\begin{subfigure}{0.325\textwidth}\includegraphics[width=\linewidth,trim=330 267 330 0,clip]{fig_chime5.jpg}\caption{Wind chime (cropped)}\end{subfigure}
-\caption{The upstairs room, the porch details and the wind chime.}
-\label{fig:up}
-\end{figure}
-
-% =====================================================================
-%                          5 DISCUSSION
-% =====================================================================
-
-\subsection{Summary and performance}
-\begin{table}[H]
+\subsection{Skybox, sun, moon, stars, clouds and day / night}\label{sec:sky}
+\textbf{Theory.} A \emph{skybox} is drawn first with the depth test and depth write off and with the camera translation removed from the modelview matrix (only rotation kept), so it appears infinitely far and everything else is drawn over it. Glowing objects add light, so halos use \emph{additive blending}, $C=\alpha C_s+C_d$; ordinary transparency uses $C=\alpha C_s+(1-\alpha)C_d$. A \emph{billboard} is a quad rotated to always face the camera.\\
+\textbf{Implementation.} \code{drawSky()} draws four layers (Table~\ref{tab:sky}); key \code{T} switches day and night, changing the sky colours, the sun/moon light colour (warm gold or cool blue), the lantern and window glow, the street lamps, the fog density ($0.012$ or $0.022$) and the shadows.
+\begin{table}[htbp]
 \centering\small
-\begin{tabular}{@{}p{5.2cm}p{2.9cm}p{5.0cm}p{3.0cm}@{}}
+\begin{tabular}{@{}p{2.2cm}p{14.1cm}@{}}
 \toprule
-\textbf{Item} & \textbf{Value} & \textbf{Item} & \textbf{Value}\\
+\textbf{Layer} & \textbf{Construction}\\
 \midrule
-Lights / switchable fixtures & 8 / 7 & Camera modes & 7\\
-Procedural textures & 13 & Shadow map & $512\times512$, PCF $3\times3$\\
-Ray-traced objects & 14 & Ray-trace cost (Release / Debug) & about 13 ms / 80 ms\\
-Cooking-game stations & 4 & Noodle states, levels & 5, up to 4\\
-Source files, lines of code & 35, about 15,000 & External assets & none\\
+Dome & 14 rings of 36 triangle strips, radius 150, elevation $-10^\circ$ to $90^\circ$; vertex colour $=\operatorname{mix}(\text{horizon},\text{zenith},t)$ with $t=(e/90^\circ)^{0.55}$. Day $(0.64,0.79,0.93)\to(0.17,0.40,0.80)$; night $(0.10,0.10,0.16)\to(0.015,0.02,0.07)$. By day the horizon equals the fog colour.\\
+Sun & five camera-facing triangle-fan discs at direction $(45,7,-63)$: halos of radius 26, 13, 7 (alpha $0.12/0.22/0.35$ fading to 0 at the rim, additive), core radius 3, bloom radius 4; warm yellow to white\\
+Moon & same position at night: cool halos (24, 11, 6), disc radius 2.8 and six darker craters (fans of radius 0.3--0.7, alpha $0.55\to0$)\\
+Stars & 132 points (57 bright of 3 px, 75 dim of 1.5 px); brightness $0.7+0.3\sin(\omega_it+\varphi_i)$\\
+Clouds & 12 clouds $\times$ 22 billboards, one 128$\times$128 RGBA noise sprite, flat base and domed top, sorted low to high, drifting with $a_0+vt$\\
 \bottomrule
 \end{tabular}
-\caption[Scene statistics]{Scene statistics. The ray-trace time was measured in a close view with 6--7 featured objects (about 7,000 eye rays) on 8 threads.}
-\label{tab:stats}
+\caption{Layers of the sky.}\label{tab:sky}
 \end{table}
-\begin{table}[H]
-\centering\small
-\begin{tabular}{@{}p{4.7cm}p{3.0cm}p{8.6cm}@{}}
-\toprule
-\textbf{Parameter} & \textbf{File} & \textbf{What changing it does}\\
-\midrule
-\code{SHADOW\_MAP\_SIZE} (512) & \code{shadowmap.cpp} & 1024 gives sharper soft shadows at a higher GPU cost\\
-Spot cut-off $28^\circ$, exponent 35 & \code{lighting.cpp} & wider cone / softer centre of the table lamps\\
-$k_l$, $k_q$ of each light & \code{lighting.cpp} & how far each lamp reaches (pool of light)\\
-\code{TARGET\_MS} (25) & \code{rtpass.cpp} & smaller: smoother frame rate but blockier ray tracing\\
-\code{TREE\_LOD\_DIST} (18) & \code{exterior.cpp} & distance at which trees switch to the lighter build\\
-Wind-chime gains $k_1,k_2$ & \code{scene.cpp} & how strongly the wind pushes the bell and the strip\\
-Cyclist, person and cat speeds & \code{scene.cpp} & how fast they move along the street\\
-\bottomrule
-\end{tabular}
-\caption{Parameters that can be changed to see their effect.}\label{tab:params}
-\end{table}
-\section{Discussion}
-\textbf{What worked.} Building every object from a few primitives kept the code small and the scene consistent, and the per-light switches made the lighting model easy to inspect. The shadow stencil trick gives clean, non-overlapping tree shadows cheaply, and the hybrid of rasterisation with a small ray tracer shows real reflection and refraction without tracing the whole scene.
+\begin{Verbatim}
+glDisable(GL_DEPTH_TEST);  glDepthMask(GL_FALSE);  glDisable(GL_FOG);
+glGetFloatv(GL_MODELVIEW_MATRIX, mv);  mv[12] = mv[13] = mv[14] = 0;  glLoadMatrixf(mv);  // rotation only
+drawGradientDome();  drawSunOrMoon();  if (night) drawStars();  drawCloudBillboards();
+glDepthMask(GL_TRUE);  glEnable(GL_DEPTH_TEST);                                              // scene on top
+\end{Verbatim}
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_cyclist.jpg}\caption{Day: sun glow and sky}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_moon.jpg}\caption{Night: cratered moon}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_stars.jpg}\caption{Night: stars and clouds}\end{subfigure}
+\caption{Result: sun, moon, stars and clouds.}\label{fig:sky}
+\end{figure}
 
-\textbf{Problems and how they were solved.}
+\subsection{Blending, transparency, emission and fog}
+\textbf{Theory.} Fog mixes the colour with a fog colour by $f=e^{-(\rho z)^2}$ (exponential-squared): $C=fC_{surface}+(1-f)C_{fog}$. Transparent objects must be drawn after opaque ones, with depth \emph{writes} off, because the depth buffer cannot sort translucent surfaces.\\
+\textbf{Implementation.} Glass, water, steam, clouds and soft shadows use alpha blending; halos, glows, light cones and fireflies use additive blending. All glass is drawn in a final transparent pass (\code{drawTransparentPass}). Steam is seven translucent spheres per bowl with phase $\varphi=(0.65t+\text{offset}+i/7)\bmod1$, radius $(0.09+0.32\varphi)$ and alpha $0.28\sin\pi\varphi$. Fog is applied in the Phong shader (and by \code{glFog} in the fixed path) with $\rho=0.012$ by day and $0.022$ at night.
+
+\subsection{Shadows}\label{sec:shadow}
+\textbf{Theory.} \emph{Planar projective shadow:} a point is flattened onto the plane $y=h$ along the light direction $\mathbf s$ (toward the light):
+\begin{equation}
+x'=x-\frac{s_x}{s_y}(y-h),\qquad y'=h,\qquad z'=z-\frac{s_z}{s_y}(y-h),
+\end{equation}
+a single $4\times4$ matrix; for a point light at $\mathbf l$, $x'=\dfrac{l_yx-l_xy}{l_y-y}$. \emph{Shadow mapping} (Williams~[5]) renders the scene from the light into a depth texture; a pixel with light-space depth $z_L$ is in shadow if $z_L>z_{map}+\epsilon$. \emph{Percentage-closer filtering}~[6] averages several comparisons, $s=\frac1N\sum_k[z_L\le z_{map,k}+\epsilon]$, for a soft edge.\\
+\textbf{Implementation.} (1)~\emph{Sun shadows:} the whole outdoor scene is drawn a second time with the flattening matrix into the \textbf{stencil buffer} only (colour and depth writes off); then one soft dark layer is blended where the stencil is set, so overlapping shadows never darken twice. Depth testing is off for this pass (the plane is a few millimetres above the ground and would z-fight). (2)~\emph{Interior:} furniture is projected from the pendant and table lamps onto the tile floor with the point-light matrix and a stencil counter. (3)~\emph{Soft shadows (key \code{Y}):} the counter, stools, tables, chairs and bowls are drawn from the pendant light into a $512\times512$ depth texture (FOV $120^\circ$, \code{glPolygonOffset} against acne); in the fragment shader every pixel is moved to light space and compared $3\times3$ times, $1.5$ texels apart (each already a bilinear $2\times2$ hardware compare) and averaged (\code{pendantShadow()} above). The stencil pass of the sun shadow (\code{shadowLayer} in \code{scene.cpp}, shortened):
+\begin{Verbatim}
+glDisable(GL_DEPTH_TEST);  glEnable(GL_STENCIL_TEST);
+glStencilFunc(GL_EQUAL, 0, 0xFF);               // exterior ground only (stencil 0)
+glStencilOp(GL_KEEP, GL_KEEP, GL_INVERT);       // first fragment flips 0 -> 0xFF, later ones fail
+glColorMask(0,0,0,0);  glDepthMask(GL_FALSE);   // write only the stencil
+glPushMatrix();  multShadowMatrix(mode, lx, ly, lz, groundY);  drawExteriorBody();  glPopMatrix();
+glColorMask(1,1,1,1);
+glStencilFunc(GL_EQUAL, 0xFF, 0xFF);  glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO);   // blend once, clear mask
+glEnable(GL_BLEND);  glColor4f(0.01, 0.03, 0.01, alpha);  shadowRegion(sidewalk, groundY);   // dark layer
+\end{Verbatim}
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_ext_day.jpg}\caption{Sun shadows (stencil)}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_sh_off.jpg}\caption{Projected only}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_sh_on.jpg}\caption{Shadow map + PCF}\end{subfigure}
+\caption{Result: the three shadow methods.}
+\end{figure}
+
+\subsection{Glass refraction (screen space)}\label{sec:glass}
+\textbf{Theory.} Snell's law $n_1\sin\theta_1=n_2\sin\theta_2$ bends a ray entering glass ($n=1.5$); the direction is $\mathbf t=\eta\mathbf d+(\eta c-\sqrt{1-\eta^2(1-c^2)})\mathbf n$ with $\eta=n_1/n_2$, $c=-\mathbf n\!\cdot\!\mathbf d$. The reflected share is Schlick's approximation~[7] $F=F_0+(1-F_0)(1-\cos\theta)^5$, $F_0=\big(\frac{n_1-n_2}{n_1+n_2}\big)^2\approx0.04$.\\
+\textbf{Implementation.} The tumbler on the left table is drawn last. The screen behind it is copied into a texture; a GLSL shader offsets the texture lookup by the amount \code{refract(I, N, 1/1.5)} bends the view ray at the glass normal, and adds $F$ times the reflected room colour and a sharp lamp highlight ($n=140$). Only what is already on screen can be refracted, so this is an approximation (key \code{Z}).
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.22\textwidth}\includegraphics[width=\linewidth,trim=300 0 300 250,clip]{fig_refr_off.jpg}\caption{\code{Z} off}\end{subfigure}\hspace{0.03\textwidth}
+\begin{subfigure}{0.22\textwidth}\includegraphics[width=\linewidth,trim=300 0 300 250,clip]{fig_refr_on.jpg}\caption{\code{Z} on}\end{subfigure}
+\caption{Result: the tumbler without and with refraction.}
+\end{figure}
+
+\subsection{Ray tracing}\label{sec:rt}
+\textbf{Theory.} Rasterisation asks for each triangle which pixels it covers; ray tracing asks for each pixel which object its ray hits. A ray is $\mathbf r(t)=\mathbf o+t\mathbf d$, $t>0$. At the nearest hit (point $\mathbf p$, normal $\mathbf n$) the colour is the local Blinn--Phong colour plus recursive rays (Whitted~[4]): a \emph{reflection} ray $\mathbf r=\mathbf d-2(\mathbf d\!\cdot\!\mathbf n)\mathbf n$ and, for glass, a \emph{refraction} ray $\mathbf t$ (Snell's law above; if $1-\eta^2(1-c^2)<0$ the ray is totally internally reflected). They are weighted by the Fresnel term, $C=(1-F)C_{local\text{ or }refr}+F\,C_{refl}$. Intersections: for a \textbf{sphere} $|\mathbf p-\mathbf c|^2=R^2$ substituting the ray gives $|\mathbf d|^2t^2+2\,\mathbf d\!\cdot\!(\mathbf o-\mathbf c)\,t+|\mathbf o-\mathbf c|^2-R^2=0$ (discriminant $<0$: miss); for a \textbf{plane/disk} $t=\frac{(\mathbf q-\mathbf o)\cdot\mathbf n}{\mathbf d\cdot\mathbf n}$ then a radius test; for an \textbf{axis-aligned box} the slab method, $t_{1,2}=(b_{min,max}-o)/d$ per axis, hit if $\max t_{near}\le\min t_{far}$; for a \textbf{cone / frustum} a quadratic in $t$ whose root must lie in the height range. A \textbf{bounding volume hierarchy} (BVH) wraps groups of shapes in boxes so a ray that misses a box skips everything inside it: the cost per ray falls from $O(n)$ to about $O(\log n)$.\\
+\textbf{Implementation} (\code{rtcore.cpp}, \code{rtscene.cpp}, \code{rtpass.cpp}; key \code{R}).
 \begin{itemize}
-\item \emph{Only 8 lights.} The outdoor lights are re-assigned to interior fixtures while the inside is drawn, and a shader mask keeps outside lights from lighting the interior through the walls.
-\item \emph{Lights switched off but the room still lit.} A global ambient and glowing materials caused it; the global ambient is now zero and glowing surfaces fade with their lamp, so every term really belongs to a light.
-\item \emph{Broken, streaky shadows.} The shadow planes were a few millimetres above the ground and z-fought, and leaf cards left gaps in the stencil; depth testing is off for that pass, and trees use full leaf geometry near the shop and solid crowns far away.
-\item \emph{Blocky ray-traced pots up close.} The ray budget keeps the cost bounded, so a large on-screen pot gets one ray per several pixels; it is crisp at normal distances and in Release builds.
+\item \textbf{What is traced:} the 2 steel stock pots, the 4 ramen bowls, the glass ball on the counter and the mirror upstairs (8 objects). The rest of the frame stays OpenGL.
+\item \textbf{Scene:} \code{rtBuildShopScene} rebuilds the shop for the rays from the same positions and sizes as the OpenGL models (boxes, truncated cones, disks, spheres), with CPU copies of the textures and the live OpenGL lights; lamps are emissive shapes so they appear in reflections. The BVH uses a median split on the longest axis with at most 2 shapes per leaf; large floors and walls are tested directly.
+\item \textbf{Shading:} metal, glaze, soup and the mirror add a reflection ray $\times F$ (up to \code{maxDepth}=3); the glass ball applies Snell's law at every surface, with total internal reflection.
+\item \textbf{Speed:} only the screen rectangle of each traced object is processed, rows are shared by up to 8 threads, and a ray budget keeps the pass near 25\,ms by tracing one ray per $2\times2$ (or larger) block when a big area is on screen; measured about 13\,ms in Release (7\,000 eye rays), 80\,ms in Debug.
+\item \textbf{Compositing:} a shader draws the result over the OpenGL frame only where the depth buffer shows the same surface, so nearer objects still hide a pot.
 \end{itemize}
+The recursion of the tracer (\code{radiance} and \code{glassRadiance} in \code{rtcore.cpp}, simplified):
+\begin{Verbatim}
+radiance(o, d, depth):
+    hit = bvhIntersect(o, d)                       // nearest shape; big floors/walls tested directly
+    if no hit: return skyColour
+    N = normal facing the ray;  V = -d
+    EMISSIVE: return emission                      // lamps: they show up in reflections
+    DIFFUSE : return blinnPhong(hit, N, V)         // all lights, no shadow rays
+    GLASS   : return glassRadiance(hit, d, depth)
+    METAL / GLAZE / LIQUID / MIRROR:
+        F = schlick(f0, dot(N,V));  local = blinnPhong(hit, N, V)
+        if depth >= maxDepth: return local
+        return local*(1-F) + radiance(p+N*eps, reflect(d,N), depth+1) * F
 
-\textbf{Limitations.} Refraction through glass is a screen-space approximation; ray tracing covers only the featured interior objects and not the outdoor scene; with full leaf geometry the shadow edge is slightly broken where light passes between leaf cards; the night shadows outdoors are simple fixed shapes; and there is no sound. The scene is designed for a desktop GPU with OpenGL 3.0.
+glassRadiance(hit, d, depth):                      // follows the ray through up to 10 surfaces
+    repeat:  entering = dot(d,n) < 0;  eta = entering ? 1/ior : ior
+             t = refract(d, n, eta)                // fails => total internal reflection
+             F = tir ? 1 : R0 + (1-R0)*(1-cos)^5
+             if first surface: colour += radiance(p, reflect(d,n), depth+1) * F
+             if tir: d = reflect(d,n)  else: { throughput *= (1-F);  d = t }
+             next = next surface of the same glass object, else the whole scene
+             if next is not glass: return colour + throughput * radiance(p, d, depth+1)
+\end{Verbatim}
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_rtc_off.jpg}\caption{OpenGL only}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_bowlrt.jpg}\caption{Ray tracing: glaze, ball}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_mirror.jpg}\caption{Mirror upstairs}\end{subfigure}
+\caption{Result: ray tracing (key \code{R}). The glaze mirrors the lamps, the glass ball refracts the counter, the mirror reflects the room.}\label{fig:rt}
+\end{figure}
 
-\textbf{Possible improvements.} Cube-map shadow maps for each lamp, a shadow map for the sun, ray tracing in a compute shader with a GPU BVH, and customers that walk into the shop by themselves.
+\subsection{Animation and the characters}\label{sec:anim}
+\textbf{Theory.} Every motion is a function of one clock $t$ (\code{animTime}, advanced by a 16\,ms timer; \code{Space} pauses). A wheel that has rolled a distance $d$ has turned $\theta=d/r$. A joint chain is \emph{forward kinematics} (a stack of rotations); \emph{inverse kinematics} finds the joint from the target: for a two-bone limb with hip $\mathbf h$, foot $\mathbf f$, bone lengths $L_1,L_2$ and $d=|\mathbf f-\mathbf h|$,
+\begin{equation}
+a=\frac{L_1^2-L_2^2+d^2}{2d},\qquad h=\sqrt{L_1^2-a^2},\qquad \mathbf k=\mathbf h+a\,\hat{\mathbf u}+h\,\hat{\mathbf u}^{\perp}.
+\end{equation}
+Smooth easing uses $3k^2-2k^3$. A pendulum with wind obeys $\ddot\theta=-\frac gL\sin\theta-c\dot\theta+kw(t)$, integrated by semi-implicit Euler steps ($\dot\theta\leftarrow\dot\theta+\ddot\theta\Delta t$, then $\theta\leftarrow\theta+\dot\theta\Delta t$).\\
+\textbf{Implementation} (\code{scene.cpp}). A helper \code{limb(a,b,r)} draws a cylinder between two points.
+\begin{itemize}
+\item \textbf{Cyclist} (\code{drawBicycle}): rides $x=-16\ldots16$ at 7 units/s, scale $1.4$. Wheel angle $-d/(rS)$; two cranks of length $0.17$ turn at $0.55\,d/(rS)$ and the legs ($L_1=L_2=0.47$) reach the pedals by the IK above; the frame is seven red tubes; a headlight and an additive road beam at night; shadow on the cobblestones.
+\begin{Verbatim}
+dist  = fmod(animTime*7, 32);   x = -16 + dist;                  // 7 units/s, loops every 32 units
+wheelDeg = -(dist / (R*SC)) * 57.29578;                          // rolling without slipping
+crank    = -(dist / (R*SC)) * 0.55;                              // pedals turn slower than wheels
+for each pedal p:  P[p] = bottomBracket + 0.17*(cos(a), sin(a));  a = crank + p*PI
+    knee = kneeFor(hip, P[p], 0.47, 0.47);                       // two-bone IK (law of cosines)
+    limb(hip, knee, 0.055);  limb(knee, P[p], 0.045);            // thigh, shin
+\end{Verbatim}
+\item \textbf{Walking person} (\code{drawWalkingPerson}): $1.8$ units/s, joint hierarchy hip $\to$ thigh $0.46$ $\to$ knee $\to$ shin $0.44$; with stride phase $\varphi=2\pi\cdot1.8t/1.4$: thigh $\pm28^\circ\sin\varphi$, knee bend $35^\circ\max(0,\sin(\varphi+\varphi_0))$, arms swing $-0.8\times$ the leg angle, body bob $0.035|\cos\varphi|$.
+\item \textbf{Cat} (\code{drawWalkingCat}): walks at 3 units/s; every \emph{third lap} a time-driven state machine stops it at $x=-1.2$, turns it to the street (smoothstep over $0.5$ s), sits it down and washes its face for 7 s (paw lick $\sin9t_w$, wipe $0.5+0.5\sin2.2t_w$, head tilt $-14^\circ+10^\circ\cdot$wipe, then looks around $25^\circ\sin0.8t$); walking uses diagonal leg pairs with swing $0.06\sin(\varphi+\varphi_i)$, lift $0.025\max(0,\cos(\varphi+\varphi_i))$, tail swaying.
+\item \textbf{Wind chime} (\code{drawFurin}): bell ($L_1=0.12$) and paper strip ($L_2=0.20$) are two pendulums with wind gains $k_1=3$, $k_2=22$, 8 sub-steps per frame; when $|\theta_2-\theta_1|>0.42$ rad the clapper strikes, rebounds with $-0.45$ of the relative speed and a glint flashes. \textbf{Banner:} grid wave of Section~\ref{sec:model}. \textbf{Fans:} blades $160^\circ$/s and $900^\circ$/s.
+\end{itemize}
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.52\textwidth}\fig{1}{r_cyclist.jpg}\caption{Cyclist with shadow}\end{subfigure}\hfill
+\begin{subfigure}{0.40\textwidth}\includegraphics[width=\linewidth]{r_pc.jpg}\caption{Person and cat}\end{subfigure}
+\caption{Result: the animated characters on the cobblestone street.}\label{fig:cyc}
+\end{figure}
 
-% =====================================================================
-%                          6 CONCLUSION
-% =====================================================================
+\subsection{The environment and the buildings}\label{sec:env}
+\begin{table}[htbp]
+\centering\footnotesize
+\begin{tabular}{@{}p{3.3cm}cp{11.2cm}@{}}
+\toprule
+\textbf{Object (function)} & \textbf{Count} & \textbf{How it is made}\\
+\midrule
+Cherry tree (\code{drawCherryBlossomTree}) & 7 & 3-level recursion, pink blossom clusters, falling petals (14) and petal carpet (110)\\
+Maple (\code{drawMapleTree}) & 6 & 4-level finer branching, red-orange notched leaves\\
+Broadleaf (\code{drawTree}) & 6 & 3 levels, leaf pads on tips and mid-branch, flared trunk with 5 roots\\
+Pine (\code{drawJapanesePineTree}) & 5 & trunk 3.3 tall, stacked jagged triangle-fan skirts, swaying crown\\
+Bamboo (\code{drawBambooGrove}) & 2 & culms $4.6$--$6.6$ tall, 9--11 nodes, lean, age-dependent green--yellow\\
+Jungle, flowers & 8, 9 & dome bushes and fern fronds; 40 flowers per garden on a golden-angle spiral, 7 colours\\
+Lake (\code{drawLake}), bridge, ducks & 1, 1, 2 & disc radius 8 with scrolling water texture and rippling rim, 12 rocks, 4 lily pads; arched bridge of 34 planks ($y=0.6\cos(\pi z/17)$); ducks on circles of radius $3.5$ with a wake\\
+Fireflies & 129 & 8 groups; orbit, pulse $0.5+0.5\sin(\omega t+\varphi)$ and on/off phase; additive\\
+Street lamps, stone lanterns & 12, 4 & pole 3.3, arm, shade; emissive bulb, additive light cone and ground pool at night\\
+Houses (\code{drawJapaneseHouse}, \code{...2}) & 10 & type 1: $4\times3.5$, veranda, 4 red lanterns; type 2: $6\times3.5$ on raised floor, 4 sliding shoji panels, side porch; textured walls and roof\\
+Shop (\code{drawShopBuilding}, \code{drawRoof}) & 1 & $10\times8$ floor, plaster walls with openings, gable roof $11.4\times2.2\times9.4$, awning with 37 blue cones, sign, shoji windows that glow only when an interior lamp is on, 2 swaying lanterns, doors opened by click\\
+Dining room, kitchen & -- & counter, 6 stools, 2 tables, 4 chairs, 4 bowls with steam, 2 stock pots, stove, hood, fridge, sink, pendant lamps, lanterns, noren, clock, glassware\\
+Upstairs room & -- & staggered tatami, fusuma and shoji doors, futon, tea table with teapot, tansu chest, radio, fans, mirror, 6 pictures drawn from 2D shapes (clipped by Sutherland--Hodgman~[8])\\
+\bottomrule
+\end{tabular}
+\caption{The objects of the scene and how they are made.}
+\end{table}
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_village.jpg}\caption{Shop, cherry and maple trees}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_house1.jpg}\caption{Neighbouring house (type 1)}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_pond.jpg}\caption{Lake, bridge, ducks}\end{subfigure}\\[2pt]
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_dining1.jpg}\caption{Dining room and kitchen}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_bowl.jpg}\caption{Ramen bowl with steam}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{r_upper1.jpg}\caption{Upstairs tatami room}\end{subfigure}
+\caption{Result: the village and the inside of the shop.}
+\end{figure}
+
+\subsection{Interaction and the cooking game}\label{sec:game}
+Keyboard and mouse events arrive through GLUT callbacks and change global state that the next frame reads: \code{C} camera, \code{T} day/night, \code{1--7} lamps, \code{G} shading, \code{Y} soft shadows, \code{Z} refraction, \code{R} ray tracing, \code{H} roof, \code{F} fog, \code{X} steam, \code{Tab} select an object to move (\code{I J K L U N}), rotate (\code{[ ]}) and scale (\code{, .}). The game (\code{game.cpp}, \code{Enter}) is a state machine MENU $\to$ TAKING\_ORDER $\to$ COOKING $\to$ SERVING $\to$ RESULT: a customer orders, the player boils noodles (raw $<3$ s, perfect 6--9 s, ruined $>12$ s), adds broth and toppings and serves. Score $Q=0.5\,\text{accuracy}+0.35\,\text{cook}+0.15\,\text{time}$, stars $=\operatorname{round}(5Q)$, up to four levels; the HUD uses the orthographic projection.
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_game_menu.jpg}\caption{Title}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_game_order.jpg}\caption{Order board}\end{subfigure}\hfill
+\begin{subfigure}{0.325\textwidth}\fig{1}{fig_game_cust.jpg}\caption{Customer}\end{subfigure}
+\caption{Result: the game screens.}\label{fig:game}
+\end{figure}
+
+% ===================== 6 RESULTS / DISCUSSION =====================
+\section{Results, Problems and Limitations}
+The scene runs in real time with all effects on (Figure~\ref{fig:res}); ray tracing adds about 13\,ms per frame in a Release build. Scene statistics: 8 lights (7 switchable fixtures), 13 textures, 7 cameras, 10 houses, 12 street lamps, 24 trees, 132 stars, 12 clouds, 8 ray-traced objects, 3 animated characters and a $512^2$ shadow map.
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.49\textwidth}\fig{1}{fig_ext_day2.jpg}\caption{Day}\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}\fig{1}{fig_ext_night.jpg}\caption{Night}\end{subfigure}
+\caption{The finished scene by day and at night.}\label{fig:res}
+\end{figure}
+\textbf{Problems and solutions.}
+\begin{itemize}
+\item \emph{Only 8 lights:} outdoor lights are re-assigned to interior fixtures while the inside is drawn, and a shader mask keeps outside lights from lighting the interior through the walls.
+\item \emph{Lights off but the room still lit:} a global ambient and glowing materials caused it; the global ambient is now zero and glowing surfaces fade with their lamp.
+\item \emph{Broken, streaky shadows:} the shadow plane z-fought with the ground and leaf cards left gaps in the stencil; depth testing is off in that pass and trees use full leaf geometry near the shop.
+\item \emph{Blocky ray-traced objects up close:} the ray budget keeps the cost bounded, so one ray covers several pixels; the drinking glasses and jug were therefore moved back to OpenGL.
+\end{itemize}
+\textbf{Limitations.} No flat shading; refraction of the tumbler is screen-space; ray tracing covers only 8 interior objects and has no shadow rays; night shadows outdoors are simple fixed shapes; no sound. \textbf{Future work:} cube-map shadows for every lamp, a GPU ray tracer, customers that walk into the shop by themselves.
+
 \section{Conclusion}
-\textbf{The Ramen Shop} is a complete, explorable 3D scene written from scratch with OpenGL. It shows modelling from basic shapes, the full set of 3D transformations in hierarchical models, procedural textures, the ambient, diffuse and specular illumination model with eight individually switchable lights, Gouraud and Phong shading, three kinds of shadows, screen-space glass refraction, real ray tracing with a BVH, rich animation (including a physically simulated wind chime) and a playable cooking game. All of it runs interactively from a single Visual Studio project with no external assets.
+The Ramen Shop implements the proposed features (translation, rotation, scaling, perspective camera, hierarchical modelling, ambient, diffuse and specular lighting, Gouraud and Phong shading, skybox, textures; the orthographic view is used for the HUD, and flat shading was not implemented) and adds shadows, glass refraction, ray tracing with a BVH, animated characters, a procedural environment with my own grass and cobblestone textures, and a cooking game, all in one Visual Studio project with no external assets.
 
-\begin{thebibliography}{9}\footnotesize
-\bibitem{phong} B.~T.~Phong, \emph{Illumination for computer generated pictures}, CACM 18(6), 1975.
-\bibitem{blinn} J.~F.~Blinn, \emph{Models of light reflection for computer synthesized pictures}, SIGGRAPH 1977.
-\bibitem{whitted} T.~Whitted, \emph{An improved illumination model for shaded display}, CACM 23(6), 1980.
-\bibitem{shadow} L.~Williams, \emph{Casting curved shadows on curved surfaces}, SIGGRAPH 1978; W.~Reeves et al., \emph{Rendering antialiased shadows with depth maps}, SIGGRAPH 1987.
-\bibitem{schlick} C.~Schlick, \emph{An inexpensive BRDF model for physically-based rendering}, Eurographics 1994.
-\bibitem{redbook} D.~Shreiner et al., \emph{OpenGL Programming Guide}, Addison-Wesley.
+\begin{thebibliography}{10}\footnotesize
+\bibitem{phong} B.~T.~Phong, ``Illumination for computer generated pictures,'' \emph{Communications of the ACM} 18(6), 1975.
+\bibitem{blinn} J.~F.~Blinn, ``Models of light reflection for computer synthesized pictures,'' \emph{SIGGRAPH}, 1977.
+\bibitem{gouraud} H.~Gouraud, ``Continuous shading of curved surfaces,'' \emph{IEEE Trans.\ Computers} C-20(6), 1971.
+\bibitem{whitted} T.~Whitted, ``An improved illumination model for shaded display,'' \emph{Communications of the ACM} 23(6), 1980.
+\bibitem{williams} L.~Williams, ``Casting curved shadows on curved surfaces,'' \emph{SIGGRAPH}, 1978.
+\bibitem{reeves} W.~Reeves, D.~Salesin, R.~Cook, ``Rendering antialiased shadows with depth maps,'' \emph{SIGGRAPH}, 1987.
+\bibitem{schlick} C.~Schlick, ``An inexpensive BRDF model for physically-based rendering,'' \emph{Eurographics}, 1994.
+\bibitem{sh} I.~Sutherland, G.~Hodgman, ``Reentrant polygon clipping,'' \emph{Communications of the ACM} 17(1), 1974.
+\bibitem{redbook} D.~Shreiner et al., \emph{OpenGL Programming Guide} (the ``Red Book''), Addison-Wesley; Khronos, \emph{OpenGL and GLSL 1.20 specifications}.
+\bibitem{noise} D.~Ebert et al., \emph{Texturing and Modeling: A Procedural Approach}, Morgan Kaufmann (value noise, fractal Brownian motion).
 \end{thebibliography}
 
 \end{document}
