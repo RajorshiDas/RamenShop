@@ -1,0 +1,14 @@
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\begin{tikzpicture}[font=\scriptsize]
+\node[boxw,text width=2.9cm] (e) at (0,0) {eye ray for every pixel of the object's screen rectangle};
+\node[boxw,text width=2.9cm] (b) at (3.7,0) {BVH traversal: nearest shape hit};
+\node[boxw,text width=3.3cm] (s) at (7.7,0) {metal, glaze, mirror: reflect;\\ glass, water: Snell + Fresnel};
+\node[boxw,text width=3.0cm] (l) at (11.7,0) {Blinn--Phong with the scene lights};
+\node[boxw,text width=3.1cm] (c) at (15.1,0) {composite where the depth matches};
+\foreach \a/\b in {e/b,b/s,s/l,l/c}{\draw[arr] (\a) -- (\b);}
+\draw[arr] (s.south) -- ++(0,-0.55) -| node[below,lab,pos=0.25]{reflected or refracted ray} (b.south);
+\end{tikzpicture}}
+\caption[Ray tracing steps]{The steps taken for every eye ray of a ray-traced object.}
+\label{fig:rtflow2}
+\end{figure}

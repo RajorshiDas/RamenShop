@@ -1,0 +1,66 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[x=0.74cm,y=-0.74cm,font=\tiny]
+% ---------------- ground floor ----------------
+\begin{scope}
+\fill[ramenlt] (-4.9,-3.9) rectangle (4.9,3.9);
+\draw[very thick,ramen!60!black] (-4.9,-3.9) rectangle (4.9,3.9);
+\fill[brown!30!white,draw=brown!70] (-3.5,-3.5) rectangle (3.5,-2.9);
+\foreach \x in {-0.55,0.55} {\fill[gray!55,draw=black!60] (\x,-3.2) circle (0.3);}
+\fill[white,draw=black!50] (3.4,-3.8) rectangle (4.2,-2.9);
+\fill[brown!55,draw=brown!80!black] (-3,-0.8) rectangle (3,-0.2);
+\foreach \i in {0,...,5} {\fill[orange!60!brown,draw=brown!80!black] ({-2.8+1.12*\i},0.8) circle (0.19);}
+\foreach \t in {-2.4,2.4}{
+  \fill[brown!35,draw=brown!80!black] (\t-0.48,2.48) rectangle (\t+0.48,3.12);
+  \fill[brown!60,draw=brown!80!black] (\t-0.19,2.06) rectangle (\t+0.19,2.44);
+  \fill[brown!60,draw=brown!80!black] (\t-0.19,3.16) rectangle (\t+0.19,3.54);
+  \fill[yellow!70,draw=orange!80!black] (\t,2.8) circle (0.12);}
+\fill[pattern=north east lines,pattern color=gray] (3.5,-0.5) rectangle (4.5,2.5);
+\fill[yellow!70,draw=orange] (-4.45,3.4) circle (0.22);
+\draw[line width=2.4pt,ramen!70] (-1.75,3.9) -- (1.75,3.9);
+\node[below] at (0,3.95) {entrance (sliding doors)};
+\node at (0,-2.45) {kitchen: stove, two stock pots, hood};
+\node at (3.8,-3.35) {fridge};
+\node at (0,-1.6) {kitchen aisle};
+\node at (0,-0.5) {dining counter};
+\node at (0,1.35) {6 stools};
+\node at (-2.4,1.75) {table 1};
+\node at (2.4,1.75) {table 2};
+\node[rotate=90] at (4.0,1.0) {stairs};
+\node[above] at (0,-3.95) {\bfseries GROUND FLOOR};
+\end{scope}
+% ---------------- upper floor ----------------
+\begin{scope}[xshift=10.4cm]
+\fill[green!10!yellow!15] (-4.8,-3.8) rectangle (3.45,3.8);
+\foreach \r in {1,...,7}{ \draw[gray!60] (-4.8,{-3.8+0.95*\r}) -- (3.45,{-3.8+0.95*\r}); }
+\draw[gray!60] (-2.0,-3.8) -- (-2.0,-2.85); \draw[gray!60] (-1.0,-2.85) -- (-1.0,-1.9);
+\draw[very thick,ramen!60!black] (-4.8,-3.8) rectangle (3.45,3.8);
+\fill[pattern=north east lines,pattern color=gray] (3.55,-0.5) rectangle (4.5,2.5);
+\node[rotate=90] at (4.0,1.0) {stairs};
+\draw[ramen!70,line width=2pt] (-2.3,-3.8) -- (1.0,-3.8);
+\node at (-0.65,-3.45) {fusuma};
+\fill[brown!55,draw=brown!80!black] (1.35,-3.74) rectangle (3.15,-3.26);
+\node at (2.25,-3.0) {sideboard};
+\fill[brown!55,draw=brown!80!black] (-4.76,-0.72) rectangle (-4.32,0.33);
+\node[rotate=90] at (-4.05,-0.2) {tansu};
+\fill[red!50!white,draw=red!60!black] (1.625,1.55) rectangle (2.675,3.5);
+\node at (2.15,2.5) {futon};
+\fill[yellow!70,draw=orange!80!black] (3.0,2.2) rectangle (3.24,2.44);
+\fill[brown!40,draw=brown!80!black] (-1.15,0.36) rectangle (-0.05,1.04);
+\node at (-0.6,0.7) {tea table};
+\fill[green!40!gray,draw=black!40] (-0.6,1.45) circle (0.25) (-0.6,-0.05) circle (0.25) (-1.55,0.7) circle (0.25);
+\fill[white,draw=gray] (-4.5,1.2) rectangle (-4.0,1.9);
+\node at (-3.55,1.9) {futons};
+\fill[blue!25,draw=blue!50] (-3.3,2.6) circle (0.2);
+\node at (-3.3,3.1) {fan};
+\draw[blue!50!black,line width=2pt] (-4.2,3.8) -- (-2.2,3.8);
+\draw[blue!50!black,line width=2pt] (2.2,3.8) -- (3.45,3.8);
+\node[above] at (-3.2,3.7) {windows};
+\node[above,xshift=-0.35cm] at (2.55,3.7) {window};
+\node[above] at (-0.65,-3.9) {\bfseries UPPER FLOOR: TATAMI ROOM};
+\end{scope}
+\draw[-,gray] (-4.9,4.9) -- ++(2,0) node[right,font=\tiny,gray] {2 m};
+\end{tikzpicture}
+\caption[Floor plans of the two storeys]{Floor plans (the street side of the shop is at the bottom). The tatami room is covered by 8 rows of mats in a staggered pattern.}
+\label{fig:plan}
+\end{figure}

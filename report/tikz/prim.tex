@@ -1,0 +1,60 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.92,font=\scriptsize,line cap=round]
+\tikzset{sh/.style={draw=ramen!70!black,thick}}
+% cube
+\fill[ramenlt] (0,0) rectangle (1,1); \fill[ramen!35] (0,1) -- (0.4,1.35) -- (1.4,1.35) -- (1,1) -- cycle; \fill[ramen!55] (1,0) -- (1.4,0.35) -- (1.4,1.35) -- (1,1) -- cycle;
+\draw[sh] (0,0) rectangle (1,1); \draw[sh] (0,1) -- (0.4,1.35) -- (1.4,1.35) -- (1,1); \draw[sh] (1,0) -- (1.4,0.35) -- (1.4,1.35);
+\node at (0.7,-0.3) {cube};
+% cylinder
+\begin{scope}[xshift=2.2cm]
+\fill[ramen!45] (0,1) -- (0,0.15) arc (180:360:0.5 and 0.16) -- (1,1) -- cycle; \fill[ramenlt] (0.5,1) ellipse (0.5 and 0.16);
+\draw[sh] (0,1) -- (0,0.15) arc (180:360:0.5 and 0.16) -- (1,1); \draw[sh] (0.5,1) ellipse (0.5 and 0.16);
+\node at (0.5,-0.3) {cylinder};
+\end{scope}
+% cone / frustum
+\begin{scope}[xshift=4.5cm]
+\fill[ramen!45] (0.28,1) -- (-0.05,0.15) arc (180:360:0.55 and 0.16) -- (0.72,1) -- cycle; \fill[ramenlt] (0.5,1) ellipse (0.22 and 0.08);
+\draw[sh] (0.28,1) -- (-0.05,0.15) arc (180:360:0.55 and 0.16) -- (0.72,1); \draw[sh] (0.5,1) ellipse (0.22 and 0.08);
+\node at (0.5,-0.3) {cone / frustum};
+\end{scope}
+% sphere
+\begin{scope}[xshift=6.9cm]
+\shade[ball color=ramen!30] (0.5,0.55) circle (0.55);
+\draw[sh] (0.5,0.55) circle (0.55); \draw[sh,dashed] (-0.05,0.55) arc (180:360:0.55 and 0.15); \draw[sh] (-0.05,0.55) arc (180:0:0.55 and 0.15);
+\node at (0.5,-0.3) {sphere};
+\end{scope}
+% torus
+\begin{scope}[xshift=8.85cm]
+\fill[ramen!35] (0.5,0.55) ellipse (0.62 and 0.36); \fill[white] (0.5,0.55) ellipse (0.24 and 0.1);
+\draw[sh] (0.5,0.55) ellipse (0.62 and 0.36); \draw[sh] (0.5,0.55) ellipse (0.24 and 0.1);
+\node at (0.5,-0.3) {torus};
+\end{scope}
+% lathe
+\begin{scope}[xshift=10.7cm]
+\draw[->,gray] (0.0,-0.05) -- (0.0,1.25); \node[gray,font=\tiny] at (-0.0,1.4) {axis};
+\draw[sh] (0.0,1.1) -- (0.14,1.1) .. controls (0.2,0.7) and (0.3,0.4) .. (0.62,0.08);
+\draw[->,gray] (0.7,0.7) arc (-30:40:0.3 and 0.15);
+\begin{scope}[xshift=1.55cm]
+\fill[ramen!35] (0,1.1) -- (0.14,1.1) .. controls (0.2,0.7) and (0.3,0.4) .. (0.62,0.08) arc (0:-180:0.62 and 0.14) .. controls (-0.3,0.4) and (-0.2,0.7) .. (-0.14,1.1) -- cycle;
+\draw[sh] (0.14,1.1) .. controls (0.2,0.7) and (0.3,0.4) .. (0.62,0.08) arc (0:-180:0.62 and 0.14) .. controls (-0.3,0.4) and (-0.2,0.7) .. (-0.14,1.1);
+\draw[sh] (0,1.1) ellipse (0.14 and 0.05);
+\end{scope}
+\node at (1.0,-0.3) {lathe (lamps, bell)};
+\end{scope}
+% wavy grid
+\begin{scope}[xshift=13.75cm]
+\foreach \j in {0,...,5} {\draw[sh,thin] plot[domain=0:1.2,samples=24] (\x,{0.1+0.18*\j+0.13*sin(\x*360*1.3+\j*35)});}
+\foreach \i in {0,...,6} {\draw[sh,thin] plot[domain=0:5,samples=6] ({0.2*\i},{0.1+0.18*\x+0.13*sin(0.2*\i*360*1.3+\x*35)});}
+\node at (0.6,-0.3) {grid (banner)};
+\end{scope}
+% tree
+\begin{scope}[xshift=16.05cm]
+\draw[brown!70!black,very thick] (0.5,0) -- (0.5,0.45); \draw[brown!70!black,thick] (0.5,0.45) -- (0.15,0.85) (0.5,0.45) -- (0.5,0.95) (0.5,0.45) -- (0.85,0.85);
+\foreach \x/\y in {0.15/0.85,0.5/0.95,0.85/0.85} {\fill[green!55!black!70] (\x,\y) circle (0.2);}
+\node at (0.5,-0.3) {tree};
+\end{scope}
+\end{tikzpicture}
+\caption{The construction primitives: every object in the shop is some combination of these.}
+\label{fig:prim}
+\end{figure}

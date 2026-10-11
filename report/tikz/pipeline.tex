@@ -1,0 +1,25 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=0.16cm,every node/.style={font=\scriptsize}]
+\node[font=\scriptsize\bfseries,color=blue!50!black] (h1) {ONCE, AT START-UP};
+\node[bluebox,below=0.18cm of h1,text width=6.3cm] (a1) {Open the window (double buffer, depth, stencil); load extensions with GLEW};
+\node[bluebox,below=of a1,text width=6.3cm] (a2) {Paint 13 procedural textures on the CPU; build mipmaps};
+\node[bluebox,below=of a2,text width=6.3cm] (a3) {Set up 8 lights, fog, quadrics, normalisation};
+\node[bluebox,below=of a3,text width=6.3cm] (a4) {Compile the Phong shader; create the shadow-map FBO, the glass shader and the ray-trace compositor};
+\node[bluebox,below=of a4,text width=6.3cm] (a5) {Reset the game state; build tree display lists on first use};
+\foreach \a/\b in {a1/a2,a2/a3,a3/a4,a4/a5}{\draw[arr] (\a) -- (\b);}
+\node[font=\scriptsize\bfseries,color=ramen,right=7.2cm of h1] (h2) {EVERY FRAME};
+\node[box,below=0.18cm of h2,text width=6.6cm] (b1) {Timer (16 ms): clock, doors, game, WASD movement};
+\node[box,below=of b1,text width=6.6cm] (b2) {Camera, 45$^\circ$ projection, light colours (flicker), light positions};
+\node[box,below=of b2,text width=6.6cm] (b3) {Shadow-map pass from the pendant light (512$\times$512 depth)};
+\node[box,below=of b3,text width=6.6cm] (b4) {Sky dome, lawn, sun / simple night shadows in the stencil buffer};
+\node[box,below=of b4,text width=6.6cm] (b5) {Exterior (trees, houses, lake, props), then interior with its shadows};
+\node[box,below=of b5,text width=6.6cm] (b6) {Glass refraction pass, then the CPU ray-tracing pass and compositing};
+\node[box,below=of b6,text width=6.6cm] (b7) {HUD (orthographic) and swap buffers};
+\foreach \a/\b in {b1/b2,b2/b3,b3/b4,b4/b5,b5/b6,b6/b7}{\draw[arr] (\a) -- (\b);}
+\draw[arr] (a5.east) -- ++(0.55,0) |- ([yshift=0.0cm]b1.west);
+\draw[arr] (b7.east) -- ++(0.28,0) |- ($(b1.north east)+(0.28,0.12)$) -- (b1.north east);
+\end{tikzpicture}
+\caption{The rendering pipeline: work done once at start-up (left) and in every frame (right).}
+\label{fig:pipeline}
+\end{figure}

@@ -1,0 +1,21 @@
+\begin{tikzpicture}[scale=0.88,font=\scriptsize]
+\draw[thick,gray] (-3.4,0) -- (3.4,0);
+\fill[gray!30] (-3.4,-0.15) rectangle (3.4,0);
+\node[circle,fill=yellow!80,draw=orange,inner sep=2pt] (sun) at (-2.3,2.5) {};
+\node[above] at (sun.north) {sun $\mathbf s$};
+\fill[green!50!black] (-0.4,0) rectangle (-0.3,1.0);
+\fill[green!60!black!80] (-0.35,1.35) ellipse (0.55 and 0.4);
+\draw[orange!80!black,dashed] (sun) -- (-0.35,1.35);
+\draw[orange!80!black,dashed] (sun) -- (-0.9,1.35);
+\draw[orange!80!black,dashed,-{Stealth}] (-0.35,1.35) -- (0.95,-0.0);
+\fill[black!55,rounded corners=1pt] (0.75,0) -- (1.55,0) -- (1.55,0.07) -- (0.75,0.07) -- cycle;
+\node[below] at (1.15,-0.02) {shadow = projected copy};
+\node at (0,-0.65) {each tree point $(x,y,z)\mapsto(x-\tfrac{s_x}{s_y}y,\;h,\;z-\tfrac{s_z}{s_y}y)$};
+\end{tikzpicture}\hfill
+\begin{tikzpicture}[scale=0.88,font=\scriptsize]
+\node[boxw,text width=2.3cm] (a) {1. Draw the shop from the lamp: depth map};
+\node[boxw,text width=2.3cm,right=0.45cm of a] (b) {2. Draw the scene; per pixel transform to light space};
+\node[boxw,text width=2.3cm,right=0.45cm of b] (c) {3. $3{\times}3$ compare taps = PCF, soft edge};
+\draw[arr] (a) -- (b); \draw[arr] (b) -- (c);
+\node[below=0.35cm of b,align=center] {soft shadow\\ $s=\tfrac1{9}\sum_{k}\,[z_k\ge z_{\text{pixel}}]$};
+\end{tikzpicture}

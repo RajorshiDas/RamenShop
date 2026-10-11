@@ -1,0 +1,15 @@
+\begin{tikzpicture}[font=\scriptsize]
+\node[box,minimum width=1.7cm] (m) at (0,0) {MENU};
+\node[box,minimum width=2.4cm] (o) at (3.4,0) {TAKING\_ORDER};
+\node[box,minimum width=1.9cm] (c) at (6.9,0) {COOKING};
+\node[box,minimum width=1.9cm] (s) at (10.0,0) {SERVING};
+\node[box,minimum width=1.9cm] (r) at (13.0,0) {RESULT};
+\draw[arr] (m) -- node[above,lab]{Enter} (o);
+\draw[arr] (o) -- node[above,lab]{customer seated} (c);
+\draw[arr] (c) -- node[above,lab]{bowl ready} (s);
+\draw[arr] (s) -- node[above,lab]{serve} (r);
+\draw[arr] (r.north) -- ++(0,0.55) -| node[above,lab,pos=0.25]{next customer (a new level every 2)} (o.north);
+\node[box,fill=gray!15,minimum width=1.9cm] (p) at (8.4,-1.1) {PAUSED};
+\draw[arr,dashed] (c.south) |- node[left,lab,pos=0.25]{Esc} (p.west);
+\draw[arr,dashed] (r.south) |- node[right,lab,pos=0.25]{customer leaves: failed} (p.east);
+\end{tikzpicture}
