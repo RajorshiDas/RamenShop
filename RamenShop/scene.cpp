@@ -2546,7 +2546,7 @@ static void drawTransparentPass()
     drawClearGlassJar({ 1.65f, counterTop + 0.004f, -0.36f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.85f, 0.20f, 0.10f }); // shichimi chili
     drawClearGlassJar({ 1.90f, counterTop + 0.004f, -0.36f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.95f, 0.90f, 0.70f }); // pickled garlic
     drawClearGlassJar({ 2.15f, counterTop + 0.004f, -0.36f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, { 0.20f, 0.18f, 0.15f }); // sesame seeds
-    if (!rayTracingActive()) {            // with ray tracing on (R) the jug and the glasses are ray traced instead
+    {
         drawClearGlassPitcher({ 0.35f, counterTop + 0.004f, -0.36f }, NO_ROT, { 0.30f, 0.30f, 0.30f });
         drawClearGlassTumbler({ -1.85f, counterTop + 0.004f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
         drawClearGlassTumbler({ -0.35f, counterTop + 0.004f, -0.22f }, NO_ROT, { 0.22f, 0.22f, 0.22f }, true, true);
@@ -2557,7 +2557,7 @@ static void drawTransparentPass()
     // Empty tumbler on the left customer table.  With glass refraction on (Z) it is drawn at the
     // end of the frame by refraction.cpp, with ray tracing on (R) by the ray tracer; this ordinary
     // blended version is the fallback.
-    if (!glassRefractionActive() && !rayTracingActive())
+    if (!glassRefractionActive())
         drawClearGlassTumbler(TABLE_TUMBLER_POS, NO_ROT, { TABLE_TUMBLER_SCALE, TABLE_TUMBLER_SCALE, TABLE_TUMBLER_SCALE }, false, false);
 
     // Glass ball on the counter (ray traced with R, see rtscene.cpp)

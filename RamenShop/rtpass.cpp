@@ -288,7 +288,7 @@ void renderRayTracing()
 
     // ── Scene of this frame and the screen rectangles of the featured objects ──
     static rt::Scene scene;
-    RtObjectBounds bounds[RTO_COUNT];
+    RtObjectBounds bounds[RTO_COUNT] = {};
     double tA = nowMs();
     rtBuildShopScene(scene, bounds);
     double tB = nowMs();
