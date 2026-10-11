@@ -308,7 +308,29 @@ Shear / projection & flattening the scene onto the ground for shadows (Section~\
 \begin{equation}
 P=\begin{pmatrix}\frac{1}{a\tan(\phi/2)}&0&0&0\\0&\frac{1}{\tan(\phi/2)}&0&0\\0&0&\frac{f+n}{n-f}&\frac{2fn}{n-f}\\0&0&-1&0\end{pmatrix},
 \end{equation}
-so after the division by $w=-z_e$ distant objects become smaller. An \emph{orthographic} projection has no division by depth and keeps sizes constant, which suits a 2D overlay.
+so after the division by $w=-z_e$ distant objects become smaller. An \emph{orthographic} projection has no division by depth and keeps sizes constant, which suits a 2D overlay (Figure~\ref{fig:frustum}).
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[font=\scriptsize,scale=0.9]
+\begin{scope}
+\fill[ramen] (0,0) circle (0.06) node[below,font=\tiny]{eye};
+\draw[thick,ramen!70] (0,0)--(5,1.6) (0,0)--(5,-1.6);
+\draw[thick,blue!60!black] (1,-0.32)--(1,0.32) node[above,font=\tiny]{near $n$};
+\draw[thick,blue!60!black] (5,-1.6)--(5,1.6) node[above,font=\tiny]{far $f$};
+\draw (0.9,0) arc (0:17.7:0.9); \node at (1.25,0.17) {$\tfrac{\phi}{2}$};
+\draw[-{Stealth}] (0,0)--(5.6,0) node[right]{$-z_e$};
+\fill[orange!70] (2.4,0.25) circle (0.12); \fill[orange!70] (4.2,0.6) circle (0.12);
+\node[below,align=center] at (2.6,-1.75) {perspective: the frustum, $x_s=x_e/(-z_e)$};
+\end{scope}
+\begin{scope}[xshift=7.8cm]
+\draw[thick,ramen!70] (0,-1.0) rectangle (4,1.0);
+\fill[orange!70] (1.4,0.25) circle (0.12); \fill[orange!70] (3.2,0.6) circle (0.12);
+\draw[-{Stealth}] (-0.4,0)--(4.6,0) node[right]{$-z_e$};
+\node[below,align=center] at (2,-1.75) {orthographic: a box, sizes kept (HUD)};
+\end{scope}
+\end{tikzpicture}
+\caption{Perspective (world) and orthographic (HUD) projection volumes; in perspective the farther ball looks smaller.}\label{fig:frustum}
+\end{figure}
 
 \ptag{Implementation} The world uses \code{gluPerspective(45, aspect, 0.5, 200)} (62$^\circ$ in game mode); the HUD, the order board and the title screen use \code{glOrtho} so that the overlay keeps its pixel size. Table~\ref{tab:cam} lists the seven cameras. For \textbf{picking}, a mouse click is turned into a world ray with \code{gluUnProject} at depth 0 and depth 1, $\mathbf r(t)=\mathbf p_{near}+t(\mathbf p_{far}-\mathbf p_{near})$, intersected with the plane of each door, $t=(z_0-p_z)/d_z$, and the hit point is tested against the door's rectangle.
 \begin{table}[htbp]
@@ -399,7 +421,26 @@ where $\mathbf e$ is the emission of the material (lantern paper, bulbs), $\math
 \end{figure}
 
 \subsection{Shading: Gouraud and Phong}\label{sec:shade}
-\ptag{Theory} \emph{Flat} shading gives one colour per polygon. \emph{Gouraud} shading~[3] evaluates the illumination equation~\eqref{eq:illum} only at the vertices and interpolates the colours across the triangle with barycentric coordinates, $C=\lambda_1C_1+\lambda_2C_2+\lambda_3C_3$; a highlight that lies inside a polygon is lost. \emph{Phong} shading interpolates the \emph{normal}, $\mathbf N=\widehat{\lambda_1\mathbf N_1+\lambda_2\mathbf N_2+\lambda_3\mathbf N_3}$, and evaluates equation~\eqref{eq:illum} at every pixel, so highlights are round and accurate. Interpolation of attributes is made perspective-correct by interpolating $q/w$ and $1/w$ linearly in screen space.
+\ptag{Theory} \emph{Flat} shading gives one colour per polygon. \emph{Gouraud} shading~[3] evaluates the illumination equation~\eqref{eq:illum} only at the vertices and interpolates the colours across the triangle with barycentric coordinates, $C=\lambda_1C_1+\lambda_2C_2+\lambda_3C_3$; a highlight that lies inside a polygon is lost. \emph{Phong} shading interpolates the \emph{normal}, $\mathbf N=\widehat{\lambda_1\mathbf N_1+\lambda_2\mathbf N_2+\lambda_3\mathbf N_3}$, and evaluates equation~\eqref{eq:illum} at every pixel, so highlights are round and accurate. Interpolation of attributes is made perspective-correct by interpolating $q/w$ and $1/w$ linearly in screen space (Figure~\ref{fig:interp}).
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[font=\scriptsize,scale=1.0]
+\begin{scope}
+\shade[left color=yellow!80!orange,right color=red!40!black] (0,0)--(3,0)--(1.5,2.2)--cycle;
+\draw (0,0)--(3,0)--(1.5,2.2)--cycle;
+\foreach \p/\l in {(0,0)/$C_1$,(3,0)/$C_2$,(1.5,2.2)/$C_3$} \fill \p circle (0.05) node[above left,font=\tiny]{\l};
+\node[below,align=center] at (1.5,-0.15) {Gouraud: light at the 3 vertices,\\colour $C=\sum\lambda_iC_i$ interpolated};
+\end{scope}
+\begin{scope}[xshift=5.2cm]
+\fill[orange!20] (0,0)--(3,0)--(1.5,2.2)--cycle; \draw (0,0)--(3,0)--(1.5,2.2)--cycle;
+\foreach \p/\a in {(0,0)/120,(3,0)/60,(1.5,2.2)/90} \draw[-{Stealth},ramen,thick] \p -- ++(\a:0.6);
+\foreach \x/\y/\a in {1.0/0.5/100,1.5/0.9/90,2.0/0.5/80,1.5/0.35/90} \draw[-{Stealth},blue!60!black] (\x,\y) -- ++(\a:0.4);
+\fill[white,opacity=0.9] (1.65,0.55) circle (0.18);
+\node[below,align=center] at (1.5,-0.15) {Phong: normal $\mathbf N=\widehat{\sum\lambda_i\mathbf N_i}$ interpolated,\\light evaluated per pixel (highlight kept)};
+\end{scope}
+\end{tikzpicture}
+\caption{Gouraud shading interpolates colours; Phong shading interpolates normals and keeps a highlight that falls inside a triangle.}\label{fig:interp}
+\end{figure}
 
 \ptag{Implementation} Key \code{G} switches between the two models. Gouraud is the fixed-function path (\code{glShadeModel(GL\_SMOOTH)}). Phong is my GLSL 1.20 program in \code{shader.cpp}: the vertex shader passes the eye-space position, normal, colour, texture coordinate and fog distance; the fragment shader multiplies the colour by the texture, loops over the 8 lights (skipping those with \code{lightOn[i]}~=~0), computes $\mathbf L$, the attenuation, the spot cone and the three terms, then mixes the fog. Flat shading was not implemented. The core of the fragment shader:
 \begin{Verbatim}
@@ -441,6 +482,18 @@ $c=\operatorname{mix}\big(G_1,G_2,0.55\,\mathrm{sstep}(0.3,0.7,n_2)\big)\rightar
 \item \emph{Grain.} $\pm3\%$ per-pixel noise. The $512\times512$ result repeats every 14 units.
 \item \emph{Macro layer.} A second, low-contrast texture repeated every 90 units is multiplied in with the blend $C=2\,C_{dst}C_{src}$ (neutral at $0.5$), which lightens and darkens big areas and gives a slight warm / cool shift so the repeat of the detail texture cannot be seen. At night a dark green tint $(0.17,0.22,0.17)$ replaces white.
 \end{enumerate}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=0.42cm,font=\scriptsize]
+\node[box,text width=2.5cm] (a) {1. Noise field\\4 greens mixed by\\3 fBm octaves};
+\node[box,text width=2.5cm,right=of a] (b) {2. Blade strokes\\$WH/40$ short lines,\\80\% near vertical};
+\node[box,text width=2.1cm,right=of b] (c) {3. Grain\\$\pm3\%$ noise,\\wrap edges};
+\node[box,text width=2.4cm,right=of c] (d) {4. Upload\\$512^2$, mipmaps,\\repeat 14 units};
+\node[box,text width=2.6cm,right=of d] (e) {5. Macro layer\\$C=2C_{dst}C_{src}$,\\repeat 90 units};
+\foreach \u/\v in {a/b,b/c,c/d,d/e} \draw[arr] (\u)--(\v);
+\end{tikzpicture}
+\caption{How the grass texture is generated and applied to the lawn.}\label{fig:grasssteps}
+\end{figure}
 On top of the texture stand about 500 real 3D \textbf{grass tufts} (\code{buildTuft}, \code{drawGrassPatch}): each tuft is 30 arching blades of four quad segments, with the path $y=Ht(1-0.3t)$, $x=b_x+o_x\,k\,t^2H$, the width $w=0.03(1-t)^{0.8}+0.0015$ and a colour from dark green at the root to light green at the tip. The blades sit on a sunflower spiral (golden angle $2.39996$ rad), there are three variants compiled into display lists, and each tuft sways by $2.5\sin(1.5t+0.6x+0.4z)+1.2\sin(3.1t+x)$ degrees; tufts farther than 32 units are skipped.
 
 \subsubsection{Cobblestone street and sidewalk (my own texture)}
@@ -719,6 +772,7 @@ for each pedal p:  P[p] = bottomBracket + 0.17*(cos(a), sin(a));  a = crank + p*
 \end{figure}
 
 \subsection{Environment: trees, village, lake and the shop}\label{sec:env}
+Table~\ref{tab:envobj} lists every object of the environment; the construction drawing and parts list of each main object are in Section~\ref{sec:build}.
 \begin{table}[htbp]
 \centering\footnotesize
 \begin{tabular}{@{}p{3.6cm}cp{11.0cm}@{}}
@@ -740,7 +794,7 @@ Dining room, kitchen & -- & counter, 6 stools, 2 tables, 4 chairs, 4 bowls with 
 Upstairs room & -- & staggered tatami, fusuma and shoji doors, futon, tea table with teapot, tansu chest with drawers, radio, fans, mirror, six pictures painted from 2D shapes and clipped by Sutherland--Hodgman~[8]\\
 \bottomrule
 \end{tabular}
-\caption{The objects of the scene and how they are made.}
+\caption{The objects of the scene and how they are made.}\label{tab:envobj}
 \end{table}
 \begin{figure}[htbp]
 \centering
@@ -782,6 +836,8 @@ where \emph{cook} is $0.15,0.60,1.00,0.60,0.10$ for raw, undercooked, perfect, o
 \begin{subfigure}{0.325\textwidth}\fig{1}{fig_game_cust.jpg}\caption{A customer at the counter}\end{subfigure}
 \caption{Result: the state machine of the game and three of its screens.}\label{fig:game}
 \end{figure}
+
+\input{objects_build}
 
 % ===================== 6 RESULTS =====================
 \section{Results}\label{sec:res}
